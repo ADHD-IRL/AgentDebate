@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { generateThreats as generateThreatsLLM } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { AlertTriangle, Plus, X, Sparkles, Trash2, Edit2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -69,9 +69,9 @@ function AiGenerateModal({ scenarios, domains, onGenerated, onClose }) {
     if (!scenario) return;
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('generateThreats', { scenarioContext: scenario.context_document, scenarioName: scenario.name });
-      setGenerated(res.data.threats || []);
-      setSelected(new Set(res.data.threats?.map((_,i) => i) || []));
+      const res = await generateThreatsLLM({ scenarioContext: scenario.context_document, scenarioName: scenario.name });
+      setGenerated(res.threats || []);
+      setSelected(new Set(res.threats?.map((_,i) => i) || []));
     } finally { setLoading(false); }
   };
 

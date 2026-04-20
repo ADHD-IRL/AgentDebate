@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { localDb } from '@/lib/localDb';
 
 export default function AppLayout() {
   const [stats, setStats] = useState({ agentCount: 0, activeSessions: 0 });
@@ -10,17 +10,14 @@ export default function AppLayout() {
     const loadStats = async () => {
       try {
         const [agents, sessions] = await Promise.all([
-          base44.entities.Agent.list(),
-          base44.entities.Session.filter({ status: 'round1' }),
+          localDb.entities.Agent.list(),
+          localDb.entities.Session.filter({ status: 'round1' }),
         ]);
         setStats({ agentCount: agents.length, activeSessions: sessions.length });
       } catch (e) {}
     };
     loadStats();
-
-    const unsub = base44.entities.Agent.subscribe(() => {
-      loadStats();
-    });
+    const unsub = localDb.entities.Agent.subscribe(loadStats);
     return () => unsub();
   }, []);
 
