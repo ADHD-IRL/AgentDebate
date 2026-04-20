@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from '@/api/entities';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
   Edit2, Check, X, RefreshCw, Copy, Trash2, UserMinus,
@@ -167,7 +167,7 @@ export default function WorkspaceManagement() {
   const loadMembers = async () => {
     setLoadingMembers(true);
     try {
-      const ms = await base44.entities.WorkspaceMember.filter({ workspace_id: workspace.id });
+      const ms = await entities.WorkspaceMember.filter({ workspace_id: workspace.id });
       setMembers(ms);
     } finally {
       setLoadingMembers(false);
@@ -177,7 +177,7 @@ export default function WorkspaceManagement() {
   const handleSaveName = async (newName) => {
     setSavingName(true);
     try {
-      await base44.entities.Workspace.update(workspace.id, { name: newName });
+      await entities.Workspace.update(workspace.id, { name: newName });
       // Update local workspace name via a shallow page reload fallback —
       // or nudge the user to see the change reflected in the sidebar.
       workspace.name = newName; // mutate so EditableField shows new value immediately
@@ -191,7 +191,7 @@ export default function WorkspaceManagement() {
     setRegenBusy(true);
     const code = generateInviteCode();
     try {
-      await base44.entities.Workspace.update(workspace.id, { invite_code: code });
+      await entities.Workspace.update(workspace.id, { invite_code: code });
       setInviteCode(code);
     } finally {
       setRegenBusy(false);
@@ -205,12 +205,12 @@ export default function WorkspaceManagement() {
   };
 
   const handleChangeRole = async (memberId, role) => {
-    await base44.entities.WorkspaceMember.update(memberId, { role });
+    await entities.WorkspaceMember.update(memberId, { role });
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role } : m));
   };
 
   const handleRemoveMember = async (memberId) => {
-    await base44.entities.WorkspaceMember.delete(memberId);
+    await entities.WorkspaceMember.delete(memberId);
     setMembers(prev => prev.filter(m => m.id !== memberId));
   };
 
@@ -219,8 +219,8 @@ export default function WorkspaceManagement() {
     setDeleting(true);
     try {
       // Remove all members first, then delete the workspace record
-      await Promise.all(members.map(m => base44.entities.WorkspaceMember.delete(m.id)));
-      await base44.entities.Workspace.delete(workspace.id);
+      await Promise.all(members.map(m => entities.WorkspaceMember.delete(m.id)));
+      await entities.Workspace.delete(workspace.id);
       leaveWorkspace();
     } catch (err) {
       console.error('Delete workspace failed:', err);

@@ -1,2 +1,2 @@
-// Standalone mode — no base44 platform params needed
+// Standalone mode — no external platform params needed
 export const appParams = {};

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Shield, Plus, LogIn, Loader2, Building2, ChevronRight, ArrowLeft } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { entities } from '@/api/entities';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import WrButton from '@/components/ui/WrButton';
 
@@ -85,12 +85,12 @@ function WorkspaceForm({ showBack, onBack }) {
     setLoading(true); setError('');
     try {
       const inviteCode = generateInviteCode();
-      const ws = await base44.entities.Workspace.create({
+      const ws = await entities.Workspace.create({
         name: name.trim(),
         owner_id: localUserId,
         invite_code: inviteCode,
       });
-      await base44.entities.WorkspaceMember.create({
+      await entities.WorkspaceMember.create({
         workspace_id: ws.id,
         user_id: localUserId,
         role: 'admin',
@@ -107,12 +107,12 @@ function WorkspaceForm({ showBack, onBack }) {
     if (!code.trim()) { setError('Invite code is required.'); return; }
     setLoading(true); setError('');
     try {
-      const workspaces = await base44.entities.Workspace.filter({ invite_code: code.trim().toUpperCase() });
+      const workspaces = await entities.Workspace.filter({ invite_code: code.trim().toUpperCase() });
       if (workspaces.length === 0) { setError('Invalid invite code — no matching workspace found.'); setLoading(false); return; }
       const ws = workspaces[0];
-      const existing = await base44.entities.WorkspaceMember.filter({ workspace_id: ws.id, user_id: localUserId });
+      const existing = await entities.WorkspaceMember.filter({ workspace_id: ws.id, user_id: localUserId });
       if (existing.length === 0) {
-        await base44.entities.WorkspaceMember.create({
+        await entities.WorkspaceMember.create({
           workspace_id: ws.id,
           user_id: localUserId,
           role: 'analyst',

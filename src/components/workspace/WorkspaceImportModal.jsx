@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { entities } from '@/api/entities';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { X, Search, Download, Loader2, CheckSquare, Square, Target, AlertTriangle, Link2, Swords, CheckCircle2, Globe } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
@@ -48,7 +48,7 @@ export default function WorkspaceImportModal({ onClose }) {
   const [lastImport, setLastImport] = useState(null);
 
   useEffect(() => {
-    base44.entities.Domain.list().then(setDomains);
+    entities.Domain.list().then(setDomains);
   }, []);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function WorkspaceImportModal({ onClose }) {
   const loadTab = async (type) => {
     setLoading(true);
     try {
-      const all = await base44.entities[type].list();
+      const all = await entities[type].list();
       // Exclude items that belong to the current workspace
       const foreign = all.filter(item => item.workspace_id !== workspace?.id);
       setItems(foreign);
