@@ -1,0 +1,86 @@
+import { supabase } from '@/lib/supabase';
+
+const TABLE = {
+  Agent:            'agents',
+  Domain:           'domains',
+  Scenario:         'scenarios',
+  Threat:           'threats',
+  Chain:            'chains',
+  Session:          'sessions',
+  SessionAgent:     'session_agents',
+  SessionSynthesis: 'session_syntheses',
+  AppConfig:        'app_configs',
+  Workspace:        'workspaces',
+  WorkspaceMember:  'workspace_members',
+};
+
+function applySort(query, sort) {
+  if (!sort) return query.order('created_at', { ascending: true });
+  const { field, order } = typeof sort === 'object' && !Array.isArray(sort)
+    ? sort
+    : { field: sort[0], order: sort[1] || 'asc' };
+  return query.order(field, { ascending: order === 'asc' });
+}
+
+function makeEntity(entityName) {
+  const table = TABLE[entityName];
+  if (!table) throw new Error(`Unknown entity: ${entityName}`);
+
+  return {
+    list: async (sort, limit) => {
+      let q = supabase.from(table).select('*');
+      q = applySort(q, sort);
+      if (limit) q = q.limit(limit);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+
+    filter: async (filters = {}, sort, limit) => {
+      let q = supabase.from(table).select('*').match(filters);
+      q = applySort(q, sort);
+      if (limit) q = q.limit(limit);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+
+    get: async (id) => {
+      const { data, error } = await supabase.from(table).select('*').eq('id', id).single();
+      if (error) return null;
+      return data;
+    },
+
+    create: async (payload) => {
+      const { data, error } = await supabase.from(table).insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    },
+
+    update: async (id, payload) => {
+      const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+
+    delete: async (id) => {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+      return { id };
+    },
+
+    subscribe: (cb) => {
+      const channel = supabase
+        .channel(`${table}_changes`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, cb)
+        .subscribe();
+      return () => supabase.removeChannel(channel);
+    },
+  };
+}
+
+export const supabaseDb = {
+  entities: Object.fromEntries(
+    Object.keys(TABLE).map(name => [name, makeEntity(name)])
+  ),
+};

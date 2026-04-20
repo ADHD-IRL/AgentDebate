@@ -3,7 +3,8 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
-import { getApiKey, setApiKey, getModelId, setModelPref } from '@/lib/llm';
+import { getModelId, setModelPref, setWorkspaceApiKey } from '@/lib/llm';
+import { supabase } from '@/lib/supabase';
 
 const MODELS = [
   {
@@ -35,6 +36,7 @@ const MODELS = [
 const MODEL_MAP = { claude_sonnet_4_6: 'claude-sonnet-4-5', claude_opus_4_6: 'claude-opus-4-5', claude_haiku: 'claude-3-haiku-20240307' };
 
 export default function Settings() {
+  const { workspace, refreshWorkspace } = useWorkspace();
   const [currentModel, setCurrentModel] = useState('claude_sonnet_4_6');
   const [apiKey, setApiKeyState] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -44,17 +46,23 @@ export default function Settings() {
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    const storedKey = getApiKey();
-    if (storedKey) setApiKeyState(storedKey);
+    if (workspace?.anthropic_api_key) setApiKeyState(workspace.anthropic_api_key);
     const stored = localStorage.getItem('agd_llm_model') || 'claude_sonnet_4_6';
     setCurrentModel(stored);
-  }, []);
+  }, [workspace]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    setApiKey(apiKey.trim());
-    setModelPref(currentModel);
-    setTimeout(() => { setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 3000); }, 300);
+    try {
+      await supabase.from('workspaces').update({ anthropic_api_key: apiKey.trim() }).eq('id', workspace.id);
+      setWorkspaceApiKey(apiKey.trim());
+      setModelPref(currentModel);
+      if (refreshWorkspace) await refreshWorkspace();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTestKey = async () => {

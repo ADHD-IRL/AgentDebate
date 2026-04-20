@@ -5,8 +5,15 @@ const MODEL_MAP = {
 };
 const DEFAULT_MODEL = 'claude-sonnet-4-5';
 
+// Workspace key set by WorkspaceContext on load (takes priority)
+let _workspaceApiKey = '';
+export function setWorkspaceApiKey(key) { _workspaceApiKey = key || ''; }
+
 export function getApiKey() {
-  return localStorage.getItem('agd_anthropic_key') || '';
+  return _workspaceApiKey
+    || localStorage.getItem('agd_anthropic_key')
+    || import.meta.env.VITE_ANTHROPIC_KEY
+    || '';
 }
 
 export function setApiKey(key) {

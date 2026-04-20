@@ -1,62 +1,78 @@
 import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
-import { localDb } from '@/lib/localDb';
+import { supabase } from '@/lib/supabase';
+import { supabaseDb } from '@/lib/supabaseDb';
+import { useAuth } from '@/lib/AuthContext';
+import { setWorkspaceApiKey } from '@/lib/llm';
 
 const WorkspaceContext = createContext(null);
-const LOCAL_USER_KEY = 'agd_local_user_id';
-const WORKSPACE_KEY  = 'agd_last_workspace';
+const WORKSPACE_KEY = 'agd_last_workspace';
 
-function getLocalUserId() {
-  let id = localStorage.getItem(LOCAL_USER_KEY);
-  if (!id) {
-    id = 'local-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    localStorage.setItem(LOCAL_USER_KEY, id);
-  }
-  return id;
-}
-
-function scopedEntity(entity, workspaceId) {
+function scopedEntity(entity, workspaceId, userId) {
   return {
-    list:   (sort, limit) => entity.filter({ workspace_id: workspaceId }, sort, limit),
-    filter: (filters = {}, sort, limit) => entity.filter({ ...filters, workspace_id: workspaceId }, sort, limit),
-    create: (data) => entity.create({ ...data, workspace_id: workspaceId }),
-    update: (id, data) => entity.update(id, data),
-    delete: (id) => entity.delete(id),
-    get:    (id) => entity.get(id),
+    list:      (sort, limit) => entity.filter({ workspace_id: workspaceId }, sort, limit),
+    filter:    (filters = {}, sort, limit) => entity.filter({ ...filters, workspace_id: workspaceId }, sort, limit),
+    create:    (data) => entity.create({ ...data, workspace_id: workspaceId, created_by: userId }),
+    update:    (id, data) => entity.update(id, data),
+    delete:    (id) => entity.delete(id),
+    get:       (id) => entity.get(id),
     subscribe: (cb) => entity.subscribe(cb),
   };
 }
 
 export const WorkspaceProvider = ({ children }) => {
-  const localUserId = getLocalUserId();
+  const { user, isAuthenticated } = useAuth();
   const [workspace, setWorkspace] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => { initWorkspace(); }, []);
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setWorkspace(null);
+      setIsLoading(false);
+      return;
+    }
+    initWorkspace(user.id);
+  }, [isAuthenticated, user]);
 
-  const initWorkspace = async () => {
+  const initWorkspace = async (userId) => {
     setIsLoading(true);
     try {
-      const members = await localDb.entities.WorkspaceMember.filter({ user_id: localUserId });
+      // Load workspaces the user is a member of
+      const { data: members } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role')
+        .eq('user_id', userId);
 
-      if (members.length > 0) {
-        const allWs = await localDb.entities.Workspace.list();
-        const wsMap = Object.fromEntries(allWs.map(w => [w.id, w]));
+      if (members?.length > 0) {
+        const ids = members.map(m => m.workspace_id);
+        const { data: workspaces } = await supabase
+          .from('workspaces')
+          .select('*')
+          .in('id', ids);
+
         const persistedId = localStorage.getItem(WORKSPACE_KEY);
-        const persisted = persistedId ? members.find(m => m.workspace_id === persistedId) : null;
-        const member = persisted || members[0];
-        const ws = wsMap[member.workspace_id];
+        const ws = workspaces?.find(w => w.id === persistedId) ?? workspaces?.[0];
+
         if (ws) {
-          setWorkspace(ws);
-          localStorage.setItem(WORKSPACE_KEY, ws.id);
-          setIsLoading(false);
+          activateWorkspace(ws);
           return;
         }
       }
 
-      const ws = await localDb.entities.Workspace.create({ name: 'My Workspace', owner_id: localUserId });
-      await localDb.entities.WorkspaceMember.create({ workspace_id: ws.id, user_id: localUserId, role: 'admin' });
-      setWorkspace(ws);
-      localStorage.setItem(WORKSPACE_KEY, ws.id);
+      // No workspace — create one automatically
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .insert({ name: 'My Workspace', owner_id: userId })
+        .select()
+        .single();
+
+      if (ws) {
+        await supabase.from('workspace_members').insert({
+          workspace_id: ws.id,
+          user_id: userId,
+          role: 'admin',
+        });
+        activateWorkspace(ws);
+      }
     } catch (err) {
       console.error('Workspace init failed:', err);
     } finally {
@@ -64,24 +80,45 @@ export const WorkspaceProvider = ({ children }) => {
     }
   };
 
+  const activateWorkspace = (ws) => {
+    setWorkspace(ws);
+    localStorage.setItem(WORKSPACE_KEY, ws.id);
+    // Make the workspace API key available to llm.js
+    if (ws.anthropic_api_key) {
+      setWorkspaceApiKey(ws.anthropic_api_key);
+    }
+  };
+
+  const refreshWorkspace = async () => {
+    if (!workspace) return;
+    const { data } = await supabase.from('workspaces').select('*').eq('id', workspace.id).single();
+    if (data) activateWorkspace(data);
+  };
+
   const db = useMemo(() => {
-    if (!workspace) return null;
-    const e = localDb.entities;
+    if (!workspace || !user) return null;
+    const e = supabaseDb.entities;
     return {
-      Agent:            scopedEntity(e.Agent, workspace.id),
-      Session:          scopedEntity(e.Session, workspace.id),
-      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id),
-      Scenario:         scopedEntity(e.Scenario, workspace.id),
-      Domain:           scopedEntity(e.Domain, workspace.id),
-      Threat:           scopedEntity(e.Threat, workspace.id),
-      Chain:            scopedEntity(e.Chain, workspace.id),
-      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id),
-      AppConfig:        scopedEntity(e.AppConfig, workspace.id),
+      Agent:            scopedEntity(e.Agent, workspace.id, user.id),
+      Session:          scopedEntity(e.Session, workspace.id, user.id),
+      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id, user.id),
+      Scenario:         scopedEntity(e.Scenario, workspace.id, user.id),
+      Domain:           scopedEntity(e.Domain, workspace.id, user.id),
+      Threat:           scopedEntity(e.Threat, workspace.id, user.id),
+      Chain:            scopedEntity(e.Chain, workspace.id, user.id),
+      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id),
+      AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
     };
-  }, [workspace]);
+  }, [workspace, user]);
 
   return (
-    <WorkspaceContext.Provider value={{ workspace, db, isLoading, localUserId }}>
+    <WorkspaceContext.Provider value={{
+      workspace,
+      db,
+      isLoading,
+      localUserId: user?.id,
+      refreshWorkspace,
+    }}>
       {children}
     </WorkspaceContext.Provider>
   );

@@ -1,2 +1,2 @@
-import { localDb } from '@/lib/localDb';
-export const entities = localDb.entities;
+import { supabaseDb } from '@/lib/supabaseDb';
+export const entities = supabaseDb.entities;
