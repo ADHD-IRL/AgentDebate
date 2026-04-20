@@ -1,0 +1,16 @@
+{
+  "name": "Workspace",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "owner_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "owner_id"
+  ]
+}

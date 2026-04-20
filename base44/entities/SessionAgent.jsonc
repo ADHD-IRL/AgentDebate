@@ -1,0 +1,63 @@
+{
+  "name": "SessionAgent",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "round1_assessment": {
+      "type": "string"
+    },
+    "round1_severity": {
+      "type": "string",
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "round2_rebuttal": {
+      "type": "string"
+    },
+    "round2_revised_severity": {
+      "type": "string",
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "round2_strongest_ally_agent_id": {
+      "type": "string"
+    },
+    "round2_strongest_disagree_agent_id": {
+      "type": "string"
+    },
+    "compound_chain_text": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "generating_r1",
+        "r1_done",
+        "generating_r2",
+        "complete"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "session_id",
+    "agent_id"
+  ]
+}

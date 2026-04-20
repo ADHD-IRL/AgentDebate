@@ -1,0 +1,83 @@
+{
+  "name": "Agent",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "discipline": {
+      "type": "string"
+    },
+    "domain_id": {
+      "type": "string"
+    },
+    "persona_description": {
+      "type": "string"
+    },
+    "cognitive_bias": {
+      "type": "string"
+    },
+    "red_team_focus": {
+      "type": "string"
+    },
+    "professional_background": {
+      "type": "string"
+    },
+    "expertise_level": {
+      "type": "string",
+      "enum": [
+        "Junior",
+        "Mid-Level",
+        "Senior",
+        "Principal",
+        "World-Class"
+      ],
+      "default": "Senior"
+    },
+    "reasoning_style": {
+      "type": "string",
+      "enum": [
+        "Analytical",
+        "Intuitive",
+        "Contrarian",
+        "Systematic",
+        "Probabilistic"
+      ],
+      "default": "Analytical"
+    },
+    "severity_default": {
+      "type": "string",
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "vector_human": {
+      "type": "number"
+    },
+    "vector_technical": {
+      "type": "number"
+    },
+    "vector_physical": {
+      "type": "number"
+    },
+    "vector_futures": {
+      "type": "number"
+    },
+    "is_ai_generated": {
+      "type": "boolean"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "discipline"
+  ]
+}

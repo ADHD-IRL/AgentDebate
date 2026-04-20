@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 213 40% 10%;
+    --foreground: 214 32% 91%;
+    --card: 213 40% 13%;
+    --card-foreground: 214 32% 91%;
+    --popover: 213 40% 11%;
+    --popover-foreground: 214 32% 91%;
+    --primary: 38 94% 47%;
+    --primary-foreground: 213 40% 8%;
+    --secondary: 213 35% 16%;
+    --secondary-foreground: 214 32% 75%;
+    --muted: 213 35% 15%;
+    --muted-foreground: 214 20% 54%;
+    --accent: 213 35% 19%;
+    --accent-foreground: 214 32% 91%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 213 30% 22%;
+    --input: 213 35% 16%;
+    --ring: 38 94% 47%;
+    --radius: 0.375rem;
+    --chart-1: 38 94% 47%;
+    --chart-2: 199 65% 45%;
+    --chart-3: 0 72% 51%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 271 65% 55%;
+    --sidebar-background: 213 45% 8%;
+    --sidebar-foreground: 214 32% 80%;
+    --sidebar-primary: 38 94% 47%;
+    --sidebar-primary-foreground: 213 40% 8%;
+    --sidebar-accent: 213 35% 14%;
+    --sidebar-accent-foreground: 214 32% 80%;
+    --sidebar-border: 213 30% 18%;
+    --sidebar-ring: 38 94% 47%;
+
+    /* WARROOM custom tokens */
+    --wr-bg-primary: #0D1B2A;
+    --wr-bg-secondary: #121E2D;
+    --wr-bg-card: #1A2844;
+    --wr-bg-hover: #1F3060;
+    --wr-border: #2A3F5A;
+    --wr-text-primary: #E8EDF5;
+    --wr-text-secondary: #8A9BB5;
+    --wr-text-muted: #546E7A;
+    --wr-amber: #F0A500;
+    --wr-amber-dim: #8B6914;
+    --wr-critical: #C0392B;
+    --wr-high: #D68910;
+    --wr-medium: #2E86AB;
+    --wr-low: #27AE60;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--wr-bg-primary);
+    color: var(--wr-text-primary);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--wr-bg-secondary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--wr-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--wr-text-muted);
+  }
+}
+
+@layer utilities {
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .wr-card {
+    background-color: var(--wr-bg-card);
+    border: 1px solid var(--wr-border);
+    border-radius: 0.375rem;
+  }
+
+  .wr-glow-amber {
+    box-shadow: 0 0 20px rgba(240, 165, 0, 0.15);
+  }
+}

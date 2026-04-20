@@ -1,0 +1,60 @@
+{
+  "name": "Chain",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "domain_id": {
+      "type": "string"
+    },
+    "scenario_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Originating session ID if this chain was derived from a synthesis"
+    },
+    "threat_id": {
+      "type": "string"
+    },
+    "is_ai_generated": {
+      "type": "boolean"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "number"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "agent_label": {
+            "type": "string"
+          },
+          "step_text": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

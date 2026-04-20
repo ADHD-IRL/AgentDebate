@@ -1,0 +1,355 @@
+import { useState, useEffect } from 'react';
+import { queued } from '@/lib/apiQueue';
+import { Link } from 'react-router-dom';
+import { useWorkspace } from '@/lib/WorkspaceContext';
+import { Target, Plus, X, Sparkles, Search, ChevronRight, Download, FileText, Link2, Trash2 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import PageHeader from '@/components/ui/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
+import WrButton from '@/components/ui/WrButton';
+import { WrInput, WrSelect } from '@/components/ui/WrInput';
+
+const STATUS_COLOR = { draft: '#546E7A', active: '#27AE60', archived: '#C0392B' };
+
+function ScenarioModal({ scenario, domains, onSave, onClose }) {
+  const [form, setForm] = useState({ name: '', description: '', domain_id: '', context_document: '', status: 'draft', tags: [], ...scenario });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState('');
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const aiAssist = async () => {
+    if (!form.context_document) return;
+    setAiLoading(true);
+    try {
+      const res = await base44.functions.invoke('scenarioAiAssist', { context: form.context_document });
+      set('context_document', res.data.improved);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const fetchFromUrl = async () => {
+    if (!urlInput.trim()) return;
+    setUrlError('');
+    setUrlLoading(true);
+    try {
+      const res = await base44.functions.invoke('fetchUrlScenario', { url: urlInput.trim() });
+      if (res.data.error) { setUrlError(res.data.error); return; }
+      set('context_document', res.data.context);
+      setUrlInput('');
+    } catch (e) {
+      setUrlError('Failed to fetch URL. Check it is publicly accessible.');
+    } finally {
+      setUrlLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+      <div className="w-[640px] max-h-[90vh] overflow-y-auto rounded-lg p-6" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>
+            {scenario?.id ? 'EDIT SCENARIO' : 'NEW SCENARIO'}
+          </h2>
+          <button onClick={onClose}><X className="w-4 h-4" style={{ color: 'var(--wr-text-muted)' }} /></button>
+        </div>
+        <div className="space-y-4">
+          <WrInput label="NAME" value={form.name} onChange={v => set('name', v)} placeholder="Scenario name" />
+          <WrSelect label="DOMAIN" value={form.domain_id} onChange={v => set('domain_id', v)}>
+            <option value="">Select domain...</option>
+            {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </WrSelect>
+          <WrInput label="DESCRIPTION" value={form.description} onChange={v => set('description', v)} placeholder="Brief description..." rows={2} />
+          <WrSelect label="STATUS" value={form.status} onChange={v => set('status', v)}>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </WrSelect>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium tracking-wide" style={{ color: 'var(--wr-text-secondary)' }}>CONTEXT DOCUMENT</label>
+              <button onClick={aiAssist} disabled={aiLoading} className="flex items-center gap-1 text-xs px-2 py-1 rounded"
+                style={{ color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)', backgroundColor: 'rgba(240,165,0,0.05)' }}>
+                <Sparkles className="w-3 h-3" />
+                {aiLoading ? 'Improving...' : 'AI Assist'}
+              </button>
+            </div>
+            {/* URL Ingestion */}
+            <div className="flex gap-2 mb-2">
+              <div className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded"
+                style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+                <Link2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }} />
+                <input
+                  value={urlInput}
+                  onChange={e => setUrlInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && fetchFromUrl()}
+                  placeholder="Paste URL to auto-populate from web..."
+                  className="flex-1 text-xs outline-none bg-transparent"
+                  style={{ color: 'var(--wr-text-primary)' }}
+                />
+              </div>
+              <button
+                onClick={fetchFromUrl}
+                disabled={urlLoading || !urlInput.trim()}
+                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded transition-colors disabled:opacity-40"
+                style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
+                <Link2 className="w-3 h-3" />
+                {urlLoading ? 'Fetching...' : 'Fetch'}
+              </button>
+            </div>
+            {urlError && <p className="text-xs mb-2" style={{ color: '#C0392B' }}>{urlError}</p>}
+            <textarea
+              value={form.context_document}
+              onChange={e => set('context_document', e.target.value)}
+              rows={8}
+              placeholder="Write the full scenario briefing document that all agents will read..."
+              className="w-full px-3 py-2 text-sm outline-none resize-none rounded"
+              style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }}
+            />
+            <p className="text-xs mt-1 text-right" style={{ color: 'var(--wr-text-muted)' }}>{form.context_document?.length || 0} characters</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <WrButton variant="secondary" onClick={onClose}>Cancel</WrButton>
+          <WrButton onClick={() => onSave(form)}>Save Scenario</WrButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Scenarios() {
+  const { db } = useWorkspace();
+  const [scenarios, setScenarios] = useState([]);
+  const [domains, setDomains] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  // Track updated_date at time of last save to detect edits after session was run
+  const [scenarioEditedAt, setScenarioEditedAt] = useState({});
+
+  const load = async () => {
+    if (!db) return;
+    const scen = await queued(() => db.Scenario.list());
+    const doms = await queued(() => db.Domain.list());
+    const sess = await queued(() => db.Session.list());
+    setScenarios(scen);
+    setDomains(doms);
+    setSessions(sess);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [db]);
+
+  const handleSave = async (form) => {
+    if (form.id) {
+      await db.Scenario.update(form.id, form);
+      // Mark this scenario as edited now so Run Session unlocks
+      setScenarioEditedAt(prev => ({ ...prev, [form.id]: Date.now() }));
+    } else {
+      await db.Scenario.create(form);
+    }
+    setModal(null);
+    load();
+  };
+
+  // Returns true if the scenario has been used in at least one session
+  // AND has NOT been edited since the most recent session was created
+  const isRunBlocked = (scen) => {
+    if (!scen) return false;
+    const relatedSessions = sessions.filter(s => s.scenario_id === scen.id);
+    if (relatedSessions.length === 0) return false;
+    // If user edited it locally this browser session, allow running
+    if (scenarioEditedAt[scen.id]) return false;
+    // Compare scenario's updated_date vs the latest session's created_date
+    const latestSessionDate = Math.max(...relatedSessions.map(s => new Date(s.created_date).getTime()));
+    const scenarioUpdated = new Date(scen.updated_date).getTime();
+    return scenarioUpdated <= latestSessionDate;
+  };
+
+  const handleDelete = async (scen) => {
+    if (!confirm(`Delete scenario "${scen.name}"? This cannot be undone.`)) return;
+    await db.Scenario.delete(scen.id);
+    setScenarios(prev => prev.filter(s => s.id !== scen.id));
+    setSelected(null);
+  };
+
+  const domainById = (id) => domains.find(d => d.id === id);
+  const filtered = scenarios.filter(s => s.name?.toLowerCase().includes(search.toLowerCase()));
+
+  const exportMarkdown = (scen) => {
+    const domain = domainById(scen.domain_id);
+    const lines = [
+      `# OPERATIONAL BRIEF`,
+      `## ${scen.name}`,
+      '',
+      domain ? `**Domain:** ${domain.name}` : '',
+      `**Status:** ${scen.status?.toUpperCase()}`,
+      `**Exported:** ${new Date().toLocaleDateString()}`,
+      '',
+      scen.description ? `### Overview\n${scen.description}\n` : '',
+      scen.context_document ? `### Context Document\n${scen.context_document}` : '',
+    ].filter(l => l !== undefined);
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `brief-${scen.name.replace(/\s+/g,'-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPdf = (scen) => {
+    const domain = domainById(scen.domain_id);
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html><head><title>${scen.name} — Operational Brief</title>
+      <style>
+        body { font-family: Georgia, serif; max-width: 800px; margin: 60px auto; color: #1a1a1a; line-height: 1.7; }
+        h1 { font-size: 28px; border-bottom: 3px solid #F0A500; padding-bottom: 10px; margin-bottom: 4px; }
+        h2 { font-size: 20px; color: #444; margin-top: 0; }
+        h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        .meta { font-size: 13px; color: #666; margin-bottom: 32px; display: flex; gap: 24px; }
+        .badge { background: #f5f5f5; border: 1px solid #ddd; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+        pre { white-space: pre-wrap; font-family: Georgia, serif; font-size: 14px; line-height: 1.8; }
+        .footer { margin-top: 60px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
+      </style></head><body>
+      <h1>${scen.name}</h1>
+      <h2>Operational Brief</h2>
+      <div class="meta">
+        ${domain ? `<span>Domain: <span class="badge">${domain.name}</span></span>` : ''}
+        <span>Status: <span class="badge">${scen.status?.toUpperCase()}</span></span>
+        <span>Exported: ${new Date().toLocaleDateString()}</span>
+      </div>
+      ${scen.description ? `<h3>Overview</h3><p>${scen.description}</p>` : ''}
+      ${scen.context_document ? `<h3>Context Document</h3><pre>${scen.context_document}</pre>` : ''}
+      <div class="footer">Generated by WARROOM — Structured Red Team Intelligence Platform</div>
+      </body></html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  return (
+    <div style={{ backgroundColor: 'var(--wr-bg-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <PageHeader
+        icon={Target}
+        title="SCENARIOS"
+        subtitle="Define situations for analysis"
+        actions={<WrButton onClick={() => setModal('new')}><Plus className="w-4 h-4" /> New Scenario</WrButton>}
+      />
+
+      <div className="flex flex-1">
+        {/* Left list */}
+        <div className="w-72 flex-shrink-0 border-r flex flex-col" style={{ borderColor: 'var(--wr-border)' }}>
+          <div className="p-3 border-b" style={{ borderColor: 'var(--wr-border)' }}>
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+              <Search className="w-3.5 h-3.5" style={{ color: 'var(--wr-text-muted)' }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search scenarios..."
+                className="flex-1 text-sm outline-none bg-transparent" style={{ color: 'var(--wr-text-primary)' }} />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {filtered.length === 0 && !loading && (
+              <div className="p-4 text-sm text-center" style={{ color: 'var(--wr-text-muted)' }}>
+                {scenarios.length === 0 ? 'No scenarios yet' : 'No results'}
+              </div>
+            )}
+            {filtered.map(s => {
+              const dom = domainById(s.domain_id);
+              return (
+                <button key={s.id} onClick={() => setSelected(s)}
+                  className="w-full text-left p-3 border-b transition-colors hover:bg-white/3"
+                  style={{
+                    borderColor: 'var(--wr-border)',
+                    backgroundColor: selected?.id === s.id ? 'var(--wr-bg-card)' : 'transparent',
+                    borderLeft: selected?.id === s.id ? `2px solid var(--wr-amber)` : '2px solid transparent',
+                  }}>
+                  <p className="text-sm font-medium" style={{ color: 'var(--wr-text-primary)' }}>{s.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {dom && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: `${dom.color}22`, color: dom.color }}>{dom.name}</span>}
+                    <span className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: `${STATUS_COLOR[s.status]}22`, color: STATUS_COLOR[s.status] }}>
+                      {s.status?.toUpperCase()}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right detail */}
+        <div className="flex-1 overflow-y-auto">
+          {!selected ? (
+            <EmptyState
+              icon={Target}
+              title="Select a scenario"
+              description="Choose a scenario from the list or create a new one."
+              action={() => setModal('new')}
+              actionLabel="New Scenario"
+            />
+          ) : (
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold" style={{ color: 'var(--wr-text-primary)' }}>{selected.name}</h2>
+                  <p className="text-sm mt-1" style={{ color: 'var(--wr-text-secondary)' }}>{selected.description}</p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <WrButton variant="secondary" size="sm" onClick={() => setModal(selected)}>Edit</WrButton>
+                  <WrButton variant="outline" size="sm" onClick={() => handleDelete(selected)}
+                    style={{ color: '#C0392B', borderColor: 'rgba(192,57,43,0.4)' }}>
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </WrButton>
+                  <WrButton variant="outline" size="sm" onClick={() => exportMarkdown(selected)}>
+                    <Download className="w-3.5 h-3.5" /> Markdown
+                  </WrButton>
+                  <WrButton variant="outline" size="sm" onClick={() => exportPdf(selected)}>
+                    <FileText className="w-3.5 h-3.5" /> PDF
+                  </WrButton>
+                  {isRunBlocked(selected) ? (
+                    <div className="relative group">
+                      <WrButton size="sm" disabled>
+                        <ChevronRight className="w-3.5 h-3.5" /> Run Session
+                      </WrButton>
+                      <div className="absolute right-0 top-full mt-1 z-10 w-52 text-xs rounded px-2.5 py-1.5 hidden group-hover:block"
+                        style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+                        This scenario has already been run. Edit it first to unlock a new session.
+                      </div>
+                    </div>
+                  ) : (
+                    <Link to={`/sessions/new?scenario=${selected.id}`}>
+                      <WrButton size="sm"><ChevronRight className="w-3.5 h-3.5" /> Run Session</WrButton>
+                    </Link>
+                  )}
+                </div>
+              </div>
+              {selected.context_document && (
+                <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+                  <h3 className="text-xs font-bold tracking-widest mb-3 font-mono" style={{ color: 'var(--wr-text-muted)' }}>CONTEXT DOCUMENT</h3>
+                  <pre className="text-sm whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)', fontFamily: 'Inter, sans-serif', lineHeight: '1.6' }}>
+                    {selected.context_document}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {modal && (
+        <ScenarioModal
+          scenario={modal === 'new' ? null : modal}
+          domains={domains}
+          onSave={handleSave}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
