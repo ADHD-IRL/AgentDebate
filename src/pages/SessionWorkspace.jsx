@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { generateRound1, generateRound2, generateSynthesis as generateSynthesisLLM } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2 } from 'lucide-react';
@@ -315,29 +315,21 @@ export default function SessionWorkspace() {
           return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
         }).join('\n\n');
 
-      const res = await base44.functions.invoke(round === 1 ? 'generateRound1' : 'generateRound2', {
+      const fn = round === 1 ? generateRound1 : generateRound2;
+      const res = await fn({
         agent: { ...agent },
         scenarioContext: scenario?.context_document || '',
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
       });
 
-      if (res.data?.error) {
-        await db.SessionAgent.update(sa.id, { status: 'pending' });
-        setGenError(res.data.error);
-        setGeneratingAll(false);
-        setProgress({ current: 0, total: 0 });
-        load();
-        return;
-      }
-
       const updates = round === 1 ? {
-        round1_assessment: res.data.assessment,
-        round1_severity: res.data.severity || agent.severity_default,
+        round1_assessment: res.assessment,
+        round1_severity: res.severity || agent.severity_default,
         status: 'r1_done',
       } : {
-        round2_rebuttal: res.data.assessment,
-        round2_revised_severity: res.data.severity || sa.round1_severity,
+        round2_rebuttal: res.assessment,
+        round2_revised_severity: res.severity || sa.round1_severity,
         status: 'complete',
       };
 
@@ -368,27 +360,21 @@ export default function SessionWorkspace() {
     }).join('\n\n');
 
     try {
-      const res = await base44.functions.invoke(round === 1 ? 'generateRound1' : 'generateRound2', {
+      const fn2 = round === 1 ? generateRound1 : generateRound2;
+      const res = await fn2({
         agent: { ...agent },
         scenarioContext: scenario?.context_document || '',
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
       });
 
-      if (res.data?.error) {
-        await db.SessionAgent.update(sa.id, { status: 'pending' });
-        setGenError(res.data.error);
-        load();
-        return;
-      }
-
       const updates = round === 1 ? {
-        round1_assessment: res.data.assessment,
-        round1_severity: res.data.severity || agent.severity_default,
+        round1_assessment: res.assessment,
+        round1_severity: res.severity || agent.severity_default,
         status: 'r1_done',
       } : {
-        round2_rebuttal: res.data.assessment,
-        round2_revised_severity: res.data.severity || sa.round1_severity,
+        round2_rebuttal: res.assessment,
+        round2_revised_severity: res.severity || sa.round1_severity,
         status: 'complete',
       };
 
@@ -427,7 +413,7 @@ export default function SessionWorkspace() {
     );
 
     try {
-      const res = await base44.functions.invoke('generateSynthesis', {
+      const res = await generateSynthesisLLM({
         session: { ...session },
         sessionAgents: sessionAgents.map(sa => ({
           ...sa,
@@ -435,14 +421,13 @@ export default function SessionWorkspace() {
           discipline: getAgent(sa.agent_id)?.discipline,
         })),
         scenarioContext: scenario?.context_document || '',
-        workspace_id: workspace?.id,
       });
 
       const existing = synthesis;
       const synthData = {
-        raw_text: res.data.synthesis_url || res.data.synthesis,
+        raw_text: res.synthesis,
         session_id: id,
-        compound_chains: res.data.compound_chains || [],
+        compound_chains: res.compound_chains || [],
       };
       if (existing?.id) {
         await db.SessionSynthesis.update(existing.id, synthData);

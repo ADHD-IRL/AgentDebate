@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -82,7 +81,7 @@ export default function Agents() {
     if (ids.length === 0) return;
     setShowBulkDelete(false);
     setSelected(new Set());
-    await base44.functions.invoke('deleteAgents', { agent_ids: ids });
+    await Promise.all(ids.map(id => db.Agent.delete(id)));
     load();
   };
 

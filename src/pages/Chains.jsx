@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { generateChain as generateChainLLM } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Link2, Plus, Sparkles, Trash2, Edit2, X, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -81,15 +81,12 @@ function ChainBuilderPanel({ chain, domains, scenarios, agents, onSave, onClose,
     setGenError(null);
     try {
       const scenario = scenarios.find(s => s.id === aiForm.scenario_id);
-      const res = await base44.functions.invoke('generateChain', {
+      const data = await generateChainLLM({
         ...aiForm,
         scenarioContext: scenario?.context_document || '',
         agentList: agents.map(a => ({ name: a.name, discipline: a.discipline }))
       });
-      if (res.data?.error) {
-        setGenError(res.data.error);
-      } else {
-        const data = res.data;
+      {
         setForm(f => ({
           ...f,
           name: data.name || f.name,

@@ -1,0 +1,406 @@
+const MODEL_MAP = {
+  claude_sonnet_4_6: 'claude-sonnet-4-5',
+  claude_opus_4_6:   'claude-opus-4-5',
+  claude_haiku:      'claude-3-haiku-20240307',
+};
+const DEFAULT_MODEL = 'claude-sonnet-4-5';
+
+export function getApiKey() {
+  return localStorage.getItem('agd_anthropic_key') || '';
+}
+
+export function setApiKey(key) {
+  localStorage.setItem('agd_anthropic_key', key);
+}
+
+export function getModelId() {
+  const val = localStorage.getItem('agd_llm_model');
+  return MODEL_MAP[val] || DEFAULT_MODEL;
+}
+
+export function setModelPref(val) {
+  localStorage.setItem('agd_llm_model', val);
+}
+
+async function callAnthropic({ messages, maxTokens = 2000, system }) {
+  const key = getApiKey();
+  if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
+  const body = { model: getModelId(), max_tokens: maxTokens, messages };
+  if (system) body.system = system;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error?.message || 'Anthropic API error');
+  return data.content[0].text.trim();
+}
+
+// --- generateAgent ---
+export async function generateAgent({ domain_id, expert_type, prior_background, key_focus, bias_toward }) {
+  const prompt = `You are building an expert agent profile for the AgentDebate strategic analysis system.
+Generate a detailed agent profile for the following expert type:
+
+Expert type: ${expert_type}
+Prior background hints: ${prior_background || 'none'}
+Key focus area: ${key_focus || 'none'}
+Known bias toward: ${bias_toward || 'none'}
+
+Return a JSON object with exactly these fields:
+{
+  "name": "short descriptive name",
+  "discipline": "2-4 word discipline label",
+  "persona_description": "3-4 sentence description of who this expert is, how they think, what they prioritize",
+  "cognitive_bias": "1-2 sentences describing what this expert systematically underweights or misses",
+  "red_team_focus": "2-3 sentences on what this agent hunts for when analyzing any scenario",
+  "severity_default": "CRITICAL or HIGH or MEDIUM",
+  "vector_human": 50,
+  "vector_technical": 50,
+  "vector_physical": 30,
+  "vector_futures": 40,
+  "tags": ["array", "of", "3-5", "relevant", "tags"]
+}
+
+Return ONLY the JSON object.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1024 });
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+// --- generateRound1 ---
+export async function generateRound1({ agent, scenarioContext, phaseFocus }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
+${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
+${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
+
+Your cognitive bias: ${agent.cognitive_bias}
+Your red-team focus: ${agent.red_team_focus}
+
+SCENARIO CONTEXT:
+${scenarioContext}
+
+PHASE/FOCUS: ${phaseFocus || 'General analysis'}
+
+Write a Round 1 independent threat/scenario assessment (600-900 words) covering:
+1. Opening position — your primary framing of the situation from your discipline
+2. Threat/Finding 1 — with specific mechanism, what defenders/analysts are missing, and severity (CRITICAL/HIGH/MEDIUM) with rationale
+3. Threat/Finding 2 — same structure
+4. Threat/Finding 3 — same structure
+5. Invalidating assumption — one assumption that if wrong would change your entire assessment
+6. Key finding — one-sentence bottom line
+
+After your assessment, on the very last line output exactly:
+SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+
+Write in first person as the expert. Be specific, opinionated, and willing to disagree with conventional wisdom.`;
+
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  const lines = fullText.split('\n');
+  let severity = agent.severity_default || 'HIGH';
+  let assessment = fullText;
+  const lastLine = lines[lines.length - 1];
+  const m = lastLine.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
+  if (m) { severity = m[1].toUpperCase(); assessment = lines.slice(0, -1).join('\n').trim(); }
+  return { assessment, severity };
+}
+
+// --- generateRound2 ---
+export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
+${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
+${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
+
+Your cognitive bias: ${agent.cognitive_bias}
+
+You have just read all Round 1 assessments from the other experts. Here they are:
+
+${othersAssessments || '(No other assessments available yet)'}
+
+Now write your Round 2 rebuttal (400-600 words) covering:
+1. Strongest alliance — which other agent's findings combine most powerfully with yours, and build the compound chain that emerges (name the agent explicitly)
+2. Strongest disagreement — which agent you disagree with most and exactly why (name them, reference their specific argument)
+3. Whether you've revised your severity rating and why
+4. ONE compound chain narrative — a multi-step sequence threading your discipline with at least one other agent's discipline
+
+After your rebuttal, on the very last line output exactly:
+SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+
+Be direct. Name names. Quote other agents' arguments when disagreeing. Change your position if another agent persuaded you.`;
+
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1500 });
+  const lines = fullText.split('\n');
+  let severity = agent.severity_default || 'HIGH';
+  let assessment = fullText;
+  const lastLine = lines[lines.length - 1];
+  const m = lastLine.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
+  if (m) { severity = m[1].toUpperCase(); assessment = lines.slice(0, -1).join('\n').trim(); }
+  return { assessment, severity };
+}
+
+// --- generateSynthesis ---
+function extractSection(text, heading) {
+  const regex = new RegExp(`##\\s*${heading}[\\s\\S]*?(?=\\n---\\n|\\n## |$)`, 'i');
+  const match = text.match(regex);
+  if (!match) return '';
+  return match[0].replace(/^##[^\n]*\n/, '').trim();
+}
+
+function parseCompoundChains(chainsText) {
+  if (!chainsText) return [];
+  if (/unable to generate|no.*assessment|no.*data/i.test(chainsText)) return [];
+  const chains = [];
+  const blocks = chainsText.split(/\n(?=###\s|(?:\d+\.|\*\*)[^\n]+)/).filter(b => b.trim());
+  for (const block of blocks) {
+    const lines = block.trim().split('\n').filter(l => l.trim());
+    if (!lines.length) continue;
+    const rawTitle = lines[0].replace(/^(###|\d+\.|\*\*)\s*/, '').replace(/\*\*/g, '').trim();
+    if (!rawTitle || rawTitle.length < 3) continue;
+    const bodyText = lines.slice(1).join('\n').trim();
+    const stepLines = bodyText.split('\n').filter(l => /^(step\s*\d+|→|\d+\.|[-•])/i.test(l.trim()));
+    const steps = stepLines.map((line, i) => ({
+      step_number: i + 1,
+      agent_id: '',
+      agent_label: '',
+      step_text: line.replace(/^(step\s*\d+[:\-]?|→|\d+\.|[-•])\s*/i, '').trim(),
+    })).filter(s => s.step_text.length > 0);
+    chains.push({ name: rawTitle, description: bodyText.substring(0, 300), steps });
+  }
+  return chains;
+}
+
+export async function generateSynthesis({ session, sessionAgents, scenarioContext }) {
+  const truncated = (scenarioContext || '').substring(0, 3000);
+  const agentsText = sessionAgents.map(sa => {
+    const parts = [`=== ${sa.agentName} (${sa.discipline}) ===`];
+    if (sa.round1_assessment) {
+      parts.push(`ROUND 1 [${sa.round1_severity}]:`);
+      parts.push((sa.round1_assessment || '').substring(0, 800));
+    }
+    if (sa.round2_rebuttal) {
+      parts.push(`\nROUND 2 [${sa.round2_revised_severity}]:`);
+      parts.push((sa.round2_rebuttal || '').substring(0, 600));
+    }
+    return parts.join('\n');
+  }).join('\n\n---\n\n');
+
+  const prompt = `You are the AgentDebate synthesis engine. You have received all agent assessments from a structured two-round red team analysis session.
+
+Session: ${session.name}
+Phase Focus: ${session.phase_focus || 'General'}
+
+Scenario Context:
+${truncated}
+
+ALL AGENT ASSESSMENTS:
+${agentsText}
+
+Generate a comprehensive synthesis report covering:
+
+## CONSENSUS FINDINGS
+(Points that multiple agents agreed on, sorted by severity)
+
+## CONTESTED FINDINGS
+(Points of significant disagreement between agents — format as "Agent A vs Agent B: [the disagreement]")
+
+## COMPOUND CHAINS
+(Multi-step threat sequences that emerged from agents building on each other's work. Format each chain EXACTLY as:
+### [Chain Name]
+Step 1: [description]
+Step 2: [description]
+Step 3: [description]
+List 2-4 chains. Each must have at least 3 steps.)
+
+## BLIND SPOTS
+(Areas or threat vectors that no agent adequately covered)
+
+## PRIORITY MITIGATIONS
+(Numbered list of recommended immediate actions, based on the highest-severity consensus findings)
+
+## SHARPEST INSIGHTS
+(5 most important or surprising specific statements from individual agents, with attribution)
+
+Write analytically. Be specific. Cite agents by name.`;
+
+  const synthesis = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2500 });
+  const chainsSection = extractSection(synthesis, 'COMPOUND CHAINS');
+  const compound_chains = parseCompoundChains(chainsSection);
+  return { synthesis, compound_chains, synthesis_url: null };
+}
+
+// --- generateThreats ---
+export async function generateThreats({ scenarioContext, scenarioName }) {
+  const prompt = `You are a strategic threat analyst for the AgentDebate intelligence platform.
+
+Based on this scenario: "${scenarioName}"
+
+Context:
+${scenarioContext}
+
+Generate 7 specific, operationally relevant threats. Return a JSON object:
+{
+  "threats": [
+    {
+      "name": "concise threat name",
+      "description": "2-3 sentence description of the threat mechanism and why it matters",
+      "severity": "CRITICAL or HIGH or MEDIUM or LOW",
+      "category": "category label (e.g. Supply Chain, Cyber, HUMINT, Physical, IO)"
+    }
+  ]
+}
+
+Make threats specific to this scenario, not generic. Include threats across multiple disciplines. Return ONLY the JSON.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+// --- generateChain ---
+export async function generateChain({ scenarioContext, agentList, chain_type, num_steps, focus_area }) {
+  const agentListText = agentList.map(a => `- ${a.name} (${a.discipline})`).join('\n');
+  const prompt = `You are generating a compound scenario chain for the AgentDebate strategic analysis system.
+
+A chain is a multi-step sequence showing how a scenario, threat, or adversary operation unfolds across multiple disciplines.
+
+Scenario Context:
+${scenarioContext || '(no specific scenario provided)'}
+
+Available Agent Disciplines:
+${agentListText}
+
+Chain Type: ${chain_type}
+Focus Area: ${focus_area || 'general'}
+Number of Steps: ${num_steps}
+
+Generate a compound chain with ${num_steps} steps. Return a JSON object:
+{
+  "name": "Evocative chain name in quotes",
+  "description": "2-3 sentence summary of what this chain represents",
+  "steps": [
+    {
+      "step_number": 1,
+      "agent_label": "Agent name or discipline label from the list above",
+      "step_text": "Clear description of what happens in this step and why it matters"
+    }
+  ]
+}
+
+Return ONLY the JSON.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+// --- scenarioAiAssist ---
+export async function scenarioAiAssist({ context }) {
+  const prompt = `You are a strategic intelligence analyst. The user has written a scenario context document for a red team analysis session.
+
+Improve and expand the following scenario context document. Make it:
+- More specific and operationally detailed
+- Include relevant geopolitical/technical/economic context
+- Add timeline context if relevant
+- Identify key actors, systems, and dependencies
+- Make it detailed enough for expert analysts to do substantive assessment
+
+Original context:
+${context}
+
+Return only the improved context document text. No preamble or explanation.`;
+
+  const improved = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  return { improved };
+}
+
+// --- fetchUrlScenario ---
+export async function fetchUrlScenario({ url }) {
+  let html;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    html = await res.text();
+  } catch (e) {
+    throw new Error(`Could not fetch URL (CORS may be blocking it): ${e.message}`);
+  }
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 12000);
+
+  const prompt = `You are a red team analyst preparing a scenario briefing.
+
+Given the following web page content, extract and synthesize the most relevant information into a concise, structured scenario context document. Focus on:
+- Key facts, events, or situation details
+- Threat actors, vulnerabilities, or risks mentioned
+- Organizational or technical environment described
+- Any timelines, impacts, or consequences
+
+Web page content:
+---
+${text}
+---
+
+Output a clean scenario context document (3-6 paragraphs). No disclaimers.`;
+
+  const context = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  return { context };
+}
+
+// --- analyzeChainBreaker ---
+const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and identify exactly where defenders should intervene to prevent adversary success.
+
+You will receive a JSON input with two fields:
+- chain: an object with name, description, and steps (array of { step_number, agent_label, step_text })
+- scenarioContext: optional free-text scenario context
+
+For each step assess: adversary objective, dependencies, leverage (HIGH/MEDIUM/LOW), countermeasures (2-4 specific controls), difficulty (EASY/MODERATE/HARD), residual risk.
+
+Also provide: summary, priority_steps (array of step numbers), chain_resilience (HIGH/MEDIUM/LOW).
+
+Return ONLY valid JSON matching this schema exactly:
+{
+  "steps": [{ "step_number": 1, "adversary_objective": "", "dependencies": "", "leverage": "HIGH", "countermeasures": [""], "difficulty": "EASY", "residual_risk": "" }],
+  "summary": "",
+  "priority_steps": [1],
+  "chain_resilience": "HIGH"
+}`;
+
+export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
+  const userMessage = [
+    'Analyze this attack chain and return the structured break analysis as JSON.',
+    '',
+    `Chain: ${JSON.stringify(chain, null, 2)}`,
+    scenarioContext ? `\nScenario Context:\n${scenarioContext}` : '',
+  ].join('\n');
+
+  const raw = await callAnthropic({
+    system: CHAIN_BREAKER_SYSTEM,
+    messages: [{ role: 'user', content: userMessage }],
+    maxTokens: 4096,
+  });
+
+  let result;
+  try { result = JSON.parse(raw); }
+  catch { throw new Error('Model returned non-JSON response. Try again.'); }
+  if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
+  return result;
+}
+
+// --- deleteAgents (no LLM needed) ---
+export async function deleteAgents({ agent_ids, db }) {
+  for (const id of agent_ids) {
+    await db.Agent.delete(id);
+  }
+  return { deleted: agent_ids.length };
+}

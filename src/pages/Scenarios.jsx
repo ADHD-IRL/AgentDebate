@@ -3,7 +3,7 @@ import { queued } from '@/lib/apiQueue';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Target, Plus, X, Sparkles, Search, ChevronRight, Download, FileText, Link2, Trash2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { scenarioAiAssist, fetchUrlScenario } from '@/lib/llm';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
@@ -23,8 +23,8 @@ function ScenarioModal({ scenario, domains, onSave, onClose }) {
     if (!form.context_document) return;
     setAiLoading(true);
     try {
-      const res = await base44.functions.invoke('scenarioAiAssist', { context: form.context_document });
-      set('context_document', res.data.improved);
+      const res = await scenarioAiAssist({ context: form.context_document });
+      set('context_document', res.improved);
     } finally {
       setAiLoading(false);
     }
@@ -35,9 +35,8 @@ function ScenarioModal({ scenario, domains, onSave, onClose }) {
     setUrlError('');
     setUrlLoading(true);
     try {
-      const res = await base44.functions.invoke('fetchUrlScenario', { url: urlInput.trim() });
-      if (res.data.error) { setUrlError(res.data.error); return; }
-      set('context_document', res.data.context);
+      const res = await fetchUrlScenario({ url: urlInput.trim() });
+      set('context_document', res.context);
       setUrlInput('');
     } catch (e) {
       setUrlError('Failed to fetch URL. Check it is publicly accessible.');

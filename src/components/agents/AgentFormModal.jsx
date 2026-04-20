@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Sparkles, Loader2, SlidersHorizontal } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
-import { base44 } from '@/api/base44Client';
+import { generateAgent as generateAgentLLM } from '@/lib/llm';
 
 const SEVERITIES = ['CRITICAL','HIGH','MEDIUM','LOW'];
 const SEV_COLORS = { CRITICAL:'#C0392B', HIGH:'#D68910', MEDIUM:'#2E86AB', LOW:'#27AE60' };
@@ -26,8 +26,7 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
   const generateAgent = async () => {
     setGenerating(true);
     try {
-      const res = await base44.functions.invoke('generateAgent', aiForm);
-      const data = res.data;
+      const data = await generateAgentLLM(aiForm);
       setForm(f => ({ ...f, ...data, is_ai_generated: true, domain_id: aiForm.domain_id || f.domain_id, name: aiForm.name || data.name || f.name }));
       setMode('manual');
     } finally { setGenerating(false); }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
+import { analyzeChainBreaker } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
   Scissors, AlertTriangle, Loader2, Save, FileText,
@@ -222,7 +222,7 @@ export default function ChainBreaker() {
     setSavedAt(null);
     const scenario = scenarios.find(s => s.id === selectedScenarioId);
     try {
-      const res = await base44.functions.invoke('analyzeChainBreaker', {
+      const result = await analyzeChainBreaker({
         chain: {
           name:        activeChain.name,
           description: activeChain.description,
@@ -234,11 +234,10 @@ export default function ChainBreaker() {
         },
         scenarioContext: scenario?.context_document || '',
       });
-      if (res.data?.error) throw new Error(res.data.error);
-      setAnalysis(res.data);
+      setAnalysis(result);
       toast({
         title: 'Analysis complete',
-        description: `${res.data.steps?.length || 0} steps analyzed · Chain resilience: ${res.data.chain_resilience}`,
+        description: `${result.steps?.length || 0} steps analyzed · Chain resilience: ${result.chain_resilience}`,
       });
     } catch (e) {
       const msg = e.message || 'Analysis failed.';
