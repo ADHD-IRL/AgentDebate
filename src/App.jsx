@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { supabaseMisconfigured } from '@/lib/supabase';
 import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import AppLayout from '@/components/layout/AppLayout';
 import LoginPage from '@/pages/LoginPage';
@@ -90,7 +91,25 @@ const AppRoutes = () => {
   );
 };
 
+const SetupRequired = () => (
+  <div style={{ backgroundColor: '#0D1B2A', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' }}>
+    <div style={{ maxWidth: 540, padding: '2rem', border: '1px solid #F0A500', borderRadius: 8, color: '#E0E0E0' }}>
+      <p style={{ color: '#F0A500', fontWeight: 'bold', fontSize: 13, letterSpacing: 2, marginBottom: 16 }}>SETUP REQUIRED</p>
+      <p style={{ fontSize: 14, marginBottom: 16, lineHeight: 1.6 }}>
+        Supabase environment variables are not configured. Create a <code style={{ color: '#F0A500' }}>.env.local</code> file in the project root with your Supabase project credentials:
+      </p>
+      <pre style={{ backgroundColor: '#0a1520', padding: '1rem', borderRadius: 4, fontSize: 12, color: '#aaa', overflowX: 'auto', marginBottom: 16 }}>{`VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key`}</pre>
+      <p style={{ fontSize: 12, color: '#888', lineHeight: 1.6 }}>
+        Find these values in your Supabase dashboard under <strong>Project Settings → API</strong>. Then restart the dev server with <code style={{ color: '#F0A500' }}>npm run dev</code>.
+      </p>
+    </div>
+  </div>
+);
+
 function App() {
+  if (supabaseMisconfigured) return <SetupRequired />;
+
   return (
     <QueryClientProvider client={queryClientInstance}>
       <Router>
