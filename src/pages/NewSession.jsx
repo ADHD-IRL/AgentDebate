@@ -1,11 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, X, ChevronRight } from 'lucide-react';
+import { Swords, Plus, X, ChevronRight, Zap, BarChart2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
+
+const MODES = [
+  {
+    id: 'classic',
+    icon: BarChart2,
+    label: 'Classic Analysis',
+    description: 'Two-round structured assessment. Agents work independently, then rebuttal round produces a scored synthesis.',
+    color: '#2E86AB',
+  },
+  {
+    id: 'live',
+    icon: Zap,
+    label: 'Live Debate',
+    description: 'Real-time streaming debate room. Watch agents think, interject with questions, and direct the conversation.',
+    color: '#F0A500',
+  },
+];
 
 export default function NewSession() {
   const { db } = useWorkspace();
@@ -22,6 +39,7 @@ export default function NewSession() {
     scenario_id: searchParams.get('scenario') || '',
     phase_focus: '',
     context_override: '',
+    mode: searchParams.get('mode') === 'live' ? 'live' : 'classic',
   });
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
@@ -55,11 +73,14 @@ export default function NewSession() {
       status: 'pending',
       agent_ids: selectedAgents.map(a => a.id),
     });
-    // Create session agent records
     for (const agent of selectedAgents) {
       await db.SessionAgent.create({ session_id: session.id, agent_id: agent.id, status: 'pending' });
     }
-    navigate(`/sessions/${session.id}`);
+    if (form.mode === 'live') {
+      navigate(`/sessions/${session.id}/live`);
+    } else {
+      navigate(`/sessions/${session.id}`);
+    }
   };
 
   return (
@@ -71,6 +92,48 @@ export default function NewSession() {
       />
 
       <div className="p-6 max-w-5xl mx-auto">
+
+        {/* Mode picker */}
+        <div className="mb-5">
+          <p className="text-xs font-bold tracking-widest font-mono mb-3" style={{ color: 'var(--wr-text-muted)' }}>SESSION MODE</p>
+          <div className="grid grid-cols-2 gap-4">
+            {MODES.map(mode => {
+              const Icon = mode.icon;
+              const isSelected = form.mode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => set('mode', mode.id)}
+                  className="text-left p-4 rounded transition-all"
+                  style={{
+                    backgroundColor: isSelected ? `${mode.color}12` : 'var(--wr-bg-card)',
+                    border: `2px solid ${isSelected ? mode.color : 'var(--wr-border)'}`,
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded flex items-center justify-center"
+                      style={{ backgroundColor: `${mode.color}20` }}>
+                      <Icon className="w-4 h-4" style={{ color: mode.color }} />
+                    </div>
+                    <span className="text-sm font-bold font-mono" style={{ color: isSelected ? mode.color : 'var(--wr-text-primary)' }}>
+                      {mode.label}
+                    </span>
+                    {isSelected && (
+                      <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded"
+                        style={{ backgroundColor: `${mode.color}20`, color: mode.color }}>
+                        SELECTED
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-muted)' }}>
+                    {mode.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Session Setup */}
         <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
           <h2 className="text-xs font-bold tracking-widest mb-4 font-mono" style={{ color: 'var(--wr-text-muted)' }}>SESSION SETUP</h2>
@@ -172,7 +235,7 @@ export default function NewSession() {
             disabled={saving || selectedAgents.length < 1 || !form.name}
             className="px-8"
           >
-            {saving ? 'Creating...' : <><ChevronRight className="w-4 h-4" /> Start Session</>}
+            {saving ? 'Creating...' : <><ChevronRight className="w-4 h-4" /> {form.mode === 'live' ? 'Enter Debate Room' : 'Start Session'}</>}
           </WrButton>
         </div>
       </div>
