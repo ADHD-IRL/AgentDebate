@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
-import { entities } from '@/api/entities';
+import { useWorkspace } from '@/lib/WorkspaceContext';
 
 // ─── Format Guide ────────────────────────────────────────────────────────────
 
@@ -187,13 +187,13 @@ export function parseMultiAgentMarkdown(text) {
 
 const DOMAIN_COLORS = ['#F0A500','#2E86AB','#27AE60','#C0392B','#7B2D8B','#E67E22','#16A085','#8E44AD'];
 
-async function resolveOrCreateDomain(name, existingDomains, createdCache) {
+async function resolveOrCreateDomain(name, existingDomains, createdCache, db) {
   const key = name.toLowerCase().trim();
   if (createdCache[key]) return createdCache[key];
   const existing = existingDomains.find(d => d.name.toLowerCase() === key);
   if (existing) { createdCache[key] = existing.id; return existing.id; }
   const color = DOMAIN_COLORS[Object.keys(createdCache).length % DOMAIN_COLORS.length];
-  const created = await entities.Domain.create({ name, color, description: `Auto-created during agent import` });
+  const created = await db.Domain.create({ name, color, description: `Auto-created during agent import` });
   createdCache[key] = created.id;
   return created.id;
 }
@@ -201,6 +201,7 @@ async function resolveOrCreateDomain(name, existingDomains, createdCache) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AgentImportModal({ existingDomains, onClose, onDone }) {
+  const { db } = useWorkspace();
   const [showFormat, setShowFormat] = useState(false);
   const [parsed, setParsed] = useState(null); // { categoryName, agents }
   const [fileName, setFileName] = useState('');
@@ -240,7 +241,7 @@ export default function AgentImportModal({ existingDomains, onClose, onDone }) {
     let count = 0;
 
     // Always fetch fresh domains before import to avoid stale cache issues
-    const freshDomains = await entities.Domain.list();
+    const freshDomains = await db.Domain.list();
 
     for (const agent of parsed.agents) {
       let domain_id = null;
@@ -249,11 +250,11 @@ export default function AgentImportModal({ existingDomains, onClose, onDone }) {
       const domainName = agent.domain_tags[0] !== '_ALL_' ? agent.domain_tags[0] : null;
 
       if (domainName) {
-        domain_id = await resolveOrCreateDomain(domainName, freshDomains, createdDomains);
+        domain_id = await resolveOrCreateDomain(domainName, freshDomains, createdDomains, db);
       }
 
       const { domain_tags, _id_prefix, ...agentData } = agent;
-      await entities.Agent.create({ ...agentData, domain_id });
+      await db.Agent.create({ ...agentData, domain_id });
       count++;
     }
 

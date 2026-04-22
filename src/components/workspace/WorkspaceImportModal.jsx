@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { entities } from '@/api/entities';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { X, Search, Download, Loader2, CheckSquare, Square, Target, AlertTriangle, Link2, Swords, CheckCircle2, Globe } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
@@ -48,7 +47,7 @@ export default function WorkspaceImportModal({ onClose }) {
   const [lastImport, setLastImport] = useState(null);
 
   useEffect(() => {
-    entities.Domain.list().then(setDomains);
+    db.Domain.list().then(setDomains);
   }, []);
 
   useEffect(() => {

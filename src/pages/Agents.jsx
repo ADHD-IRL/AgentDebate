@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { entities } from '@/api/entities';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -29,7 +28,7 @@ export default function Agents() {
     isLoadingRef.current = true;
     setLoading(true);
     try {
-      const [a, d] = await Promise.all([entities.Agent.list(), db.Domain.list()]);
+      const [a, d] = await Promise.all([db.Agent.list(), db.Domain.list()]);
       setAgents(a);
       setDomains(d);
     } catch (err) {
@@ -47,21 +46,21 @@ export default function Agents() {
   useEffect(() => { load(); }, [db]);
 
   const handleSave = async (form) => {
-    if (form.id) await entities.Agent.update(form.id, form);
-    else await entities.Agent.create(form);
+    if (form.id) await db.Agent.update(form.id, form);
+    else await db.Agent.create(form);
     setModal(null);
     load();
   };
 
   const handleClone = async (agent) => {
     const { id, created_date, updated_date, ...rest } = agent;
-    await entities.Agent.create({ ...rest, name: `${rest.name} (Copy)` });
+    await db.Agent.create({ ...rest, name: `${rest.name} (Copy)` });
     load();
   };
 
   const handleDelete = async (agent) => {
     if (!confirm(`Delete agent "${agent.name}"?`)) return;
-    await entities.Agent.delete(agent.id);
+    await db.Agent.delete(agent.id);
     load();
   };
 
