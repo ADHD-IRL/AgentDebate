@@ -6,7 +6,7 @@ import {
   Bot, Swords, Link2, Target, Plus, ArrowRight,
   Globe, Shield, CheckCircle2,
   FileText, Scissors, BarChart3, Map, ChevronRight,
-  Play, TrendingUp, BookOpen,
+  Play, TrendingUp, BookOpen, Zap,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
@@ -533,25 +533,50 @@ export default function Dashboard() {
           {/* ── RIGHT 1/3 ─────────────────────────────────────────────────── */}
           <div className="col-span-1 space-y-5">
 
-            {/* Primary action */}
-            {loading ? <Skeleton h="h-24" /> : (
-              <Link to="/sessions/new" className="block">
-                <div className="rounded-lg p-5 transition-all hover:opacity-90"
-                  style={{ backgroundColor: 'var(--wr-amber)', cursor: 'pointer' }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: '#0D1B2A' }}>Start New Session</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#0D1B2A', opacity: 0.65 }}>
-                        Structured threat assessment with your analyst team
-                      </p>
-                    </div>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
-                      <Swords className="w-5 h-5" style={{ color: '#0D1B2A' }} />
+            {/* Primary actions */}
+            {loading ? <Skeleton h="h-44" /> : (
+              <div className="space-y-3">
+                <Link to="/sessions/new" className="block">
+                  <div className="rounded-lg p-5 transition-all hover:opacity-90"
+                    style={{ backgroundColor: 'var(--wr-amber)', cursor: 'pointer' }}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: '#0D1B2A' }}>Start New Session</p>
+                        <p className="text-xs mt-0.5" style={{ color: '#0D1B2A', opacity: 0.65 }}>
+                          Structured threat assessment with your analyst team
+                        </p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
+                        <Swords className="w-5 h-5" style={{ color: '#0D1B2A' }} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+                <Link to="/sessions/new?mode=live" className="block">
+                  <div className="rounded-lg p-5 transition-all hover:opacity-90"
+                    style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid rgba(240,165,0,0.35)', cursor: 'pointer' }}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm font-bold" style={{ color: 'var(--wr-amber)' }}>Live Debate Room</p>
+                          <span className="text-xs font-bold px-1.5 py-0.5 rounded font-mono"
+                            style={{ backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)' }}>
+                            NEW
+                          </span>
+                        </div>
+                        <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                          Watch agents debate in real-time — interject, direct, ask questions
+                        </p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: 'rgba(240,165,0,0.12)', border: '1px solid rgba(240,165,0,0.3)' }}>
+                        <Zap className="w-5 h-5" style={{ color: 'var(--wr-amber)' }} />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </div>
             )}
 
             {/* Workspace shortcuts */}

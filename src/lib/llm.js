@@ -1,9 +1,9 @@
 const MODEL_MAP = {
-  claude_sonnet_4_6: 'claude-sonnet-4-5',
-  claude_opus_4_6:   'claude-opus-4-5',
-  claude_haiku:      'claude-3-haiku-20240307',
+  claude_sonnet_4_6: 'claude-sonnet-4-6',
+  claude_opus_4_6:   'claude-opus-4-7',
+  claude_haiku:      'claude-haiku-4-5-20251001',
 };
-const DEFAULT_MODEL = 'claude-sonnet-4-5';
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 // Workspace key set by WorkspaceContext on load (takes priority)
 let _workspaceApiKey = '';
@@ -29,6 +29,67 @@ export function setModelPref(val) {
   localStorage.setItem('agd_llm_model', val);
 }
 
+export async function callAnthropicStream({ messages, maxTokens = 2000, system, onToken, onDone }) {
+  const key = getApiKey();
+  if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
+  const body = { model: getModelId(), max_tokens: maxTokens, messages, stream: true };
+  if (system) body.system = system;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Anthropic API error ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let streamError = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (raw === '[DONE]') continue;
+      try {
+        const event = JSON.parse(raw);
+        if (event.type === 'error') {
+          streamError = new Error(event.error?.message || 'Stream error from Anthropic API');
+          break;
+        }
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          fullText += event.delta.text;
+          onToken?.(event.delta.text, fullText);
+        }
+      } catch {}
+    }
+    if (streamError) break;
+  }
+  if (streamError) throw streamError;
+  onDone?.(fullText);
+  return fullText;
+}
+
+export function parseSeverityFromText(text, fallback = 'HIGH') {
+  const lines = text.trimEnd().split('\n');
+  const last = lines[lines.length - 1];
+  const m = last.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
+  if (m) return { assessment: lines.slice(0, -1).join('\n').trim(), severity: m[1].toUpperCase() };
+  return { assessment: text.trim(), severity: fallback };
+}
+
 async function callAnthropic({ messages, maxTokens = 2000, system }) {
   const key = getApiKey();
   if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
@@ -40,6 +101,7 @@ async function callAnthropic({ messages, maxTokens = 2000, system }) {
       'Content-Type': 'application/json',
       'x-api-key': key,
       'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
   });
@@ -95,20 +157,19 @@ ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
 
-Write a Round 1 independent threat/scenario assessment (600-900 words) covering:
-1. Opening position — your primary framing of the situation from your discipline
-2. Threat/Finding 1 — with specific mechanism, what defenders/analysts are missing, and severity (CRITICAL/HIGH/MEDIUM) with rationale
-3. Threat/Finding 2 — same structure
-4. Threat/Finding 3 — same structure
-5. Invalidating assumption — one assumption that if wrong would change your entire assessment
-6. Key finding — one-sentence bottom line
+Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
+1. Opening position — your primary framing from your discipline
+2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
+3. Second threat — same structure
+4. Invalidating assumption — one assumption that if wrong changes your whole assessment
+5. Key finding — one-sentence bottom line
 
 After your assessment, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
-Write in first person as the expert. Be specific, opinionated, and willing to disagree with conventional wisdom.`;
+Write in first person as the expert. Be specific and opinionated.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200 });
   const lines = fullText.split('\n');
   let severity = agent.severity_default || 'HIGH';
   let assessment = fullText;
@@ -131,18 +192,17 @@ You have just read all Round 1 assessments from the other experts. Here they are
 
 ${othersAssessments || '(No other assessments available yet)'}
 
-Now write your Round 2 rebuttal (400-600 words) covering:
-1. Strongest alliance — which other agent's findings combine most powerfully with yours, and build the compound chain that emerges (name the agent explicitly)
-2. Strongest disagreement — which agent you disagree with most and exactly why (name them, reference their specific argument)
+Now write your Round 2 rebuttal (250-400 words) covering:
+1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
 3. Whether you've revised your severity rating and why
-4. ONE compound chain narrative — a multi-step sequence threading your discipline with at least one other agent's discipline
 
 After your rebuttal, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
-Be direct. Name names. Quote other agents' arguments when disagreeing. Change your position if another agent persuaded you.`;
+Be direct. Name names. Change your position if persuaded.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1500 });
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 900 });
   const lines = fullText.split('\n');
   let severity = agent.severity_default || 'HIGH';
   let assessment = fullText;
@@ -150,6 +210,83 @@ Be direct. Name names. Quote other agents' arguments when disagreeing. Change yo
   const m = lastLine.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
   if (m) { severity = m[1].toUpperCase(); assessment = lines.slice(0, -1).join('\n').trim(); }
   return { assessment, severity };
+}
+
+// --- streaming variants ---
+export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, onToken, onDone }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
+${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
+${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
+
+Your cognitive bias: ${agent.cognitive_bias}
+Your red-team focus: ${agent.red_team_focus}
+
+SCENARIO CONTEXT:
+${scenarioContext}
+
+PHASE/FOCUS: ${phaseFocus || 'General analysis'}
+
+Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
+1. Opening position — your primary framing from your discipline
+2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
+3. Second threat — same structure
+4. Invalidating assumption — one assumption that if wrong changes your whole assessment
+5. Key finding — one-sentence bottom line
+
+After your assessment, on the very last line output exactly:
+SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+
+Write in first person as the expert. Be specific and opinionated.`;
+
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200, onToken, onDone });
+}
+
+export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, onToken, onDone }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
+${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
+${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
+
+Your cognitive bias: ${agent.cognitive_bias}
+
+You have just read all Round 1 assessments from the other experts. Here they are:
+
+${othersAssessments || '(No other assessments available yet)'}
+
+Now write your Round 2 rebuttal (250-400 words) covering:
+1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
+3. Whether you've revised your severity rating and why
+
+After your rebuttal, on the very last line output exactly:
+SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+
+Be direct. Name names. Change your position if persuaded.`;
+
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 900, onToken, onDone });
+}
+
+export async function generateAgentReply({ agent, question, priorMessages, scenarioContext, onToken, onDone }) {
+  const contextLines = (priorMessages || []).slice(-6).map(m =>
+    m.agentName ? `${m.agentName}: ${m.content.slice(0, 300)}` : `Facilitator: ${m.content}`
+  ).join('\n\n');
+
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+Your cognitive bias: ${agent.cognitive_bias}
+Your red-team focus: ${agent.red_team_focus}
+
+SCENARIO CONTEXT:
+${(scenarioContext || '').slice(0, 1500)}
+
+RECENT DEBATE CONTEXT:
+${contextLines || '(debate just started)'}
+
+The facilitator has asked: "${question}"
+
+Respond in character (100-180 words). Be direct and opinionated. No headings or bullet lists — speak naturally as the expert you are.`;
+
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 400, onToken, onDone });
 }
 
 // --- generateSynthesis ---
@@ -184,16 +321,16 @@ function parseCompoundChains(chainsText) {
 }
 
 export async function generateSynthesis({ session, sessionAgents, scenarioContext }) {
-  const truncated = (scenarioContext || '').substring(0, 3000);
+  const truncated = (scenarioContext || '').substring(0, 1500);
   const agentsText = sessionAgents.map(sa => {
     const parts = [`=== ${sa.agentName} (${sa.discipline}) ===`];
     if (sa.round1_assessment) {
       parts.push(`ROUND 1 [${sa.round1_severity}]:`);
-      parts.push((sa.round1_assessment || '').substring(0, 800));
+      parts.push((sa.round1_assessment || '').substring(0, 500));
     }
     if (sa.round2_rebuttal) {
-      parts.push(`\nROUND 2 [${sa.round2_revised_severity}]:`);
-      parts.push((sa.round2_rebuttal || '').substring(0, 600));
+      parts.push(`ROUND 2 [${sa.round2_revised_severity}]:`);
+      parts.push((sa.round2_rebuttal || '').substring(0, 400));
     }
     return parts.join('\n');
   }).join('\n\n---\n\n');
@@ -236,7 +373,7 @@ List 2-4 chains. Each must have at least 3 steps.)
 
 Write analytically. Be specific. Cite agents by name.`;
 
-  const synthesis = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2500 });
+  const synthesis = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1800 });
   const chainsSection = extractSection(synthesis, 'COMPOUND CHAINS');
   const compound_chains = parseCompoundChains(chainsSection);
   return { synthesis, compound_chains, synthesis_url: null };

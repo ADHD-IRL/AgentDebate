@@ -107,6 +107,7 @@ export const WorkspaceProvider = ({ children }) => {
       Threat:           scopedEntity(e.Threat, workspace.id, user.id),
       Chain:            scopedEntity(e.Chain, workspace.id, user.id),
       SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id),
+      SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id),
       AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
     };
   }, [workspace, user]);

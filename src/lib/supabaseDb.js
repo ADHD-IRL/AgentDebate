@@ -9,6 +9,7 @@ const TABLE = {
   Session:          'sessions',
   SessionAgent:     'session_agents',
   SessionSynthesis: 'session_syntheses',
+  SessionMessage:   'session_messages',
   AppConfig:        'app_configs',
   Workspace:        'workspaces',
   WorkspaceMember:  'workspace_members',
