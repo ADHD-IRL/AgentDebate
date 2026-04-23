@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { ArrowLeft, Zap, Play, Send, Loader2 } from 'lucide-react';
+import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical } from 'lucide-react';
 import {
   generateRound1Stream, generateRound2Stream,
-  generateAgentReply, parseSeverityFromText,
+  generateAgentReply, generateAgentReplyWithTools,
+  parseSeverityFromText,
 } from '@/lib/llm';
 
 const AGENT_COLORS = [
@@ -15,11 +16,14 @@ const AGENT_COLORS = [
 const SEV_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
 
 const STATUS = {
-  idle:      { color: '#546E7A', pulse: false, label: 'Waiting' },
-  thinking:  { color: '#F0A500', pulse: true,  label: 'Thinking...' },
-  streaming: { color: '#27AE60', pulse: true,  label: 'Speaking...' },
-  done:      { color: '#27AE60', pulse: false, label: 'Done' },
+  idle:        { color: '#546E7A', pulse: false, label: 'Waiting' },
+  thinking:    { color: '#F0A500', pulse: true,  label: 'Thinking...' },
+  researching: { color: '#1ABC9C', pulse: true,  label: 'Researching...' },
+  streaming:   { color: '#27AE60', pulse: true,  label: 'Speaking...' },
+  done:        { color: '#27AE60', pulse: false, label: 'Done' },
 };
+
+const TOOL_ICONS = { search_knowledge: Search, fetch_url: Globe };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -73,6 +77,20 @@ function Divider({ text }) {
   );
 }
 
+function ToolChip({ tc }) {
+  const Icon = TOOL_ICONS[tc.name] || Search;
+  const label = tc.name === 'search_knowledge'
+    ? tc.input.query
+    : (tc.input.url || '').replace(/^https?:\/\//, '').slice(0, 50);
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mr-1 mb-1"
+      style={{ backgroundColor: 'rgba(26,188,156,0.12)', color: '#1ABC9C', border: '1px solid rgba(26,188,156,0.25)' }}>
+      <Icon className="w-2.5 h-2.5 flex-shrink-0" />
+      {label}
+    </span>
+  );
+}
+
 function AgentBubble({ msg, color, isStreaming }) {
   return (
     <div className="mb-5">
@@ -89,6 +107,11 @@ function AgentBubble({ msg, color, isStreaming }) {
           </span>
         )}
       </div>
+      {msg.toolCalls?.length > 0 && (
+        <div className="flex flex-wrap mb-1.5">
+          {msg.toolCalls.map((tc, i) => <ToolChip key={i} tc={tc} />)}
+        </div>
+      )}
       <div className="rounded p-3 text-sm leading-relaxed whitespace-pre-wrap"
         style={{
           backgroundColor: `${color}08`,
@@ -96,7 +119,7 @@ function AgentBubble({ msg, color, isStreaming }) {
           border: `1px solid ${color}20`,
           color: 'var(--wr-text-secondary)',
         }}>
-        {msg.content}
+        {msg.content || (isStreaming ? '' : '—')}
         {isStreaming && (
           <span className="inline-block w-1.5 h-4 ml-1 align-middle animate-pulse rounded-sm"
             style={{ backgroundColor: color }} />
@@ -142,6 +165,7 @@ export default function LiveDebateRoom() {
 
   const [session, setSession]           = useState(null);
   const [scenario, setScenario]         = useState(null);
+  const [sourcePins, setSourcePins]     = useState([]);
   const [sessionAgents, setSessionAgents] = useState([]);
   const [profiles, setProfiles]         = useState({});   // agent_id → agent row
   const [colors, setColors]             = useState({});   // agent_id → hex color
@@ -157,6 +181,7 @@ export default function LiveDebateRoom() {
   const [question, setQuestion]         = useState('');
   const [targetId, setTargetId]         = useState('all');
   const [asking, setAsking]             = useState(false);
+  const [toolsEnabled, setToolsEnabled] = useState(true);
 
   const transcriptRef  = useRef(null);
   const streamBuf      = useRef({});  // tempId → accumulated text
@@ -172,6 +197,7 @@ export default function LiveDebateRoom() {
         db.SessionMessage.filter({ session_id: id }),
       ]);
       setSession(sess);
+      setSourcePins(sess?.source_pins || []);
       setSessionAgents(saList);
 
       const p = {}, c = {}, statuses = {}, severities = {};
@@ -369,15 +395,36 @@ export default function LiveDebateRoom() {
       streamBuf.current[tempId] = '';
       push({ id: tempId, role: 'agent', agentId: sa.agent_id, agentName: agent.name, discipline: agent.discipline, content: '', isStreaming: true });
       try {
-        await generateAgentReply({
-          agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx,
-          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
-          onDone: async text => {
-            finishStream(tempId, text);
-            setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
-            await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
-          },
-        });
+        if (toolsEnabled) {
+          await generateAgentReplyWithTools({
+            agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx, sourcePins,
+            onToolCall: (tc) => {
+              setAgentStatus(s => ({ ...s, [sa.agent_id]: 'researching' }));
+              setMessages(prev => prev.map(m =>
+                m.id === tempId
+                  ? { ...m, toolCalls: [...(m.toolCalls || []), tc] }
+                  : m
+              ));
+            },
+            onDone: async (text, toolCalls) => {
+              setMessages(prev => prev.map(m =>
+                m.id === tempId ? { ...m, content: text, isStreaming: false, toolCalls } : m
+              ));
+              setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
+              await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline, toolCalls } });
+            },
+          });
+        } else {
+          await generateAgentReply({
+            agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx,
+            onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
+            onDone: async text => {
+              finishStream(tempId, text);
+              setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
+              await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
+            },
+          });
+        }
       } catch {
         setAgentStatus(s => ({ ...s, [sa.agent_id]: 'idle' }));
         setMessages(prev => prev.filter(m => m.id !== tempId));
@@ -423,6 +470,17 @@ export default function LiveDebateRoom() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setToolsEnabled(v => !v)}
+            title={toolsEnabled ? 'Tool use enabled — agents can search for information' : 'Tool use disabled'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+            style={{
+              backgroundColor: toolsEnabled ? 'rgba(26,188,156,0.12)' : 'transparent',
+              border: `1px solid ${toolsEnabled ? '#1ABC9C' : 'var(--wr-border)'}`,
+              color: toolsEnabled ? '#1ABC9C' : 'var(--wr-text-muted)',
+            }}>
+            <FlaskConical className="w-3 h-3" /> TOOLS {toolsEnabled ? 'ON' : 'OFF'}
+          </button>
           {[
             { label: 'ROUND 1', can: canR1, action: startRound1, color: '#2E86AB' },
             { label: 'ROUND 2', can: canR2, action: startRound2, color: '#D68910' },
@@ -462,6 +520,29 @@ export default function LiveDebateRoom() {
                 severity={agentSeverity[sa.agent_id]} />
             );
           })}
+          {sourcePins.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
+              <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>
+                SOURCES ({sourcePins.length})
+              </p>
+              {sourcePins.map((pin, i) => (
+                <div key={i} className="flex items-start gap-1.5 mb-1.5">
+                  <Globe className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: '#1ABC9C' }} />
+                  <div className="min-w-0">
+                    {pin.label && (
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-secondary)' }}>{pin.label}</p>
+                    )}
+                    <a href={pin.url} target="_blank" rel="noreferrer"
+                      className="text-xs truncate block hover:underline"
+                      style={{ color: 'var(--wr-text-muted)' }}>
+                      {pin.url.replace(/^https?:\/\//, '').slice(0, 28)}…
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
             <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>STATUS</p>
             {running ? (
@@ -527,7 +608,7 @@ export default function LiveDebateRoom() {
               </button>
             </div>
             <p className="text-xs mt-2" style={{ color: 'var(--wr-text-muted)' }}>
-              Direct a question to one agent or broadcast to all · Enter to send · Ask anytime during the debate
+              Direct to one agent or broadcast to all · Enter to send · {toolsEnabled ? 'Paste a URL in your question to send agents to a specific source' : 'Tool use off — direct replies only'}
             </p>
           </div>
         </div>

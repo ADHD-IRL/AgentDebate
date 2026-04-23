@@ -289,6 +289,172 @@ Respond in character (100-180 words). Be direct and opinionated. No headings or 
   return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 400, onToken, onDone });
 }
 
+// --- Tool use for live debate ---
+
+export const DEBATE_TOOLS = [
+  {
+    name: 'search_knowledge',
+    description: 'Search for factual information: historical events, threat actors, geopolitical context, technical concepts, known incidents. Use when the question requires specific facts you want to verify.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Specific search query' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'fetch_url',
+    description: 'Fetch and read the content of a specific public URL (news article, report, etc.).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Full URL starting with https://' },
+      },
+      required: ['url'],
+    },
+  },
+];
+
+async function runSearchKnowledge(query) {
+  try {
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`;
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+    const pages = searchData.query?.search || [];
+    if (!pages.length) return 'No results found for this query.';
+
+    const top = pages[0];
+    const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&pageids=${top.pageid}&prop=extracts&exintro=true&explaintext=true&exsectionformat=plain&format=json&origin=*`;
+    const extractRes = await fetch(extractUrl);
+    const extractData = await extractRes.json();
+    const page = Object.values(extractData.query.pages)[0];
+    const text = (page?.extract || top.snippet?.replace(/<[^>]+>/g, '') || '').slice(0, 1500);
+
+    const related = pages.slice(1).map(p => p.title).join(', ');
+    return `[Wikipedia: ${top.title}]\n${text}${related ? `\n\nRelated: ${related}` : ''}`;
+  } catch (e) {
+    return `Search failed: ${e.message}`;
+  }
+}
+
+async function runFetchUrl(url) {
+  try {
+    if (!url.startsWith('https://')) return 'Only https:// URLs are supported.';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, 2000);
+    return text || 'No readable content found at this URL.';
+  } catch (e) {
+    return `Fetch failed: ${e.message}`;
+  }
+}
+
+export async function executeToolCall(name, input) {
+  if (name === 'search_knowledge') return runSearchKnowledge(input.query);
+  if (name === 'fetch_url') return runFetchUrl(input.url);
+  return `Unknown tool: ${name}`;
+}
+
+export async function generateAgentReplyWithTools({ agent, question, priorMessages, scenarioContext, sourcePins = [], onToolCall, onDone }) {
+  const key = getApiKey();
+  if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
+
+  const contextLines = (priorMessages || []).slice(-6)
+    .map(m => m.agentName ? `${m.agentName}: ${m.content.slice(0, 200)}` : `Facilitator: ${m.content}`)
+    .join('\n\n');
+
+  const pinsSection = sourcePins.length > 0
+    ? `\nPINNED SOURCE DOCUMENTS (use fetch_url to read any of these when relevant):\n${sourcePins.map((p, i) => `${i + 1}. ${p.label ? `"${p.label}" — ` : ''}${p.url}`).join('\n')}`
+    : '';
+
+  const system = `You are ${agent.name}, ${agent.persona_description}
+Your cognitive bias: ${agent.cognitive_bias}
+Your red-team focus: ${agent.red_team_focus}
+
+SCENARIO CONTEXT:
+${(scenarioContext || '').slice(0, 800)}
+${pinsSection}
+RECENT DEBATE CONTEXT:
+${contextLines || '(debate just started)'}`;
+
+  const userMsg = `The facilitator has asked: "${question}"
+
+Use tools if you need specific facts, recent incidents, or technical detail — including any pinned source documents above. Then give your in-character expert response (100-180 words). No headings or bullet lists — speak naturally.`;
+
+  const messages = [{ role: 'user', content: userMsg }];
+  const toolCallLog = [];
+
+  for (let i = 0; i < 4; i++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: getModelId(),
+        max_tokens: 800,
+        system,
+        tools: DEBATE_TOOLS,
+        messages,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Anthropic API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const hasToolUse = data.content.some(b => b.type === 'tool_use');
+
+    if (!hasToolUse || data.stop_reason === 'end_turn') {
+      const text = data.content.find(b => b.type === 'text')?.text?.trim() || '';
+      onDone?.(text, toolCallLog);
+      return { text, toolCalls: toolCallLog };
+    }
+
+    messages.push({ role: 'assistant', content: data.content });
+
+    const toolResults = [];
+    for (const block of data.content) {
+      if (block.type !== 'tool_use') continue;
+      const tc = { name: block.name, input: block.input };
+      toolCallLog.push(tc);
+      onToolCall?.(tc);
+      const result = await executeToolCall(block.name, block.input);
+      toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+    }
+    messages.push({ role: 'user', content: toolResults });
+  }
+
+  // Safety fallback — strip tools and get plain response
+  const fallback = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: getModelId(), max_tokens: 400, system, messages: [{ role: 'user', content: userMsg }] }),
+  });
+  const fallbackData = await fallback.json();
+  const text = fallbackData.content?.[0]?.text?.trim() || '';
+  onDone?.(text, toolCallLog);
+  return { text, toolCalls: toolCallLog };
+}
+
 // --- generateSynthesis ---
 function extractSection(text, heading) {
   const regex = new RegExp(`##\\s*${heading}[\\s\\S]*?(?=\\n---\\n|\\n## |$)`, 'i');
