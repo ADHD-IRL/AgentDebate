@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, X, ChevronRight, Zap, BarChart2 } from 'lucide-react';
+import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import SeverityBadge from '@/components/ui/SeverityBadge';
@@ -40,9 +40,21 @@ export default function NewSession() {
     phase_focus: '',
     context_override: '',
     mode: searchParams.get('mode') === 'live' ? 'live' : 'classic',
+    source_pins: [],
   });
   const [saving, setSaving] = useState(false);
+  const [newPinUrl, setNewPinUrl] = useState('');
+  const [newPinLabel, setNewPinLabel] = useState('');
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
+
+  const addPin = () => {
+    const url = newPinUrl.trim();
+    if (!url || !url.startsWith('http')) return;
+    set('source_pins', [...form.source_pins, { url, label: newPinLabel.trim() }]);
+    setNewPinUrl('');
+    setNewPinLabel('');
+  };
+  const removePin = (i) => set('source_pins', form.source_pins.filter((_, idx) => idx !== i));
 
   useEffect(() => {
     if (!db) return;
@@ -226,6 +238,61 @@ export default function NewSession() {
             </div>
           </div>
         </div>
+
+        {/* Source Documents — shown for Live Debate mode */}
+        {form.mode === 'live' && (
+          <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SOURCE DOCUMENTS</h2>
+              <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{form.source_pins.length} pinned</span>
+            </div>
+            <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)' }}>
+              URLs agents can fetch during the debate — reports, advisories, articles. Agents see the list and decide when to read them.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newPinUrl}
+                onChange={e => setNewPinUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addPin()}
+                placeholder="https://..."
+                className="flex-1 px-2 py-1.5 text-xs rounded outline-none"
+                style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }}
+              />
+              <input
+                value={newPinLabel}
+                onChange={e => setNewPinLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addPin()}
+                placeholder="Label (optional)"
+                className="w-40 px-2 py-1.5 text-xs rounded outline-none"
+                style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }}
+              />
+              <button onClick={addPin}
+                className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold flex-shrink-0"
+                style={{ backgroundColor: 'rgba(26,188,156,0.15)', border: '1px solid #1ABC9C', color: '#1ABC9C' }}>
+                <Plus className="w-3 h-3" /> Add
+              </button>
+            </div>
+            {form.source_pins.length === 0 ? (
+              <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>No sources pinned — agents will use Wikipedia and any URLs you paste in your questions.</p>
+            ) : (
+              <div className="space-y-1">
+                {form.source_pins.map((pin, i) => (
+                  <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded"
+                    style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+                    <Globe className="w-3 h-3 flex-shrink-0" style={{ color: '#1ABC9C' }} />
+                    <div className="flex-1 min-w-0">
+                      {pin.label && <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{pin.label}</p>}
+                      <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{pin.url}</p>
+                    </div>
+                    <button onClick={() => removePin(i)} className="text-red-400 hover:text-red-300 p-0.5 flex-shrink-0">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Launch */}
         <div className="flex justify-end">

@@ -363,7 +363,7 @@ export async function executeToolCall(name, input) {
   return `Unknown tool: ${name}`;
 }
 
-export async function generateAgentReplyWithTools({ agent, question, priorMessages, scenarioContext, onToolCall, onDone }) {
+export async function generateAgentReplyWithTools({ agent, question, priorMessages, scenarioContext, sourcePins = [], onToolCall, onDone }) {
   const key = getApiKey();
   if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
 
@@ -371,19 +371,23 @@ export async function generateAgentReplyWithTools({ agent, question, priorMessag
     .map(m => m.agentName ? `${m.agentName}: ${m.content.slice(0, 200)}` : `Facilitator: ${m.content}`)
     .join('\n\n');
 
+  const pinsSection = sourcePins.length > 0
+    ? `\nPINNED SOURCE DOCUMENTS (use fetch_url to read any of these when relevant):\n${sourcePins.map((p, i) => `${i + 1}. ${p.label ? `"${p.label}" — ` : ''}${p.url}`).join('\n')}`
+    : '';
+
   const system = `You are ${agent.name}, ${agent.persona_description}
 Your cognitive bias: ${agent.cognitive_bias}
 Your red-team focus: ${agent.red_team_focus}
 
 SCENARIO CONTEXT:
 ${(scenarioContext || '').slice(0, 800)}
-
+${pinsSection}
 RECENT DEBATE CONTEXT:
 ${contextLines || '(debate just started)'}`;
 
   const userMsg = `The facilitator has asked: "${question}"
 
-Use tools if you need specific facts, recent incidents, or technical detail. Then give your in-character expert response (100-180 words). No headings or bullet lists — speak naturally.`;
+Use tools if you need specific facts, recent incidents, or technical detail — including any pinned source documents above. Then give your in-character expert response (100-180 words). No headings or bullet lists — speak naturally.`;
 
   const messages = [{ role: 'user', content: userMsg }];
   const toolCallLog = [];

@@ -165,6 +165,7 @@ export default function LiveDebateRoom() {
 
   const [session, setSession]           = useState(null);
   const [scenario, setScenario]         = useState(null);
+  const [sourcePins, setSourcePins]     = useState([]);
   const [sessionAgents, setSessionAgents] = useState([]);
   const [profiles, setProfiles]         = useState({});   // agent_id → agent row
   const [colors, setColors]             = useState({});   // agent_id → hex color
@@ -196,6 +197,7 @@ export default function LiveDebateRoom() {
         db.SessionMessage.filter({ session_id: id }),
       ]);
       setSession(sess);
+      setSourcePins(sess?.source_pins || []);
       setSessionAgents(saList);
 
       const p = {}, c = {}, statuses = {}, severities = {};
@@ -395,7 +397,7 @@ export default function LiveDebateRoom() {
       try {
         if (toolsEnabled) {
           await generateAgentReplyWithTools({
-            agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx,
+            agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx, sourcePins,
             onToolCall: (tc) => {
               setAgentStatus(s => ({ ...s, [sa.agent_id]: 'researching' }));
               setMessages(prev => prev.map(m =>
@@ -518,6 +520,29 @@ export default function LiveDebateRoom() {
                 severity={agentSeverity[sa.agent_id]} />
             );
           })}
+          {sourcePins.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
+              <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>
+                SOURCES ({sourcePins.length})
+              </p>
+              {sourcePins.map((pin, i) => (
+                <div key={i} className="flex items-start gap-1.5 mb-1.5">
+                  <Globe className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: '#1ABC9C' }} />
+                  <div className="min-w-0">
+                    {pin.label && (
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-secondary)' }}>{pin.label}</p>
+                    )}
+                    <a href={pin.url} target="_blank" rel="noreferrer"
+                      className="text-xs truncate block hover:underline"
+                      style={{ color: 'var(--wr-text-muted)' }}>
+                      {pin.url.replace(/^https?:\/\//, '').slice(0, 28)}…
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
             <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>STATUS</p>
             {running ? (
@@ -583,7 +608,7 @@ export default function LiveDebateRoom() {
               </button>
             </div>
             <p className="text-xs mt-2" style={{ color: 'var(--wr-text-muted)' }}>
-              Direct to one agent or broadcast to all · Enter to send · {toolsEnabled ? 'Agents will research before responding' : 'Tool use off — direct replies only'}
+              Direct to one agent or broadcast to all · Enter to send · {toolsEnabled ? 'Paste a URL in your question to send agents to a specific source' : 'Tool use off — direct replies only'}
             </p>
           </div>
         </div>
