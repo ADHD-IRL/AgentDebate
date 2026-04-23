@@ -57,8 +57,8 @@ const STEPS = [
     title: 'Run a Threat Assessment',
     description: 'Start a session to bring your agents together. They score threats, challenge each other through structured debate rounds, and produce a synthesised assessment.',
     to: '/sessions/new', actionLabel: 'Start a session',
-    check: c => c.sessions > 0,
-    doneText: c => `${c.sessions} session${c.sessions !== 1 ? 's' : ''} run`,
+    check: c => c.startedSessions > 0,
+    doneText: c => `${c.startedSessions} session${c.startedSessions !== 1 ? 's' : ''} run`,
     requiresSteps: [1, 2, 3],
   },
   {
@@ -281,6 +281,7 @@ export default function Dashboard() {
     scenarios:        data.scenarios.length,
     chains:           data.chains.length,
     sessions:         data.sessions.length,
+    startedSessions:  data.sessions.filter(s => s.status !== 'pending').length,
     completeSessions: completeSessions.length,
   }), [data, completeSessions]);
 
