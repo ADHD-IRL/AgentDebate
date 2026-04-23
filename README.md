@@ -1,6 +1,6 @@
 # AgentDebate
 
-Structured multi-agent risk assessment platform. Build expert agent panels, run two-round red team sessions, generate threat chains, and produce decision briefs with a live Systemic Critical Risk Score (SCRS).
+Structured multi-agent risk assessment platform. Build expert agent panels, run two-round red team sessions, and produce decision briefs — or drop into the **Live Debate Room** for a real-time streaming debate you can facilitate on the fly.
 
 Multi-user, workspace-aware deployment backed by Supabase. All AI calls go directly from your browser to the Anthropic API using your own key.
 
@@ -22,10 +22,12 @@ Go to [supabase.com/dashboard](https://supabase.com/dashboard) and create a new 
 
 ### 2. Run the database migrations
 
-Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) for your project and run the two migration files in order:
+Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) for your project and run the migration files in order:
 
-1. [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql) — creates all tables, triggers, and Realtime config
-2. [`supabase/migrations/002_rls.sql`](supabase/migrations/002_rls.sql) — enables Row Level Security with workspace-scoped policies
+1. [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql) — tables, triggers, Realtime config
+2. [`supabase/migrations/002_rls.sql`](supabase/migrations/002_rls.sql) — Row Level Security with workspace-scoped policies
+3. [`supabase/migrations/003_debate.sql`](supabase/migrations/003_debate.sql) — Live Debate session mode and transcript storage
+4. [`supabase/migrations/004_source_urls.sql`](supabase/migrations/004_source_urls.sql) — pinned source document support
 
 Then run this additional fix to allow workspace bootstrap on first login:
 
@@ -101,34 +103,36 @@ The app will be available at `http://localhost:5173`.
 
 1. Open the app and click **Sign up** to create an account
 2. A workspace is automatically created for you on first login
-3. Go to **Settings** and paste your Anthropic API key — this is stored encrypted in your workspace record so all workspace members share it, or members can override it per-session
+3. Go to **Settings** and paste your Anthropic API key — stored encrypted in your workspace record so all workspace members share it
 
 ---
 
 ## Workflow
 
-### Step 1 — Add domains
-Go to **Domains** and create the subject areas relevant to your assessment (e.g. *Cybersecurity*, *Supply Chain*, *Human Factors*).
+### Classic session
 
-### Step 2 — Build your agent panel
-Go to **Agents** and add expert agents. Each agent has a discipline, expertise level, cognitive bias, and red-team focus. Use **AI Generate** to have the model create a full agent profile from a short description, or **Import** to bulk-load agents from a Markdown file.
+1. **Domains** — define the subject areas relevant to your assessment (e.g. *Cybersecurity*, *Supply Chain*)
+2. **Agents** — build your expert panel; use **AI Generate** or **Import** from Markdown
+3. **Scenarios** — create a scenario with a context document describing the system or threat environment
+4. **Sessions → New Session → Classic** — assign agents, run Round 1 and Round 2, generate synthesis
+5. **Results** — view synthesis, consensus findings, SCRS, threat chains, and chain-breaker analysis
 
-### Step 3 — Define a scenario
-Go to **Scenarios** and create a scenario with a context document describing the system, situation, or threat environment to be assessed.
+### Live Debate Room
 
-### Step 4 — Run a session
-Go to **Sessions**, create a new session, assign your agents and scenario, then run Round 1 (independent assessments) and Round 2 (cross-agent rebuttals). Generate the synthesis when both rounds are complete.
+1. **Dashboard → Live Debate Room** (or **New Session → Live mode**)
+2. Pin any reference URLs agents should consult during the debate
+3. Assign agents and scenario, then click **Enter Debate Room**
+4. Click **Round 1** to start — agent responses stream in live
+5. Ask questions at any time to redirect agents or probe specific threats
+6. Click **Round 2** after Round 1 completes, then **Synthesize** when done
 
-### Step 5 — Analyse results
-- **Reports** — view the synthesis, consensus findings, and agent-level breakdowns
-- **What-If Simulator** — toggle countermeasures on/off and watch the SCRS update live
-- **Chain Breaker** — select a threat chain and get step-by-step defensive analysis
+See [USER_GUIDE.md](USER_GUIDE.md) for a full walkthrough of both modes, threat management, and facilitator controls.
 
 ---
 
 ## Agent import format
 
-Agents can be bulk-imported from a `.md` file. Each agent block starts with an `##` heading and supports the following fields:
+Agents can be bulk-imported from a `.md` file. Each block starts with an `##` heading:
 
 ```markdown
 ## Agent Name / Discipline
@@ -174,7 +178,8 @@ Output goes to `dist/`. Deploy to any static host (Vercel, Netlify, GitHub Pages
 | Styling | Tailwind CSS + CSS variables |
 | Routing | React Router v6 |
 | Auth & database | Supabase (PostgreSQL + Row Level Security) |
-| Realtime | Supabase Realtime (sessions, session agents) |
-| AI | Anthropic API (direct browser calls) |
+| Realtime | Supabase Realtime (sessions, session agents, live transcripts) |
+| AI | Anthropic API — claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5 |
+| Knowledge search | Wikipedia API (CORS-friendly, used by agent tool calls) |
 | Charts | Recharts |
 | Icons | Lucide React |

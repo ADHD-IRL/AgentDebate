@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { generateRound1, generateRound2, generateSynthesis as generateSynthesisLLM } from '@/lib/llm';
+import { generateRound1, generateRound2, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 
-const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','SETTINGS'];
+const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
 
 const STATUS_COLOR = { pending:'#546E7A', round1:'#2E86AB', round2:'#D68910', complete:'#27AE60' };
 
@@ -270,6 +270,11 @@ export default function SessionWorkspace() {
   const [scenarios, setScenarios] = useState([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [genError, setGenError] = useState(null);
+  const [threats, setThreats] = useState([]);
+  const [extractedThreats, setExtractedThreats] = useState(null); // null = not run, [] = run + empty, [...] = results
+  const [extracting, setExtracting] = useState(false);
+  const [savingThreats, setSavingThreats] = useState(false);
+  const [selectedThreats, setSelectedThreats] = useState(new Set());
 
   const load = async () => {
     if (!db) return;
@@ -285,6 +290,12 @@ export default function SessionWorkspace() {
     setAgents(ag);
     setScenarios(sc);
     setSynthesis(synth[0] || null);
+    // Load threats for the session's scenario
+    const scenarioId = sess[0]?.scenario_id;
+    if (scenarioId) {
+      const t = await db.Threat.filter({ scenario_id: scenarioId });
+      setThreats(t);
+    }
   };
 
   useEffect(() => { load(); }, [id, db]);
@@ -321,6 +332,7 @@ export default function SessionWorkspace() {
         scenarioContext: scenario?.context_document || '',
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
+        threatCatalog: threats,
       });
 
       const updates = round === 1 ? {
@@ -366,6 +378,7 @@ export default function SessionWorkspace() {
         scenarioContext: scenario?.context_document || '',
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
+        threatCatalog: threats,
       });
 
       const updates = round === 1 ? {
@@ -441,6 +454,51 @@ export default function SessionWorkspace() {
       timers.forEach(clearTimeout);
       setGeneratingSynthesis(false);
       setSynthStatus('');
+    }
+  };
+
+  const handleExtractThreats = async () => {
+    setExtracting(true);
+    setExtractedThreats(null);
+    try {
+      const results = await extractSessionThreats({
+        sessionAgents: sessionAgents.map(sa => ({
+          ...sa,
+          agentName: getAgent(sa.agent_id)?.name,
+          discipline: getAgent(sa.agent_id)?.discipline,
+        })),
+        scenarioName: scenario?.name || '',
+        scenarioContext: scenario?.context_document || '',
+      });
+      setExtractedThreats(results);
+      setSelectedThreats(new Set(results.map((_, i) => i)));
+    } catch {
+      setExtractedThreats([]);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleSaveThreats = async () => {
+    if (!extractedThreats || selectedThreats.size === 0) return;
+    setSavingThreats(true);
+    try {
+      const toSave = extractedThreats.filter((_, i) => selectedThreats.has(i));
+      for (const t of toSave) {
+        await db.Threat.create({
+          scenario_id: session.scenario_id,
+          name: t.name,
+          description: t.description,
+          severity: t.severity,
+          category: t.category,
+          tags: [],
+        });
+      }
+      setExtractedThreats(null);
+      setSelectedThreats(new Set());
+      load();
+    } finally {
+      setSavingThreats(false);
     }
   };
 
@@ -559,6 +617,125 @@ export default function SessionWorkspace() {
             generating={generatingSynthesis}
             synthStatus={synthStatus}
           />
+        )}
+
+        {tab === 'THREATS' && (
+          <div className="space-y-6 max-w-4xl">
+            {/* Existing scenario threats */}
+            <div>
+              <h3 className="text-xs font-bold tracking-widest font-mono mb-3" style={{ color: 'var(--wr-text-muted)' }}>
+                SCENARIO THREATS ({threats.length})
+              </h3>
+              {threats.length === 0 ? (
+                <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                  <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                    No threats assigned to this scenario. Extract threats from session assessments below.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {threats.map(t => (
+                    <div key={t.id} className="rounded p-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--wr-text-primary)' }}>{t.name}</p>
+                        <SeverityBadge severity={t.severity} />
+                      </div>
+                      {t.category && (
+                        <p className="text-xs font-mono mb-1.5" style={{ color: 'var(--wr-amber)' }}>{t.category}</p>
+                      )}
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{t.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Extract new threats from session */}
+            <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                    EXTRACT FROM SESSION
+                  </h3>
+                  <p className="text-xs mt-1" style={{ color: 'var(--wr-text-muted)' }}>
+                    Analyze agent assessments to surface new threats and save them to this scenario.
+                  </p>
+                </div>
+                <WrButton size="sm" onClick={handleExtractThreats}
+                  disabled={extracting || !sessionAgents.some(sa => sa.round1_assessment)}>
+                  {extracting
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Extracting...</>
+                    : <><ShieldAlert className="w-3.5 h-3.5" /> Extract Threats</>}
+                </WrButton>
+              </div>
+
+              {!sessionAgents.some(sa => sa.round1_assessment) && (
+                <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                  Complete at least Round 1 before extracting threats.
+                </p>
+              )}
+
+              {extractedThreats !== null && (
+                <div>
+                  {extractedThreats.length === 0 ? (
+                    <p className="text-xs py-2" style={{ color: 'var(--wr-text-muted)' }}>
+                      No distinct threats could be extracted from the current assessments.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs mb-3" style={{ color: 'var(--wr-text-secondary)' }}>
+                        {extractedThreats.length} threat{extractedThreats.length !== 1 ? 's' : ''} found — click to select/deselect
+                      </p>
+                      <div className="space-y-2 mb-4">
+                        {extractedThreats.map((t, i) => (
+                          <div key={i}
+                            className="flex items-start gap-3 rounded p-3 cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: selectedThreats.has(i) ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
+                              border: `1px solid ${selectedThreats.has(i) ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
+                            }}
+                            onClick={() => setSelectedThreats(prev => {
+                              const next = new Set(prev);
+                              if (next.has(i)) next.delete(i); else next.add(i);
+                              return next;
+                            })}>
+                            <div className="flex-shrink-0 w-4 h-4 mt-0.5 rounded flex items-center justify-center"
+                              style={{
+                                backgroundColor: selectedThreats.has(i) ? 'var(--wr-amber)' : 'transparent',
+                                border: `1.5px solid ${selectedThreats.has(i) ? 'var(--wr-amber)' : 'var(--wr-border)'}`,
+                              }}>
+                              {selectedThreats.has(i) && <Check className="w-2.5 h-2.5" style={{ color: '#0D1B2A' }} />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <p className="text-xs font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{t.name}</p>
+                                <SeverityBadge severity={t.severity} />
+                                {t.category && (
+                                  <span className="text-xs font-mono" style={{ color: 'var(--wr-amber)' }}>{t.category}</span>
+                                )}
+                              </div>
+                              <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{t.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <WrButton size="sm" onClick={handleSaveThreats}
+                          disabled={savingThreats || selectedThreats.size === 0}>
+                          {savingThreats
+                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                            : <><Check className="w-3.5 h-3.5" /> Save {selectedThreats.size} Selected</>}
+                        </WrButton>
+                        <WrButton variant="secondary" size="sm" onClick={() => setExtractedThreats(null)}>
+                          <X className="w-3.5 h-3.5" /> Discard
+                        </WrButton>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {tab === 'SETTINGS' && (

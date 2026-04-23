@@ -43,6 +43,7 @@ export default function NewSession() {
     source_pins: [],
   });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [newPinUrl, setNewPinUrl] = useState('');
   const [newPinLabel, setNewPinLabel] = useState('');
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
@@ -80,18 +81,31 @@ export default function NewSession() {
   const handleStart = async () => {
     if (!form.name || selectedAgents.length < 1) return;
     setSaving(true);
-    const session = await db.Session.create({
-      ...form,
-      status: 'pending',
-      agent_ids: selectedAgents.map(a => a.id),
-    });
-    for (const agent of selectedAgents) {
-      await db.SessionAgent.create({ session_id: session.id, agent_id: agent.id, status: 'pending' });
-    }
-    if (form.mode === 'live') {
-      navigate(`/sessions/${session.id}/live`);
-    } else {
-      navigate(`/sessions/${session.id}`);
+    setSaveError('');
+    try {
+      const payload = {
+        name: form.name,
+        domain_id: form.domain_id || null,
+        scenario_id: form.scenario_id || null,
+        phase_focus: form.phase_focus,
+        context_override: form.context_override,
+        mode: form.mode,
+        source_pins: form.source_pins,
+        status: 'pending',
+        agent_ids: selectedAgents.map(a => a.id),
+      };
+      const session = await db.Session.create(payload);
+      for (const agent of selectedAgents) {
+        await db.SessionAgent.create({ session_id: session.id, agent_id: agent.id, status: 'pending' });
+      }
+      if (form.mode === 'live') {
+        navigate(`/sessions/${session.id}/live`);
+      } else {
+        navigate(`/sessions/${session.id}`);
+      }
+    } catch (err) {
+      setSaveError(err.message || 'Failed to create session');
+      setSaving(false);
     }
   };
 
@@ -295,7 +309,12 @@ export default function NewSession() {
         )}
 
         {/* Launch */}
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-4">
+          {saveError && (
+            <p className="text-xs font-mono" style={{ color: '#C0392B' }}>
+              Error: {saveError}
+            </p>
+          )}
           <WrButton
             size="lg"
             onClick={handleStart}

@@ -143,7 +143,11 @@ Return ONLY the JSON object.`;
 }
 
 // --- generateRound1 ---
-export async function generateRound1({ agent, scenarioContext, phaseFocus }) {
+export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [] }) {
+  const threatSection = threatCatalog.length
+    ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
+    : '';
+
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -156,13 +160,13 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-
+${threatSection}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
-3. Second threat — same structure
-4. Invalidating assumption — one assumption that if wrong changes your whole assessment
-5. Key finding — one-sentence bottom line
+3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify any critical gaps not in the list' : ''}
+${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
+${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
 
 After your assessment, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
@@ -180,7 +184,7 @@ Write in first person as the expert. Be specific and opinionated.`;
 }
 
 // --- generateRound2 ---
-export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments }) {
+export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [] }) {
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -191,11 +195,11 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}
 Now write your Round 2 rebuttal (250-400 words) covering:
 1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
 2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why
+3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
 After your rebuttal, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
@@ -213,7 +217,11 @@ Be direct. Name names. Change your position if persuaded.`;
 }
 
 // --- streaming variants ---
-export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, onToken, onDone }) {
+export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], onToken, onDone }) {
+  const threatSection = threatCatalog.length
+    ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
+    : '';
+
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -226,13 +234,13 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-
+${threatSection}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
-3. Second threat — same structure
-4. Invalidating assumption — one assumption that if wrong changes your whole assessment
-5. Key finding — one-sentence bottom line
+3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify gaps not in the list' : ''}
+${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
+${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
 
 After your assessment, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
@@ -242,7 +250,7 @@ Write in first person as the expert. Be specific and opinionated.`;
   return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200, onToken, onDone });
 }
 
-export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, onToken, onDone }) {
+export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], onToken, onDone }) {
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -253,11 +261,11 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}
 Now write your Round 2 rebuttal (250-400 words) covering:
 1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
 2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why
+3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
 After your rebuttal, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
@@ -453,6 +461,33 @@ Use tools if you need specific facts, recent incidents, or technical detail — 
   const text = fallbackData.content?.[0]?.text?.trim() || '';
   onDone?.(text, toolCallLog);
   return { text, toolCalls: toolCallLog };
+}
+
+// --- extractSessionThreats ---
+export async function extractSessionThreats({ sessionAgents, scenarioName, scenarioContext }) {
+  const assessmentText = sessionAgents
+    .filter(sa => sa.round1_assessment)
+    .map(sa => `=== ${sa.agentName || 'Agent'} (${sa.discipline || ''}) ===\n${sa.round1_assessment || ''}\n${sa.round2_rebuttal || ''}`)
+    .join('\n\n---\n\n')
+    .slice(0, 4000);
+
+  const prompt = `You are a threat analyst extracting structured threat entries from red team session assessments.
+
+Scenario: ${scenarioName || 'Unknown'}
+Context: ${(scenarioContext || '').slice(0, 400)}
+
+Agent Assessments:
+${assessmentText}
+
+Extract all distinct threats identified or validated by agents. For each return exactly:
+{ "name": "concise threat name", "description": "2-3 sentences on mechanism and impact", "severity": "CRITICAL|HIGH|MEDIUM|LOW", "category": "e.g. Cyber, Supply Chain, Human Factors, Physical, OSINT, Geopolitical" }
+
+Return a JSON array only. No preamble.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200 });
+  const match = text.match(/\[[\s\S]*\]/);
+  try { return JSON.parse(match ? match[0] : '[]'); }
+  catch { return []; }
 }
 
 // --- generateSynthesis ---

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert } from 'lucide-react';
 import {
   generateRound1Stream, generateRound2Stream,
   generateAgentReply, generateAgentReplyWithTools,
@@ -182,6 +182,7 @@ export default function LiveDebateRoom() {
   const [targetId, setTargetId]         = useState('all');
   const [asking, setAsking]             = useState(false);
   const [toolsEnabled, setToolsEnabled] = useState(true);
+  const [threats, setThreats]           = useState([]);
 
   const transcriptRef  = useRef(null);
   const streamBuf      = useRef({});  // tempId → accumulated text
@@ -221,7 +222,11 @@ export default function LiveDebateRoom() {
       const hasR2 = saList.some(sa => sa.round2_rebuttal);
       setPhase(hasR2 ? 'r2done' : hasR1 ? 'r1done' : 'idle');
 
-      if (sess?.scenario_id) setScenario(await db.Scenario.get(sess.scenario_id));
+      if (sess?.scenario_id) {
+        setScenario(await db.Scenario.get(sess.scenario_id));
+        const t = await db.Threat.filter({ scenario_id: sess.scenario_id });
+        setThreats(t);
+      }
 
       setMessages(msgs.map(m => ({
         id: m.id,
@@ -285,6 +290,7 @@ export default function LiveDebateRoom() {
       try {
         await generateRound1Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
+          threatCatalog: threats,
           onToken: token => {
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' }));
             appendToken(tempId, token);
@@ -343,6 +349,7 @@ export default function LiveDebateRoom() {
         await generateRound2Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
           othersAssessments: othersCtx(sa.agent_id),
+          threatCatalog: threats,
           onToken: token => {
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' }));
             appendToken(tempId, token);
@@ -558,6 +565,34 @@ export default function LiveDebateRoom() {
               </span>
             )}
           </div>
+
+          {threats.length > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
+              <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>
+                THREATS ({threats.length})
+              </p>
+              {threats.map(t => (
+                <div key={t.id} className="mb-2 rounded p-2"
+                  style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                  <div className="flex items-start justify-between gap-1 mb-1">
+                    <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--wr-text-primary)' }}>
+                      {t.name}
+                    </p>
+                    <span className="text-xs font-bold font-mono flex-shrink-0"
+                      style={{ color: SEV_COLOR[t.severity] || 'var(--wr-text-muted)' }}>
+                      {t.severity?.[0]}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setQuestion(`Regarding the threat "${t.name}": ${t.description || ''} What are the implications for this scenario?`)}
+                    className="flex items-center gap-1 text-xs transition-opacity hover:opacity-80 mt-1"
+                    style={{ color: 'var(--wr-amber)' }}>
+                    <ShieldAlert className="w-2.5 h-2.5" /> Surface
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Transcript + input */}
