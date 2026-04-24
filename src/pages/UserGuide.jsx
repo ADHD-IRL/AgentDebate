@@ -149,7 +149,7 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
       {
         num: '05',
         title: 'Generate Synthesis',
-        what: 'You click "Generate Synthesis."
+        what: 'You click "Generate Synthesis.",
         system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
 - Consensus findings (what most agents agree on)
 - Contested findings (where agents significantly disagree)
