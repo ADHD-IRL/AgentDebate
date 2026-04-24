@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, ArrowRight, Map, Brain, BarChart2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -53,8 +53,6 @@ A scenario has a **status** (draft → active → archived) so you can track whi
         title: 'Agents',
         body: `Agents are **expert thinking archetypes** — personas that embody a specific discipline, cognitive style, and set of biases.
 
-body: `Agents are **expert thinking archetypes** — personas that embody a specific discipline, cognitive style, and set of biases.
-
 The analogy: imagine hiring a panel of consultants for a day. One is a former counterintelligence officer. One is a supply chain economist. One is a futurist. Each one looks at the same situation through a completely different lens. An Agent in AgentDebate captures that lens.
 
 Each Agent has:
@@ -65,7 +63,8 @@ Each Agent has:
 - **Vector Weights** — how much they emphasize Human, Technical, Physical, and Futures dimensions (0–100 each)
 - **Severity Default** — their baseline alarm level (CRITICAL / HIGH / MEDIUM / LOW)
 
-You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. When importing, the **## heading** in the file becomes the agent's display name — keep it clear and descriptive (e.g., "Counterintelligence \/ HUMINT Officer" rather than a code like "LIB-IC01").`},
+You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. When importing, the **## heading** in the file becomes the agent's display name — keep it clear and descriptive (e.g., "Counterintelligence / HUMINT Officer" rather than a code like "LIB-IC01").`
+      },
       {
         icon: AlertTriangle,
         color: '#C0392B',
@@ -201,7 +200,8 @@ The synthesis is saved as a SessionSynthesis record and the session status moves
     icon: FileText,
     color: '#546E7A',
     title: 'Exporting & Reports',
-    content: `A full report can include:
+    content: `
+A full report can include:
 - **Cover** — session name, date, scenario, phase focus
 - **Scenario Brief** — the full context document
 - **Agent Roster** — who participated and their profiles
@@ -507,7 +507,6 @@ export default function UserGuide() {
         subtitle="How to use AgentDebate — concepts, workflows, and best practices"
       />
       <div className="p-6 max-w-5xl mx-auto space-y-4">
-        {/* Intro Banner */}
         <div className="rounded p-5 flex items-start gap-4" style={{ backgroundColor: 'rgba(240,165,0,0.06)', border: '1px solid rgba(240,165,0,0.2)' }}>
           <Shield className="w-6 h-6 flex-shrink-0 mt-0.5" style={{ color: 'var(--wr-amber)' }} />
           <div>
@@ -518,7 +517,6 @@ export default function UserGuide() {
           </div>
         </div>
 
-        {/* Quick Nav */}
         <div className="rounded p-4 flex flex-wrap gap-2" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
           <span className="text-xs font-mono font-bold self-center mr-1" style={{ color: 'var(--wr-text-muted)' }}>JUMP TO:</span>
           {sections.map(s => (
@@ -530,7 +528,6 @@ export default function UserGuide() {
           ))}
         </div>
 
-        {/* Sections */}
         {sections.map(section => (
           <div key={section.id} id={section.id}>
             <Section section={section} />
