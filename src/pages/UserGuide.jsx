@@ -53,6 +53,8 @@ A scenario has a **status** (draft → active → archived) so you can track whi
         title: 'Agents',
         body: `Agents are **expert thinking archetypes** — personas that embody a specific discipline, cognitive style, and set of biases.
 
+body: `Agents are **expert thinking archetypes** — personas that embody a specific discipline, cognitive style, and set of biases.
+
 The analogy: imagine hiring a panel of consultants for a day. One is a former counterintelligence officer. One is a supply chain economist. One is a futurist. Each one looks at the same situation through a completely different lens. An Agent in AgentDebate captures that lens.
 
 Each Agent has:
@@ -63,8 +65,7 @@ Each Agent has:
 - **Vector Weights** — how much they emphasize Human, Technical, Physical, and Futures dimensions (0–100 each)
 - **Severity Default** — their baseline alarm level (CRITICAL / HIGH / MEDIUM / LOW)
 
-You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. When importing, the **## heading** in the file becomes the agent's display name — keep it clear and descriptive (e.g., "Counterintelligence / HUMINT Officer" rather than a code like "LIB-IC01").`
-      },
+You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. When importing, the **## heading** in the file becomes the agent's display name — keep it clear and descriptive (e.g., "Counterintelligence \/ HUMINT Officer" rather than a code like "LIB-IC01").`},
       {
         icon: AlertTriangle,
         color: '#C0392B',
