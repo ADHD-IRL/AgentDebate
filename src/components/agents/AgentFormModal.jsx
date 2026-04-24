@@ -1,11 +1,21 @@
 import { useState } from 'react';
-import { X, Sparkles, Loader2, SlidersHorizontal } from 'lucide-react';
+import { X, Sparkles, Loader2, SlidersHorizontal, Volume2 } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
 import { generateAgent as generateAgentLLM } from '@/lib/llm';
+import { DEFAULT_VOICES } from '@/lib/voice';
 
 const SEVERITIES = ['CRITICAL','HIGH','MEDIUM','LOW'];
 const SEV_COLORS = { CRITICAL:'#C0392B', HIGH:'#D68910', MEDIUM:'#2E86AB', LOW:'#27AE60' };
+
+const VOICE_META = {
+  alloy:   { label: 'Alloy',   desc: 'Neutral · balanced' },
+  echo:    { label: 'Echo',    desc: 'Male · clear' },
+  nova:    { label: 'Nova',    desc: 'Female · warm' },
+  onyx:    { label: 'Onyx',   desc: 'Male · deep' },
+  fable:   { label: 'Fable',  desc: 'Expressive · storytelling' },
+  shimmer: { label: 'Shimmer', desc: 'Female · soft' },
+};
 
 export default function AgentFormModal({ agent, mode: initialMode, domains, onSave, onClose }) {
   const [mode, setMode] = useState(initialMode || (agent ? 'manual' : 'manual'));
@@ -14,6 +24,7 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
     red_team_focus:'', professional_background:'', expertise_level:'Senior',
     reasoning_style:'Analytical', severity_default:'HIGH', vector_human:50,
     vector_technical:50, vector_physical:30, vector_futures:40, is_ai_generated:false, tags:[],
+    voice_id: '',
     ...agent
   });
   const [aiForm, setAiForm] = useState({ domain_id: '', expert_type:'', prior_background:'', key_focus:'', bias_toward:'' });
@@ -200,6 +211,39 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Volume2 className="w-3.5 h-3.5" style={{ color: '#2E86AB' }} />
+                  <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>VOICE</p>
+                  <span className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(46,134,171,0.1)', color: '#2E86AB', border: '1px solid rgba(46,134,171,0.2)' }}>optional · TTS</span>
+                </div>
+                <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>
+                  Pick an OpenAI voice for this agent. Requires an OpenAI API key in Settings.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {DEFAULT_VOICES.map(v => {
+                    const meta = VOICE_META[v];
+                    const selected = form.voice_id === v;
+                    return (
+                      <button key={v} onClick={() => set('voice_id', selected ? '' : v)}
+                        className="text-left px-3 py-2 rounded transition-all"
+                        style={{
+                          backgroundColor: selected ? 'rgba(46,134,171,0.12)' : 'var(--wr-bg-secondary)',
+                          border: selected ? '1px solid rgba(46,134,171,0.4)' : '1px solid var(--wr-border)',
+                        }}>
+                        <div className="text-xs font-semibold" style={{ color: selected ? '#2E86AB' : 'var(--wr-text-primary)' }}>{meta.label}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{meta.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!form.voice_id && (
+                  <p className="text-xs mt-2" style={{ color: 'var(--wr-text-muted)', fontStyle: 'italic' }}>
+                    No voice selected — debate room will auto-assign based on roster position.
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -251,7 +251,7 @@ export default function LiveDebateRoom() {
         if (agent) {
           p[sa.agent_id] = agent;
           c[sa.agent_id] = agent.color || AGENT_COLORS[i % AGENT_COLORS.length];
-          v[sa.agent_id] = agent.voiceId || DEFAULT_VOICES[i % DEFAULT_VOICES.length];
+          v[sa.agent_id] = agent.voice_id || agent.voiceId || DEFAULT_VOICES[i % DEFAULT_VOICES.length];
         }
         statuses[sa.agent_id]  = sa.round1_assessment ? 'done' : 'idle';
         if (sa.round2_revised_severity || sa.round1_severity)
