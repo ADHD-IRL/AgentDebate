@@ -1,244 +1,73 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { parseAnalysisConfigs } from '@/lib/chainBreakStorage';
-import {
-  Bot, Swords, Link2, Target, Plus, ArrowRight,
-  Globe, Shield, CheckCircle2,
-  FileText, Scissors, BarChart3, Map, ChevronRight,
-  Play, TrendingUp, BookOpen, Zap,
-} from 'lucide-react';
+import { AlertTriangle, ChevronDown } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+import KpiStrip      from '@/components/dashboard/KpiStrip';
+import PriorityQueue from '@/components/dashboard/PriorityQueue';
+import FindingsMatrix from '@/components/dashboard/FindingsMatrix';
+import SessionFeed   from '@/components/dashboard/SessionFeed';
+import CoveragePanel from '@/components/dashboard/CoveragePanel';
+import QuickActions  from '@/components/dashboard/QuickActions';
+import { SEV_ORDINAL } from '@/components/dashboard/atoms';
 
-const SEV_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
-const GUIDE_KEY = 'agentdebate_guide_open';
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-const STEPS = [
-  {
-    num: 1, key: 'domains', icon: Globe, color: '#2E86AB',
-    title: 'Map Your Threat Landscape',
-    description: 'Create domains to organise your threat environment — cyber, physical, geopolitical, OSINT, or any area relevant to your assessment.',
-    to: '/domains', actionLabel: 'Set up domains',
-    check: c => c.domains > 0,
-    doneText: c => `${c.domains} domain${c.domains !== 1 ? 's' : ''} configured`,
-    requiresSteps: [],
-  },
-  {
-    num: 2, key: 'agents', icon: Bot, color: '#7B2D8B',
-    title: 'Add Analyst Agents',
-    description: 'Agents bring different analytical lenses to your assessment. Add at least one specialist per domain you want covered.',
-    to: '/agents', actionLabel: 'Add agents',
-    check: c => c.agents > 0,
-    doneText: c => `${c.agents} agent${c.agents !== 1 ? 's' : ''} ready`,
-    requiresSteps: [],
-  },
-  {
-    num: 3, key: 'scenarios', icon: Target, color: '#27AE60',
-    title: 'Define a Threat Scenario',
-    description: "A scenario provides the threat context — who the actor is, what they're targeting, and under what conditions.",
-    to: '/scenarios', actionLabel: 'Create a scenario',
-    check: c => c.scenarios > 0,
-    doneText: c => `${c.scenarios} scenario${c.scenarios !== 1 ? 's' : ''} available`,
-    requiresSteps: [],
-  },
-  {
-    num: 4, key: 'session', icon: Swords, color: '#F0A500',
-    title: 'Run a Threat Assessment',
-    description: 'Start a session to bring your agents together. They score threats, challenge each other through structured debate rounds, and produce a synthesised assessment.',
-    to: '/sessions/new', actionLabel: 'Start a session',
-    check: c => c.startedSessions > 0,
-    doneText: c => `${c.startedSessions} session${c.startedSessions !== 1 ? 's' : ''} run`,
-    requiresSteps: [1, 2, 3],
-  },
-  {
-    num: 5, key: 'review', icon: FileText, color: '#546E7A',
-    title: 'Review & Export Findings',
-    description: 'Once a session completes, review the synthesised threat findings across all agents and domains.',
-    to: '/reports', actionLabel: 'View reports',
-    check: c => c.completeSessions > 0,
-    doneText: () => 'Findings available',
-    requiresSteps: [4],
-  },
+const SEV_KEYS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+function median(arr) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function withinDays(isoDate, days) {
+  if (!isoDate) return false;
+  return Date.now() - new Date(isoDate).getTime() < days * 86400000;
+}
+
+function spark14(items, getDate, getValue) {
+  const now    = Date.now();
+  const bucket = 86400000;
+  const bins   = Array(14).fill(0);
+  for (const item of items) {
+    const d = new Date(getDate(item)).getTime();
+    const daysAgo = Math.floor((now - d) / bucket);
+    if (daysAgo >= 0 && daysAgo < 14) bins[13 - daysAgo] += getValue(item);
+  }
+  return bins;
+}
+
+// ── Range options ──────────────────────────────────────────────────────────────
+
+const RANGES = [
+  { key: '14D', label: 'Last 14 days', days: 14 },
+  { key: '30D', label: 'Last 30 days', days: 30 },
+  { key: '90D', label: 'Last 90 days', days: 90 },
 ];
 
-const TRACK_STEPS = [
-  { label: 'PEND', color: '#546E7A' },
-  { label: 'R1',   color: '#2E86AB' },
-  { label: 'R2',   color: '#D68910' },
-  { label: 'SYN',  color: '#27AE60' },
-];
-
-const STATUS_TO_STEP = { pending: 0, round1: 1, round2: 2, complete: 3 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function timeAgo(iso) {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const hours = Math.floor(mins / 60);
-  const days  = Math.floor(hours / 24);
-  if (days > 0)  return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (mins > 0)  return `${mins}m ago`;
-  return 'just now';
-}
-
-// ── RingMini ──────────────────────────────────────────────────────────────────
-
-function RingMini({ pct, color, size = 48, centerLabel }) {
-  const r = size * 0.38;
-  const circ = 2 * Math.PI * r;
-  const sw = Math.max(4, size * 0.14);
-  const offset = circ * (1 - Math.max(0, Math.min(1, pct)));
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke="var(--wr-bg-secondary)" strokeWidth={sw} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={color} strokeWidth={sw} strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={pct > 0 ? offset : circ} />
-      </svg>
-      {centerLabel !== undefined && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: size * 0.24, fontFamily: 'monospace', fontWeight: 700, color: 'var(--wr-text-primary)', lineHeight: 1 }}>
-            {centerLabel}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── MiniProgressTrack ─────────────────────────────────────────────────────────
-
-function MiniProgressTrack({ status }) {
-  const activeStep = STATUS_TO_STEP[status] ?? 0;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-      {TRACK_STEPS.map((step, i) => (
-        <div key={i} style={{
-          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-          backgroundColor: i <= activeStep ? step.color : 'transparent',
-          border: `1.5px solid ${i <= activeStep ? step.color : 'var(--wr-border)'}`,
-        }} />
-      ))}
-    </div>
-  );
-}
-
-// ── SessionCard ───────────────────────────────────────────────────────────────
-
-function SessionCard({ session }) {
-  const activeStep = STATUS_TO_STEP[session.status] ?? 0;
-  const lineFillPct = (activeStep / 3) * 75;
-
-  return (
-    <Link to={`/sessions/${session.id}`} className="block">
-      <div className="rounded-lg p-3 transition-all"
-        style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(240,165,0,0.3)'; e.currentTarget.style.boxShadow = '0 0 16px rgba(240,165,0,0.06)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--wr-border)'; e.currentTarget.style.boxShadow = 'none'; }}>
-
-        <div className="flex items-start justify-between mb-3">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--wr-text-primary)' }}>{session.name}</p>
-            {session.phase_focus && (
-              <p className="text-xs truncate mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>
-            )}
-          </div>
-          <span className="text-xs flex-shrink-0 ml-3" style={{ color: 'var(--wr-text-muted)' }}>{timeAgo(session.created_date)}</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 10, left: '12.5%', right: '12.5%', height: 1, backgroundColor: 'var(--wr-border)' }} />
-          <div style={{ position: 'absolute', top: 10, left: '12.5%', height: 1, width: `${lineFillPct}%`, backgroundColor: TRACK_STEPS[activeStep].color, transition: 'width 0.4s ease' }} />
-          {TRACK_STEPS.map((step, i) => {
-            const done = i < activeStep;
-            const active = i === activeStep;
-            const locked = i > activeStep;
-            return (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: '50%',
-                  backgroundColor: locked ? 'var(--wr-bg-primary)' : step.color,
-                  border: locked ? '1.5px solid var(--wr-border)' : 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: active ? `0 0 8px ${step.color}60` : 'none',
-                }}>
-                  {done   && <CheckCircle2 style={{ width: 11, height: 11, color: '#0D1B2A' }} />}
-                  {active && <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#0D1B2A' }} />}
-                </div>
-                <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 600, marginTop: 3, color: locked ? 'var(--wr-text-muted)' : step.color }}>
-                  {step.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ── WorkflowStep ──────────────────────────────────────────────────────────────
-
-function WorkflowStep({ step, counts, isDone, isActive, isLocked }) {
-  const Icon = step.icon;
-  return (
-    <div className="flex gap-3 py-3 px-4 border-b last:border-0"
-      style={{ borderColor: 'var(--wr-border)', backgroundColor: isActive ? `${step.color}08` : 'transparent', opacity: isLocked ? 0.4 : 1 }}>
-      <div className="flex-shrink-0 pt-0.5">
-        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold font-mono"
-          style={{
-            backgroundColor: isDone ? 'rgba(39,174,96,0.12)' : isActive ? `${step.color}18` : 'rgba(84,110,122,0.1)',
-            border: `1.5px solid ${isDone ? '#27AE60' : isActive ? step.color : 'rgba(84,110,122,0.3)'}`,
-            color: isDone ? '#27AE60' : isActive ? step.color : '#546E7A',
-          }}>
-          {isDone ? <CheckCircle2 className="w-3.5 h-3.5" /> : step.num}
-        </div>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <p className="text-xs font-semibold leading-tight" style={{ color: isDone ? 'var(--wr-text-muted)' : 'var(--wr-text-primary)' }}>
-              {step.title}
-            </p>
-            {isDone
-              ? <p className="text-xs mt-0.5 font-medium" style={{ color: '#27AE60' }}>✓ {step.doneText(counts)}</p>
-              : <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--wr-text-muted)' }}>{isLocked ? 'Complete the steps above first.' : step.description}</p>
-            }
-          </div>
-          {!isDone && !isLocked && (
-            <Link to={step.to}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all hover:opacity-80"
-              style={{ backgroundColor: isActive ? step.color : 'transparent', color: isActive ? '#fff' : 'var(--wr-text-muted)', border: isActive ? `1px solid ${step.color}` : '1px solid var(--wr-border)' }}>
-              {step.actionLabel} <ArrowRight className="w-2.5 h-2.5" />
-            </Link>
-          )}
-          {isDone && (
-            <Link to={step.to} className="flex-shrink-0 text-xs hover:opacity-70" style={{ color: 'var(--wr-text-muted)' }}>Edit</Link>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Main export ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { db } = useWorkspace();
-  const navigate = useNavigate();
+  const { db }     = useWorkspace();
+  const navigate   = useNavigate();
+  const [params, setParams] = useSearchParams();
 
-  const [guideOpen, setGuideOpen] = useState(() => {
-    const stored = localStorage.getItem(GUIDE_KEY);
-    return stored === null ? true : stored === 'true';
-  });
+  const range     = params.get('range')  || '14D';
+  const kpiFilter = params.get('kpi')    || null;
+
+  const setRange     = (v) => { const p = new URLSearchParams(params); p.set('range', v);  setParams(p); };
+  const setKpiFilter = (v) => {
+    const p = new URLSearchParams(params);
+    if (v) p.set('kpi', v); else p.delete('kpi');
+    setParams(p);
+  };
+
+  const rangeDays = RANGES.find(r => r.key === range)?.days ?? 14;
+
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     agents: [], sessions: [], chains: [], scenarios: [], domains: [],
@@ -248,8 +77,14 @@ export default function Dashboard() {
   const loadData = useCallback(() => {
     if (!db) return;
     Promise.all([
-      db.Agent.list(), db.Session.list(), db.Chain.list(), db.Scenario.list(),
-      db.Domain.list(), db.SessionAgent.list(), db.SessionSynthesis.list(), db.AppConfig.list(),
+      db.Agent.list(),
+      db.Session.list(),
+      db.Chain.list(),
+      db.Scenario.list(),
+      db.Domain.list(),
+      db.SessionAgent.list(),
+      db.SessionSynthesis.list(),
+      db.AppConfig.list(),
     ]).then(([agents, sessions, chains, scenarios, domains, sessionAgents, syntheses, configs]) => {
       const { libMap, sesMap } = parseAnalysisConfigs(configs);
       setData({ agents, sessions, chains, scenarios, domains, sessionAgents, syntheses, libMap, sesMap });
@@ -264,419 +99,395 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [loadData]);
 
-  const toggleGuide = () => {
-    setGuideOpen(prev => { const next = !prev; localStorage.setItem(GUIDE_KEY, String(next)); return next; });
-  };
+  // ── Derived maps ──────────────────────────────────────────────────────────────
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
+  const agentMap   = useMemo(() => Object.fromEntries(data.agents.map(a => [a.id, a])),   [data.agents]);
+  const domainMap  = useMemo(() => Object.fromEntries(data.domains.map(d => [d.id, d])),  [data.domains]);
+  const scenarioMap = useMemo(() => Object.fromEntries(data.scenarios.map(s => [s.id, s])), [data.scenarios]);
 
-  const activeSessions   = useMemo(() => data.sessions.filter(s => ['round1','round2'].includes(s.status)), [data.sessions]);
-  const completeSessions = useMemo(() => data.sessions.filter(s => s.status === 'complete'), [data.sessions]);
-
-  const recentSessions = useMemo(() => {
-    const active = activeSessions.slice().sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0));
-    const rest = data.sessions.filter(s => !['round1','round2'].includes(s.status))
-      .sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0));
-    return [...active, ...rest].slice(0, 6);
-  }, [data.sessions, activeSessions]);
-
-  const completedSessionIds = useMemo(() => new Set(completeSessions.map(s => s.id)), [completeSessions]);
-
-  const findings = useMemo(() => {
-    const completed = data.sessionAgents.filter(sa => completedSessionIds.has(sa.session_id));
-    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    for (const sa of completed) {
-      const sev = sa.round2_revised_severity || sa.round1_severity;
-      if (counts[sev] !== undefined) counts[sev]++;
-    }
-    return { ...counts, total: completed.length };
-  }, [data.sessionAgents, completedSessionIds]);
-
-  const totalAnalyzed = useMemo(() => Object.keys(data.libMap).length + Object.keys(data.sesMap).length, [data.libMap, data.sesMap]);
-
-  const counts = useMemo(() => ({
-    domains: data.domains.length, agents: data.agents.length,
-    scenarios: data.scenarios.length, chains: data.chains.length,
-    sessions: data.sessions.length,
-    startedSessions: data.sessions.filter(s => s.status !== 'pending').length,
-    completeSessions: completeSessions.length,
-  }), [data, completeSessions]);
-
-  const stepStates = useMemo(() =>
-    STEPS.map(step => {
-      const isDone   = step.check(counts);
-      const reqsMet  = (step.requiresSteps || []).every(n => STEPS[n - 1].check(counts));
-      const isLocked = !isDone && !reqsMet;
-      const isActive = !isDone && reqsMet;
-      return { isDone, isActive, isLocked };
-    }), [counts]);
-
-  const allStepsDone   = stepStates.every(s => s.isDone);
-  const doneCount      = stepStates.filter(s => s.isDone).length;
-  const currentStepNum = stepStates.findIndex(s => s.isActive) + 1;
-  const isReady        = counts.domains > 0 && counts.agents > 0 && counts.scenarios > 0;
-
-  const activeScenarioCount = data.scenarios.filter(s => s.status === 'active').length || data.scenarios.length;
-  const sessionsPct  = counts.sessions  > 0 ? counts.completeSessions / counts.sessions  : 0;
-  const agentsPct    = Math.min(1, counts.agents / 10);
-  const scenariosPct = counts.scenarios > 0 ? activeScenarioCount / counts.scenarios : 0;
-
-  const Skeleton = ({ h = 'h-32' }) => (
-    <div className={`${h} rounded-lg animate-pulse`} style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }} />
+  const inRange = useCallback(
+    (isoDate) => withinDays(isoDate, rangeDays),
+    [rangeDays]
   );
+
+  // ── Session enrichment ────────────────────────────────────────────────────────
+
+  const enrichedSessions = useMemo(() => {
+    const saBySession = {};
+    for (const sa of data.sessionAgents) {
+      if (!saBySession[sa.session_id]) saBySession[sa.session_id] = [];
+      saBySession[sa.session_id].push(sa);
+    }
+
+    return data.sessions.map(s => {
+      const sas        = saBySession[s.id] || [];
+      const completed  = sas.filter(sa => sa.status === 'complete');
+      const conf       = sas.length > 0 ? completed.length / sas.length : null;
+
+      const drifts = completed
+        .filter(sa => sa.round1_severity && sa.round2_revised_severity)
+        .map(sa => (SEV_ORDINAL[sa.round2_revised_severity] ?? 0) - (SEV_ORDINAL[sa.round1_severity] ?? 0));
+      const drift = drifts.length ? median(drifts) : null;
+
+      const sevCounts  = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+      for (const sa of sas) {
+        const sev = sa.round2_revised_severity || sa.round1_severity;
+        if (sev && sevCounts[sev] !== undefined) sevCounts[sev]++;
+      }
+      const topSeverity = SEV_KEYS.find(k => sevCounts[k] > 0) || null;
+      const findingCount = sas.length;
+
+      const r1Complete   = sas.length > 0 && sas.every(sa => sa.round1_assessment);
+      const r2Complete   = sas.length > 0 && sas.every(sa => sa.round2_rebuttal);
+      const synth        = data.syntheses.find(sy => sy.session_id === s.id);
+
+      return {
+        ...s,
+        agentCount:          sas.length,
+        findingCount,
+        criticalCount:       sevCounts.CRITICAL,
+        topSeverity,
+        confidence:          conf,
+        drift,
+        scenario:            scenarioMap[s.scenario_id]?.name || null,
+        r1_complete:         r1Complete,
+        r2_complete:         r2Complete,
+        synthesis_complete:  !!synth?.summary,
+      };
+    });
+  }, [data.sessions, data.sessionAgents, data.syntheses, scenarioMap]);
+
+  // ── KPI strip data ────────────────────────────────────────────────────────────
+
+  const kpis = useMemo(() => {
+    const rangeEnd   = Date.now();
+    const rangeStart = rangeEnd - rangeDays * 86400000;
+    const prevStart  = rangeStart - rangeDays * 86400000;
+
+    const inRangeSessions = enrichedSessions.filter(s => inRange(s.created_date));
+    const prevSessions    = enrichedSessions.filter(s => {
+      const t = new Date(s.created_date || 0).getTime();
+      return t >= prevStart && t < rangeStart;
+    });
+
+    const rangedSAs = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && inRange(s.created_date);
+    });
+
+    const criticals  = rangedSAs.filter(sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL');
+    const prevCrit   = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      if (!s) return false;
+      const t = new Date(s.created_date || 0).getTime();
+      return t >= prevStart && t < rangeStart && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
+    });
+
+    const openCount  = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && ['round1', 'round2'].includes(s.status);
+    }).length;
+
+    const completedConfs = enrichedSessions.filter(s => inRange(s.created_date) && s.confidence != null).map(s => s.confidence);
+    const avgConf = completedConfs.length ? completedConfs.reduce((a, b) => a + b, 0) / completedConfs.length : null;
+
+    const driftVals = inRangeSessions.filter(s => s.drift != null).map(s => s.drift);
+    const medDrift  = driftVals.length ? median(driftVals) : null;
+
+    const critSpark  = spark14(data.sessionAgents, sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s?.created_date || new Date(0).toISOString();
+    }, sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL' ? 1 : 0);
+
+    const sessSpark  = spark14(enrichedSessions, s => s.created_date || new Date(0).toISOString(), () => 1);
+
+    return {
+      critical: { value: criticals.length, delta: criticals.length - prevCrit.length, spark: critSpark },
+      open:     { value: openCount,         delta: null },
+      sessions: { value: inRangeSessions.length, delta: inRangeSessions.length - prevSessions.length, spark: sessSpark },
+      conf:     { value: avgConf,           delta: null },
+      drift:    { value: medDrift,          delta: null },
+    };
+  }, [enrichedSessions, data.sessionAgents, rangeDays, inRange]);
+
+  // ── Priority queue ────────────────────────────────────────────────────────────
+
+  const priorityItems = useMemo(() => {
+    const items = [];
+
+    // Unresolved criticals — active sessions with CRITICAL findings
+    for (const s of enrichedSessions) {
+      if (!['round1', 'round2', 'active'].includes(s.status)) continue;
+      if ((s.criticalCount || 0) === 0) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'unresolved',
+        severity: 'CRITICAL',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${s.criticalCount} critical`,
+        href:     `/session/${s.id}`,
+        action:   'Review',
+        agents:   [],
+      });
+    }
+
+    // Severity drift — sessions where |drift| >= 2
+    for (const s of enrichedSessions) {
+      if (s.drift == null || Math.abs(s.drift) < 2) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'drift',
+        severity: s.drift > 0 ? 'HIGH' : 'MEDIUM',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${s.drift > 0 ? '+' : ''}${s.drift?.toFixed(1)} avg drift`,
+        href:     `/session/${s.id}`,
+        action:   'Analyse',
+        agents:   [],
+      });
+    }
+
+    // Coverage gaps — domains with no agents
+    for (const d of data.domains) {
+      const agentCount = data.agents.filter(a => a.domain_id === d.id).length;
+      if (agentCount > 0) continue;
+      items.push({
+        kind:     'gap',
+        severity: 'HIGH',
+        title:    `${d.name || 'Unnamed domain'} has no agents`,
+        subtitle: 'Assign at least one agent to this domain',
+        meta:     '0 agents',
+        href:     '/agents',
+        action:   'Assign',
+        agents:   [],
+      });
+    }
+
+    // Stale scenarios — not used in >30d
+    for (const sc of data.scenarios) {
+      if (!withinDays(sc.created_date, 365)) continue; // only flag if scenario exists
+      const lastSession = enrichedSessions
+        .filter(s => s.scenario_id === sc.id)
+        .sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0))[0];
+      if (lastSession && withinDays(lastSession.created_date, 30)) continue;
+      if (!lastSession && withinDays(sc.created_date, 30)) continue;
+      items.push({
+        kind:     'stale',
+        severity: 'LOW',
+        title:    `${sc.name || 'Unnamed scenario'} not assessed recently`,
+        subtitle: lastSession ? `Last session ${Math.floor((Date.now() - new Date(lastSession.created_date).getTime()) / 86400000)}d ago` : 'Never run',
+        meta:     '>30d stale',
+        href:     '/scenarios',
+        action:   'Run',
+        agents:   [],
+      });
+    }
+
+    // Low confidence — complete sessions with conf < 0.65
+    for (const s of enrichedSessions) {
+      if (s.status !== 'complete') continue;
+      if (s.confidence == null || s.confidence >= 0.65) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'lowconf',
+        severity: 'MEDIUM',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${Math.round(s.confidence * 100)}% confidence`,
+        href:     `/session/${s.id}`,
+        action:   'Review',
+        agents:   [],
+      });
+    }
+
+    // Sort: CRITICAL > HIGH > MEDIUM > LOW
+    const ord = { CRITICAL: 3, HIGH: 2, MEDIUM: 1, LOW: 0 };
+    return items.sort((a, b) => (ord[b.severity] || 0) - (ord[a.severity] || 0));
+  }, [enrichedSessions, data.domains, data.agents, data.scenarios, scenarioMap]);
+
+  // ── Findings matrix ───────────────────────────────────────────────────────────
+
+  const { matrixRows, matrixDomainMap, totalFindings } = useMemo(() => {
+    const cutoff = Date.now() - 14 * 86400000;
+
+    const recentSAs = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && new Date(s.created_date || 0).getTime() >= cutoff;
+    });
+
+    const byDomain = {};
+    for (const sa of recentSAs) {
+      const agent = agentMap[sa.agent_id];
+      if (!agent) continue;
+      const domId = agent.domain_id || '__none__';
+      if (!byDomain[domId]) byDomain[domId] = { domain_id: domId, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, spark: Array(14).fill(0) };
+      const sev = sa.round2_revised_severity || sa.round1_severity;
+      if (sev && byDomain[domId][sev] !== undefined) byDomain[domId][sev]++;
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      if (s) {
+        const daysAgo = Math.floor((Date.now() - new Date(s.created_date || 0).getTime()) / 86400000);
+        if (daysAgo >= 0 && daysAgo < 14) byDomain[domId].spark[13 - daysAgo]++;
+      }
+    }
+
+    const rows = Object.values(byDomain).sort((a, b) => {
+      const aSum = SEV_KEYS.reduce((s, k) => s + a[k], 0);
+      const bSum = SEV_KEYS.reduce((s, k) => s + b[k], 0);
+      return bSum - aSum;
+    });
+
+    const dMap = {};
+    for (const d of data.domains) {
+      const agentCount = data.agents.filter(a => a.domain_id === d.id).length;
+      dMap[d.id] = { name: d.name, color: d.color, agentCount };
+    }
+
+    const total = rows.reduce((s, r) => s + SEV_KEYS.reduce((ss, k) => ss + r[k], 0), 0);
+    return { matrixRows: rows, matrixDomainMap: dMap, totalFindings: total };
+  }, [data.sessionAgents, data.domains, data.agents, enrichedSessions, agentMap]);
+
+  // ── Coverage panel data ───────────────────────────────────────────────────────
+
+  const coverageDomains = useMemo(() => {
+    return data.domains.map(d => {
+      const agentCount    = data.agents.filter(a => a.domain_id === d.id).length;
+      const domSessions   = enrichedSessions.filter(s => {
+        const sas = data.sessionAgents.filter(sa => sa.session_id === s.id);
+        return sas.some(sa => agentMap[sa.agent_id]?.domain_id === d.id);
+      });
+      const openFindings  = data.sessionAgents.filter(sa => {
+        const s = enrichedSessions.find(x => x.id === sa.session_id);
+        const agent = agentMap[sa.agent_id];
+        return agent?.domain_id === d.id && s && ['round1', 'round2'].includes(s.status);
+      }).length;
+      return { id: d.id, name: d.name, color: d.color, agentCount, sessions: domSessions.length, openFindings };
+    }).sort((a, b) => b.sessions - a.sessions);
+  }, [data.domains, data.agents, data.sessionAgents, enrichedSessions, agentMap]);
+
+  // ── Workspace readiness ───────────────────────────────────────────────────────
+
+  const isWorkspaceReady = data.domains.length > 0 && data.agents.length > 0 && data.scenarios.length > 0;
+
+  // ── Range selector ────────────────────────────────────────────────────────────
+
+  const [rangeOpen, setRangeOpen] = useState(false);
+
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
+
+  const Skeleton = ({ h = 120 }) => (
+    <div style={{ height: h, borderRadius: 8, backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
       <PageHeader
-        icon={Shield}
-        title="AgentDebate"
-        subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        title="Dashboard"
+        subtitle="Analyst Operations Centre"
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={toggleGuide}
-              className="flex items-center gap-2 px-4 py-2 rounded text-sm font-medium transition-all"
-              style={{ backgroundColor: guideOpen ? 'rgba(240,165,0,0.1)' : 'transparent', color: guideOpen ? 'var(--wr-amber)' : 'var(--wr-text-muted)', border: `1px solid ${guideOpen ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}` }}>
-              <BookOpen className="w-3.5 h-3.5" />
-              {guideOpen ? 'Hide Guide' : 'Setup Guide'}
-              {!guideOpen && currentStepNum > 0 && (
-                <span className="w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold ml-0.5" style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                  {currentStepNum}
-                </span>
-              )}
-            </button>
-            <Link to="/sessions/new">
-              <button className="flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold transition-all" style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                <Plus className="w-4 h-4" /> New Session
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Range selector */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setRangeOpen(o => !o)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 6,
+                  backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)',
+                  color: 'var(--wr-text-primary)', fontSize: 12,
+                  fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {RANGES.find(r => r.key === range)?.label}
+                <ChevronDown style={{ width: 12, height: 12 }} />
               </button>
-            </Link>
+              {rangeOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                  backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)',
+                  borderRadius: 6, overflow: 'hidden', minWidth: 140,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                }}>
+                  {RANGES.map(r => (
+                    <button key={r.key} onClick={() => { setRange(r.key); setRangeOpen(false); }} style={{
+                      display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left',
+                      fontSize: 12, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                      backgroundColor: r.key === range ? 'rgba(240,165,0,0.1)' : 'transparent',
+                      color: r.key === range ? 'var(--wr-amber)' : 'var(--wr-text-primary)',
+                      border: 'none', cursor: 'pointer',
+                    }}>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         }
       />
 
-      <div className="p-6 space-y-5">
-        <div className="grid grid-cols-3 gap-5">
+      <div style={{ padding: '0 24px 32px', maxWidth: 1440, margin: '0 auto' }}>
 
-          {/* ── LEFT 2/3 ──────────────────────────────────────────────────────── */}
-          <div className="col-span-2 space-y-5">
-
-            {/* Stat rings row */}
-            {loading ? <Skeleton h="h-28" /> : (
-              <div className="rounded-lg overflow-hidden flex" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                {[
-                  { to: '/sessions', pct: sessionsPct, color: '#2E86AB', label: 'Sessions', sub: counts.sessions === 0 ? 'None yet' : `${activeSessions.length} active · ${counts.completeSessions} done`, center: counts.sessions || '+' },
-                  { to: '/agents',   pct: agentsPct,   color: '#7B2D8B', label: 'Analysts',  sub: counts.agents === 0 ? 'None added' : `across ${counts.domains} domain${counts.domains !== 1 ? 's' : ''}`, center: counts.agents || '+' },
-                  { to: '/scenarios',pct: scenariosPct,color: '#27AE60', label: 'Scenarios', sub: counts.scenarios === 0 ? 'None created' : `${activeScenarioCount} active`, center: counts.scenarios || '+' },
-                ].map(({ to, pct, color, label, sub, center }, idx, arr) => (
-                  <Link key={to} to={to} className="flex-1 flex flex-col items-center py-5 px-4 transition-all hover:brightness-110"
-                    style={{ borderRight: idx < arr.length - 1 ? '1px solid var(--wr-border)' : 'none' }}>
-                    <RingMini pct={pct} color={color} size={52} centerLabel={center} />
-                    <p className="text-xs font-semibold mt-2" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-                    <p className="text-xs mt-0.5 text-center" style={{ color: 'var(--wr-text-muted)' }}>{sub}</p>
-                  </Link>
-                ))}
-                {/* Findings cell */}
-                <Link to="/reports" className="flex-1 flex flex-col items-center py-5 px-4 transition-all hover:brightness-110"
-                  style={{ borderLeft: '1px solid var(--wr-border)' }}>
-                  {findings.total > 0 ? (
-                    <>
-                      <p className="text-2xl font-bold font-mono" style={{ color: findings.CRITICAL > 0 ? SEV_COLOR.CRITICAL : findings.HIGH > 0 ? SEV_COLOR.HIGH : 'var(--wr-text-primary)' }}>{findings.total}</p>
-                      <div className="w-full h-2 rounded-full overflow-hidden flex my-2" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
-                        {['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => findings[sev] > 0 && (
-                          <div key={sev} style={{ width: `${(findings[sev]/findings.total)*100}%`, backgroundColor: SEV_COLOR[sev], height: '100%' }} />
-                        ))}
-                      </div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--wr-text-secondary)' }}>Findings</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{findings.CRITICAL} critical · {findings.HIGH} high</p>
-                    </>
-                  ) : (
-                    <>
-                      <RingMini pct={0} color="#D68910" size={52} centerLabel="–" />
-                      <p className="text-xs font-semibold mt-2" style={{ color: 'var(--wr-text-secondary)' }}>Findings</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>From completed sessions</p>
-                    </>
-                  )}
-                </Link>
-              </div>
-            )}
-
-            {/* Active sessions strip */}
-            {!loading && activeSessions.length > 0 && (
-              <div className="rounded-lg px-4 py-2.5 flex items-center justify-between"
-                style={{ backgroundColor: 'rgba(46,134,171,0.06)', border: '1px solid rgba(46,134,171,0.25)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full animate-pulse flex-shrink-0" style={{ backgroundColor: '#2E86AB' }} />
-                  <span className="text-sm font-semibold" style={{ color: '#2E86AB' }}>
-                    {activeSessions.length} session{activeSessions.length !== 1 ? 's' : ''} in progress
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {activeSessions.slice(0, 2).map(s => (
-                    <Link key={s.id} to={`/sessions/${s.id}`}
-                      className="text-xs px-2.5 py-1 rounded truncate max-w-[130px] hover:opacity-80 transition-opacity"
-                      style={{ backgroundColor: 'rgba(46,134,171,0.1)', border: '1px solid rgba(46,134,171,0.3)', color: '#2E86AB' }}>
-                      {s.name}
-                    </Link>
-                  ))}
-                  {activeSessions.length > 2 && (
-                    <Link to="/sessions" className="text-xs" style={{ color: '#2E86AB' }}>+{activeSessions.length - 2} more →</Link>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Session cards */}
-            {loading ? <Skeleton h="h-64" /> : (
-              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
-                  <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>Sessions</p>
-                  <Link to="/sessions" className="text-xs flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: 'var(--wr-amber)' }}>
-                    View all <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-                {recentSessions.length === 0 ? (
-                  <div className="px-5 py-10 text-center">
-                    <Swords className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: 'var(--wr-amber)' }} />
-                    <p className="text-sm font-medium mb-1" style={{ color: 'var(--wr-text-secondary)' }}>No sessions yet</p>
-                    <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)' }}>
-                      {isReady ? 'Your workspace is ready — start your first session.' : 'Complete the setup guide, then start a session.'}
-                    </p>
-                    {isReady && (
-                      <Link to="/sessions/new">
-                        <button className="inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold" style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                          <Plus className="w-3.5 h-3.5" /> New Session
-                        </button>
-                      </Link>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-3 space-y-2" style={{ maxHeight: recentSessions.length > 4 ? 480 : 'none', overflowY: recentSessions.length > 4 ? 'auto' : 'visible' }}>
-                    {recentSessions.map(s => <SessionCard key={s.id} session={s} />)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Threat findings bar */}
-            {!loading && completeSessions.length > 0 && findings.total > 0 && (
-              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
-                  <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>Threat Findings</p>
-                  <Link to="/reports" className="text-xs flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: 'var(--wr-amber)' }}>
-                    Full report <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-                <div className="px-5 py-4 flex items-center gap-6">
-                  <div style={{ flex: '0 0 45%' }}>
-                    <div className="w-full h-3 rounded-full overflow-hidden flex mb-2" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
-                      {['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => findings[sev] > 0 && (
-                        <div key={sev} style={{ width: `${(findings[sev]/findings.total)*100}%`, backgroundColor: SEV_COLOR[sev] }} />
-                      ))}
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
-                      {findings.total} findings across {completeSessions.length} session{completeSessions.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <div className="flex gap-5">
-                    {['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => (
-                      <div key={sev}>
-                        <p className="text-lg font-bold font-mono" style={{ color: SEV_COLOR[sev] }}>{findings[sev]}</p>
-                        <p className="text-xs font-bold font-mono" style={{ color: SEV_COLOR[sev], opacity: 0.7 }}>{sev}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>{/* end left col */}
-
-          {/* ── RIGHT 1/3 ─────────────────────────────────────────────────────── */}
-          <div className="col-span-1 space-y-3">
-
-            {/* Action buttons — always visible */}
-            <Link to="/sessions/new" className="block">
-              <div className="rounded-lg p-4 transition-all hover:opacity-90" style={{ backgroundColor: 'var(--wr-amber)', cursor: 'pointer' }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: '#0D1B2A' }}>Start New Session</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#0D1B2A', opacity: 0.65 }}>Structured threat assessment</p>
-                  </div>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
-                    <Swords className="w-4 h-4" style={{ color: '#0D1B2A' }} />
-                  </div>
-                </div>
-              </div>
+        {/* Setup banner — only when workspace incomplete */}
+        {!loading && !isWorkspaceReady && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 16px', borderRadius: 7, marginBottom: 16,
+            backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)',
+          }}>
+            <AlertTriangle style={{ width: 14, height: 14, color: 'var(--wr-amber)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, color: 'var(--wr-text-primary)', flex: 1 }}>
+              Your workspace needs setup before running assessments — add domains, agents, and scenarios.
+            </span>
+            <Link to="/guide" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--wr-amber)', textDecoration: 'none' }}>
+              Setup Guide →
             </Link>
-            <Link to="/sessions/new?mode=live" className="block">
-              <div className="rounded-lg p-4 transition-all hover:opacity-90" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid rgba(240,165,0,0.35)', cursor: 'pointer' }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-bold" style={{ color: 'var(--wr-amber)' }}>Live Debate Room</p>
-                      <span className="text-xs font-bold px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)' }}>NEW</span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>Real-time streaming debate</p>
-                  </div>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(240,165,0,0.12)', border: '1px solid rgba(240,165,0,0.3)' }}>
-                    <Zap className="w-4 h-4" style={{ color: 'var(--wr-amber)' }} />
-                  </div>
-                </div>
-              </div>
-            </Link>
+          </div>
+        )}
 
-            {/* Guide panel (toggle-able) */}
-            {guideOpen ? (
-              loading ? <Skeleton h="h-80" /> : (
-                <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                  <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>{allStepsDone ? 'Workflow Complete' : 'Getting Started'}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{allStepsDone ? 'Workspace fully configured' : 'Follow these steps to begin'}</p>
-                    </div>
-                    {allStepsDone
-                      ? <div className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" style={{ color: '#27AE60' }} /><span className="text-xs font-semibold" style={{ color: '#27AE60' }}>All done</span></div>
-                      : <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>{doneCount} / {STEPS.length}</span>
-                    }
-                  </div>
-                  {!allStepsDone && (
-                    <div className="px-4 pt-2.5 pb-1">
-                      <div className="h-1 rounded-full" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
-                        <div className="h-1 rounded-full transition-all" style={{ backgroundColor: 'var(--wr-amber)', width: `${(doneCount / STEPS.length) * 100}%` }} />
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    {STEPS.map((step, i) => (
-                      <WorkflowStep key={step.key} step={step} counts={counts} isDone={stepStates[i].isDone} isActive={stepStates[i].isActive} isLocked={stepStates[i].isLocked} />
-                    ))}
-                  </div>
-                  {isReady && !allStepsDone && (
-                    <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: 'rgba(39,174,96,0.05)', borderTop: '1px solid rgba(39,174,96,0.2)' }}>
-                      <p className="text-sm" style={{ color: '#27AE60' }}>Ready to start</p>
-                      <Link to="/sessions/new">
-                        <button className="flex items-center gap-2 px-3 py-1.5 rounded text-sm font-semibold" style={{ backgroundColor: '#27AE60', color: '#fff' }}>
-                          <Play className="w-3.5 h-3.5" /> Start
-                        </button>
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )
-            ) : (
-              /* Operations summary */
-              <>
-                {/* Workspace readiness */}
-                {loading ? <Skeleton h="h-44" /> : (
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                    <p className="px-4 py-3 text-xs font-bold tracking-widest font-mono border-b" style={{ color: 'var(--wr-text-muted)', borderColor: 'var(--wr-border)' }}>WORKSPACE</p>
-                    {[
-                      { to: '/domains',   icon: Globe,  label: 'Threat Domains', count: counts.domains,   color: '#2E86AB' },
-                      { to: '/agents',    icon: Bot,    label: 'Analyst Agents', count: counts.agents,    color: '#7B2D8B' },
-                      { to: '/scenarios', icon: Target, label: 'Scenarios',      count: counts.scenarios, color: '#27AE60' },
-                      { to: '/chains',    icon: Link2,  label: 'Threat Chains',  count: counts.chains,    color: '#F0A500' },
-                    ].map(({ to, icon: Icon, label, count, color }) => (
-                      <Link key={to} to={to} className="flex items-center gap-3 px-4 py-3 transition-all hover:brightness-110 group border-b last:border-0" style={{ borderColor: 'var(--wr-border)' }}>
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: count > 0 ? '#27AE60' : 'var(--wr-amber)' }} />
-                        <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}15` }}>
-                          <Icon className="w-3 h-3" style={{ color }} />
-                        </div>
-                        <p className="flex-1 text-xs font-medium" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-                        <span className="text-sm font-bold font-mono" style={{ color: count > 0 ? color : 'var(--wr-text-muted)' }}>{count}</span>
-                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--wr-text-muted)' }} />
-                      </Link>
-                    ))}
-                    {[counts.domains, counts.agents, counts.scenarios].some(c => c === 0) && (
-                      <div className="px-4 py-2.5 flex items-center gap-2" style={{ backgroundColor: 'rgba(240,165,0,0.05)', borderTop: '1px solid rgba(240,165,0,0.15)' }}>
-                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--wr-amber)' }} />
-                        <p className="text-xs flex-1" style={{ color: 'var(--wr-amber)' }}>Setup incomplete</p>
-                        <button onClick={() => { setGuideOpen(true); localStorage.setItem(GUIDE_KEY, 'true'); }} className="text-xs hover:opacity-80" style={{ color: 'var(--wr-amber)', textDecoration: 'underline' }}>Show guide</button>
-                      </div>
-                    )}
-                  </div>
-                )}
+        {/* KPI Strip */}
+        <div style={{ marginBottom: 16 }}>
+          {loading ? <Skeleton h={88} /> : (
+            <KpiStrip kpis={kpis} activeFilter={kpiFilter} onFilter={setKpiFilter} />
+          )}
+        </div>
 
-                {/* Findings snapshot OR analysis tools */}
-                {loading ? <Skeleton h="h-36" /> : findings.total > 0 ? (
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                    <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
-                      <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>FINDINGS</p>
-                      <Link to="/reports" className="text-xs hover:opacity-70" style={{ color: 'var(--wr-amber)' }}>View report →</Link>
-                    </div>
-                    <div className="px-4 py-3">
-                      <div className="w-full h-2 rounded-full overflow-hidden flex mb-2" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
-                        {['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => findings[sev] > 0 && (
-                          <div key={sev} style={{ width: `${(findings[sev]/findings.total)*100}%`, backgroundColor: SEV_COLOR[sev] }} />
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between mb-2">
-                        {['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => (
-                          <div key={sev} className="text-center">
-                            <p className="text-sm font-bold font-mono" style={{ color: SEV_COLOR[sev] }}>{findings[sev]}</p>
-                            <p style={{ fontSize: 9, fontFamily: 'monospace', color: SEV_COLOR[sev], opacity: 0.7 }}>{sev.slice(0,4)}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{findings.total} total from {completeSessions.length} session{completeSessions.length !== 1 ? 's' : ''}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                    <p className="px-4 py-3 text-xs font-bold tracking-widest font-mono border-b" style={{ color: 'var(--wr-text-muted)', borderColor: 'var(--wr-border)' }}>ANALYSIS TOOLS</p>
-                    {[
-                      { to: '/reports',         icon: FileText,  label: 'Reports',         color: '#546E7A' },
-                      { to: '/chain-breaker',   icon: Scissors,  label: 'Chain Breaker',   color: '#C0392B' },
-                      { to: '/threatmap',       icon: Map,       label: 'Threat Map',      color: '#2E86AB' },
-                      { to: '/agent-analytics', icon: BarChart3, label: 'Agent Analytics', color: '#7B2D8B' },
-                    ].map(({ to, icon: Icon, label, color }) => (
-                      <Link key={to} to={to} className="flex items-center gap-3 px-4 py-3 transition-all hover:brightness-110 group border-b last:border-0" style={{ borderColor: 'var(--wr-border)' }}>
-                        <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}15` }}>
-                          <Icon className="w-3 h-3" style={{ color }} />
-                        </div>
-                        <p className="flex-1 text-xs font-medium" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--wr-text-muted)' }} />
-                      </Link>
-                    ))}
-                  </div>
-                )}
+        {/* Main 2-column layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-                {/* Recent sessions */}
-                {loading ? <Skeleton h="h-40" /> : (
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                    <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
-                      <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>RECENT SESSIONS</p>
-                      <Link to="/sessions" className="text-xs hover:opacity-70" style={{ color: 'var(--wr-amber)' }}>View all →</Link>
-                    </div>
-                    {recentSessions.length === 0 ? (
-                      <div className="px-4 py-5 text-center space-y-1">
-                        <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>No sessions yet</p>
-                        <Link to="/sessions/new" className="text-xs hover:opacity-70" style={{ color: 'var(--wr-amber)' }}>New Session →</Link>
-                      </div>
-                    ) : (
-                      recentSessions.slice(0, 3).map(s => (
-                        <Link key={s.id} to={`/sessions/${s.id}`} className="flex items-center gap-3 px-4 py-3 transition-all hover:brightness-110 border-b last:border-0" style={{ borderColor: 'var(--wr-border)' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-secondary)' }}>{s.name}</p>
-                            <p className="text-xs font-mono mt-0.5" style={{ color: { pending:'#546E7A', round1:'#2E86AB', round2:'#D68910', complete:'#27AE60' }[s.status] || '#546E7A' }}>
-                              {s.status?.toUpperCase()}
-                            </p>
-                          </div>
-                          <MiniProgressTrack status={s.status} />
-                        </Link>
-                      ))
-                    )}
-                  </div>
-                )}
-              </>
+          {/* Left column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Priority Queue */}
+            {loading ? <Skeleton h={220} /> : (
+              <PriorityQueue items={priorityItems} kpiFilter={kpiFilter} />
             )}
 
-          </div>{/* end right col */}
+            {/* Findings Matrix */}
+            {loading ? <Skeleton h={180} /> : (
+              <FindingsMatrix
+                matrix={matrixRows}
+                domainMap={matrixDomainMap}
+                totalFindings={totalFindings}
+              />
+            )}
+
+            {/* Session Feed */}
+            {loading ? <Skeleton h={240} /> : (
+              <SessionFeed sessions={enrichedSessions} kpiFilter={kpiFilter} />
+            )}
+          </div>
+
+          {/* Right column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <QuickActions />
+            <CoveragePanel domains={coverageDomains} analysts={[]} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-

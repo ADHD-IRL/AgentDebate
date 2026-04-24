@@ -149,7 +149,7 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
       {
         num: '05',
         title: 'Generate Synthesis',
-        what: 'You click "Generate Synthesis.",
+        what: 'You click "Generate Synthesis." AgentDebate reads all Round 1 and Round 2 assessments and produces a single consolidated report.',
         system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
 - Consensus findings (what most agents agree on)
 - Contested findings (where agents significantly disagree)
@@ -506,14 +506,14 @@ export default function UserGuide() {
       <PageHeader
         icon={BookOpen}
         title="USER GUIDE"
-        subtitle="How to use s
+        subtitle="How to use AgentDebate — concepts, workflows, and best practices"
       />
       <div className="p-6 max-w-5xl mx-auto space-y-4">
         {/* Intro Banner */}
         <div className="rounded p-5 flex items-start gap-4" style={{ backgroundColor: 'rgba(240,165,0,0.06)', border: '1px solid rgba(240,165,0,0.2)' }}>
           <Shield className="w-6 h-6 flex-shrink-0 mt-0.5" style={{ color: 'var(--wr-amber)' }} />
           <div>
-            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--wr-amber)' }}>Welcome to s
+            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--wr-amber)' }}>Welcome to AgentDebate</p>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>
               This guide will walk you through every concept and workflow in the platform. If you're new, start with <strong style={{ color: 'var(--wr-text-primary)' }}>What is AgentDebate?</strong>, then read <strong style={{ color: 'var(--wr-text-primary)' }}>Core Concepts</strong> before running your first session.
             </p>
@@ -540,7 +540,7 @@ export default function UserGuide() {
         ))}
 
         <div className="text-center py-6">
-          <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>s
+          <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>AgentDebate — Structured Red Team Intelligence Platform</p>
         </div>
       </div>
     </div>
