@@ -200,10 +200,7 @@ The synthesis is saved as a SessionSynthesis record and the session status moves
     icon: FileText,
     color: '#546E7A',
     title: 'Exporting & Reports',
-    content: `
-s
-
-A full report can include:
+    content: `A full report can include:
 - **Cover** — session name, date, scenario, phase focus
 - **Scenario Brief** — the full context document
 - **Agent Roster** — who participated and their profiles
