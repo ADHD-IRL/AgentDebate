@@ -114,7 +114,7 @@ export default function NewSession() {
       <PageHeader
         icon={Swords}
         title="NEW SESSION"
-        subtitle="Configure and launch a WARROOM analysis session"
+        subtitle="Configure and launch an AgentDebate analysis session"
       />
 
       <div className="p-6 max-w-5xl mx-auto">

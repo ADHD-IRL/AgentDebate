@@ -194,7 +194,7 @@ export default function Agents() {
               icon={Bot}
               title="No agents found"
               description={agents.length === 0
-                ? "Agents are the expert archetypes that power every WARROOM session. Build them manually or let AI generate a profile."
+                ? "Agents are the expert archetypes that power every AgentDebate session. Build them manually or let AI generate a profile."
                 : "No agents match your current filters."}
               action={agents.length === 0 ? () => setModal('new') : null}
               actionLabel="Create First Agent"

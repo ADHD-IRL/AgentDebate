@@ -7,15 +7,15 @@ const sections = [
     id: 'what-is',
     icon: Globe,
     color: '#F0A500',
-    title: 'What is WARROOM?',
+    title: 'What is AgentDebate?',
     content: `
-WARROOM is a **structured red-teaming platform** — a systematic way to stress-test plans, strategies, or decisions by simulating how adversaries, disruptors, or unexpected forces might exploit weaknesses.
+AgentDebate is a **structured red-teaming platform** — a systematic way to stress-test plans, strategies, or decisions by simulating how adversaries, disruptors, or unexpected forces might exploit weaknesses.
 
-Think of it like a **chess grandmaster reviewing a game before it's played**. Instead of reacting to problems after they happen, WARROOM assembles a panel of expert "thinking styles" — called Agents — and forces them to imagine every way things could go wrong, from every angle simultaneously.
+Think of it like a **chess grandmaster reviewing a game before it's played**. Instead of reacting to problems after they happen, AgentDebate assembles a panel of expert "thinking styles" — called Agents — and forces them to imagine every way things could go wrong, from every angle simultaneously.
 
-The core insight: **no single expert sees everything**. A cybersecurity specialist thinks differently than an economist, who thinks differently than a geopolitical analyst. WARROOM structures a conversation between these perspectives so blind spots become visible before they become crises.
+The core insight: **no single expert sees everything**. A cybersecurity specialist thinks differently than an economist, who thinks differently than a geopolitical analyst. AgentDebate structures a conversation between these perspectives so blind spots become visible before they become crises.
 
-**What WARROOM is NOT:**
+**What AgentDebate is NOT:**
 - It's not a chatbot. It's a structured analytical framework.
 - It's not a prediction engine. It surfaces risk — it doesn't forecast futures.
 - It's not a replacement for human judgment. It's a tool to sharpen it.
@@ -53,7 +53,7 @@ A scenario has a **status** (draft → active → archived) so you can track whi
         title: 'Agents',
         body: `Agents are **expert thinking archetypes** — personas that embody a specific discipline, cognitive style, and set of biases.
 
-The analogy: imagine hiring a panel of consultants for a day. One is a former counterintelligence officer. One is a supply chain economist. One is a futurist. Each one looks at the same situation through a completely different lens. An Agent in WARROOM captures that lens.
+The analogy: imagine hiring a panel of consultants for a day. One is a former counterintelligence officer. One is a supply chain economist. One is a futurist. Each one looks at the same situation through a completely different lens. An Agent in AgentDebate captures that lens.
 
 Each Agent has:
 - **Discipline** — their professional identity (e.g., "HUMINT Officer," "Critical Infrastructure Engineer")
@@ -95,7 +95,7 @@ Think of a Session like a **formal analytical war game**:
 - You run them through structured rounds of analysis
 - You synthesize what they found
 
-Sessions are the core workflow of WARROOM. Everything else (domains, agents, threats, chains) exists to support them.`
+Sessions are the core workflow of AgentDebate. Everything else (domains, agents, threats, chains) exists to support them.`
       },
     ]
   },
@@ -109,14 +109,14 @@ Sessions are the core workflow of WARROOM. Everything else (domains, agents, thr
         num: '01',
         title: 'Create a Session',
         what: 'You name the session, select a Scenario, optionally set a Phase Focus (e.g., "design phase," "deployment week"), and choose which Agents will participate.',
-        system: 'WARROOM creates a Session record and a SessionAgent record for each selected agent, all initialized to "pending" status. No analysis has been run yet — this is just configuration.',
+        system: 'AgentDebate creates a Session record and a SessionAgent record for each selected agent, all initialized to "pending" status. No analysis has been run yet — this is just configuration.',
         tip: 'Choose agents with diverse vector weights. If all your agents are Technical-heavy, you\'ll miss human and geopolitical risks.'
       },
       {
         num: '02',
         title: 'Generate Round 1 — Independent Assessments',
         what: 'You click "Generate All Round 1" (or generate individual agents one at a time). Each agent independently analyzes the scenario.',
-        system: `For each Agent, WARROOM:
+        system: `For each Agent, AgentDebate:
 1. Sets the agent's status to "generating_r1"
 2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario's context document, and the session's phase focus
 3. Sends this prompt to Claude (Anthropic's AI model)
@@ -138,7 +138,7 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
         num: '04',
         title: 'Generate Round 2 — Cross-Examination',
         what: 'You click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 and produces a rebuttal — revising, reinforcing, or challenging.',
-        system: `For each Agent, WARROOM:
+        system: `For each Agent, AgentDebate:
 1. Compiles all other agents' Round 1 assessments into a single "others" block
 2. Constructs a new prompt asking the agent to respond: who do they most agree with? Who do they most disagree with, and why? Does their severity rating change?
 3. The model responds with a structured rebuttal that includes a revised severity, strongest ally identification, and a compound chain narrative (how this agent sees multiple threats connecting)
@@ -149,8 +149,8 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
       {
         num: '05',
         title: 'Generate Synthesis',
-        what: 'You click "Generate Synthesis." WARROOM reads all Round 1 and Round 2 assessments and produces a single consolidated report.',
-        system: `WARROOM sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
+        what: 'You click "Generate Synthesis." s
+        system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
 - Consensus findings (what most agents agree on)
 - Contested findings (where agents significantly disagree)
 - Compound chains (how threats chain together across disciplines)
@@ -187,7 +187,7 @@ The synthesis is saved as a SessionSynthesis record and the session status moves
       },
       {
         title: 'Don\'t just run one session',
-        body: 'The real power of WARROOM accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change.'
+        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change.'
       },
       {
         title: 'Use chains to communicate risk narratives',
@@ -201,7 +201,7 @@ The synthesis is saved as a SessionSynthesis record and the session status moves
     color: '#546E7A',
     title: 'Exporting & Reports',
     content: `
-WARROOM's **Reports** page lets you export session data as a structured Markdown document or print it as a PDF.
+s
 
 A full report can include:
 - **Cover** — session name, date, scenario, phase focus
@@ -506,16 +506,16 @@ export default function UserGuide() {
       <PageHeader
         icon={BookOpen}
         title="USER GUIDE"
-        subtitle="How to use WARROOM — concepts, workflows, and best practices"
+        subtitle="How to use s
       />
       <div className="p-6 max-w-5xl mx-auto space-y-4">
         {/* Intro Banner */}
         <div className="rounded p-5 flex items-start gap-4" style={{ backgroundColor: 'rgba(240,165,0,0.06)', border: '1px solid rgba(240,165,0,0.2)' }}>
           <Shield className="w-6 h-6 flex-shrink-0 mt-0.5" style={{ color: 'var(--wr-amber)' }} />
           <div>
-            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--wr-amber)' }}>Welcome to WARROOM</p>
+            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--wr-amber)' }}>Welcome to s
             <p className="text-sm leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>
-              This guide will walk you through every concept and workflow in the platform. If you're new, start with <strong style={{ color: 'var(--wr-text-primary)' }}>What is WARROOM?</strong>, then read <strong style={{ color: 'var(--wr-text-primary)' }}>Core Concepts</strong> before running your first session.
+              This guide will walk you through every concept and workflow in the platform. If you're new, start with <strong style={{ color: 'var(--wr-text-primary)' }}>What is AgentDebate?</strong>, then read <strong style={{ color: 'var(--wr-text-primary)' }}>Core Concepts</strong> before running your first session.
             </p>
           </div>
         </div>
@@ -540,7 +540,7 @@ export default function UserGuide() {
         ))}
 
         <div className="text-center py-6">
-          <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>WARROOM — Structured Red Team Intelligence Platform</p>
+          <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>s
         </div>
       </div>
     </div>
