@@ -46,6 +46,7 @@
     --wr-bg-card: #1A2844;
     --wr-bg-hover: #1F3060;
     --wr-border: #2A3F5A;
+    --wr-border-strong: #3A5075;
     --wr-text-primary: #E8EDF5;
     --wr-text-secondary: #8A9BB5;
     --wr-text-muted: #546E7A;
@@ -55,6 +56,7 @@
     --wr-high: #D68910;
     --wr-medium: #2E86AB;
     --wr-low: #27AE60;
+    --wr-purple: #7B2D8B;
   }
 }
 
@@ -105,4 +107,21 @@
   .wr-glow-amber {
     box-shadow: 0 0 20px rgba(240, 165, 0, 0.15);
   }
+
+  .pulse-dot {
+    animation: pulseDot 1.6s ease-in-out infinite;
+  }
+
+  .stripe {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(138, 155, 181, 0.04) 0 6px,
+      transparent 6px 12px
+    );
+  }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
