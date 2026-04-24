@@ -217,7 +217,7 @@ export default function WorkspaceSetup() {
         <div className="flex items-center gap-3 mb-8">
           <Shield className="w-7 h-7" style={{ color: 'var(--wr-amber)' }} />
           <div>
-            <p className="text-lg font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>WARROOM</p>
+            <p className="text-lg font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>AgentDebate</p>
             <p className="text-xs tracking-widest" style={{ color: 'var(--wr-text-muted)' }}>
               {showPicker ? 'SELECT WORKSPACE' : 'WORKSPACE SETUP'}
             </p>
