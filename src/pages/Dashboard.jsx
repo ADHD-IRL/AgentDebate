@@ -1,210 +1,72 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { parseAnalysisConfigs } from '@/lib/chainBreakStorage';
-import {
-  Bot, Swords, Link2, Target, Plus, ArrowRight,
-  Globe, Shield, CheckCircle2,
-  FileText, Scissors, BarChart3, Map, ChevronRight,
-  Play, TrendingUp, BookOpen,
-} from 'lucide-react';
+import { AlertTriangle, ChevronDown } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+import KpiStrip      from '@/components/dashboard/KpiStrip';
+import PriorityQueue from '@/components/dashboard/PriorityQueue';
+import FindingsMatrix from '@/components/dashboard/FindingsMatrix';
+import SessionFeed   from '@/components/dashboard/SessionFeed';
+import CoveragePanel from '@/components/dashboard/CoveragePanel';
+import QuickActions  from '@/components/dashboard/QuickActions';
+import { SEV_ORDINAL } from '@/components/dashboard/atoms';
 
-const SESSION_STATUS = {
-  pending:  { label: 'Pending',  color: '#546E7A', bg: 'rgba(84,110,122,0.12)' },
-  round1:   { label: 'Round 1',  color: '#2E86AB', bg: 'rgba(46,134,171,0.12)' },
-  round2:   { label: 'Round 2',  color: '#D68910', bg: 'rgba(214,137,16,0.12)' },
-  complete: { label: 'Complete', color: '#27AE60', bg: 'rgba(39,174,96,0.12)'  },
-};
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-const SEV_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
-const GUIDE_KEY = 'warroom_guide_open';
+const SEV_KEYS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
-// ── Workflow steps ─────────────────────────────────────────────────────────────
+function median(arr) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
 
-const STEPS = [
-  {
-    num: 1, key: 'domains', icon: Globe, color: '#2E86AB',
-    title: 'Map Your Threat Landscape',
-    description: 'Create domains to organise your threat environment — cyber, physical, geopolitical, OSINT, or any area relevant to your assessment.',
-    to: '/domains', actionLabel: 'Set up domains',
-    check: c => c.domains > 0,
-    doneText: c => `${c.domains} domain${c.domains !== 1 ? 's' : ''} configured`,
-    requiresSteps: [],
-  },
-  {
-    num: 2, key: 'agents', icon: Bot, color: '#7B2D8B',
-    title: 'Add Analyst Agents',
-    description: 'Agents bring different analytical lenses to your assessment. Add at least one specialist per domain you want covered.',
-    to: '/agents', actionLabel: 'Add agents',
-    check: c => c.agents > 0,
-    doneText: c => `${c.agents} agent${c.agents !== 1 ? 's' : ''} ready`,
-    requiresSteps: [],
-  },
-  {
-    num: 3, key: 'scenarios', icon: Target, color: '#27AE60',
-    title: 'Define a Threat Scenario',
-    description: "A scenario provides the threat context — who the actor is, what they're targeting, and under what conditions. Agents assess threats within this framing.",
-    to: '/scenarios', actionLabel: 'Create a scenario',
-    check: c => c.scenarios > 0,
-    doneText: c => `${c.scenarios} scenario${c.scenarios !== 1 ? 's' : ''} available`,
-    requiresSteps: [],
-  },
-  {
-    num: 4, key: 'session', icon: Swords, color: '#F0A500',
-    title: 'Run a Threat Assessment',
-    description: 'Start a session to bring your agents together. They score threats, challenge each other through structured debate rounds, and produce a synthesised assessment.',
-    to: '/sessions/new', actionLabel: 'Start a session',
-    check: c => c.sessions > 0,
-    doneText: c => `${c.sessions} session${c.sessions !== 1 ? 's' : ''} run`,
-    requiresSteps: [1, 2, 3],
-  },
-  {
-    num: 5, key: 'review', icon: FileText, color: '#546E7A',
-    title: 'Review & Export Findings',
-    description: 'Once a session completes, review the synthesised threat findings across all agents and domains. Export reports for stakeholders.',
-    to: '/reports', actionLabel: 'View reports',
-    check: c => c.completeSessions > 0,
-    doneText: () => 'Findings available',
-    requiresSteps: [4],
-  },
+function withinDays(isoDate, days) {
+  if (!isoDate) return false;
+  return Date.now() - new Date(isoDate).getTime() < days * 86400000;
+}
+
+function spark14(items, getDate, getValue) {
+  const now    = Date.now();
+  const bucket = 86400000;
+  const bins   = Array(14).fill(0);
+  for (const item of items) {
+    const d = new Date(getDate(item)).getTime();
+    const daysAgo = Math.floor((now - d) / bucket);
+    if (daysAgo >= 0 && daysAgo < 14) bins[13 - daysAgo] += getValue(item);
+  }
+  return bins;
+}
+
+// ── Range options ──────────────────────────────────────────────────────────────
+
+const RANGES = [
+  { key: '14D', label: 'Last 14 days', days: 14 },
+  { key: '30D', label: 'Last 30 days', days: 30 },
+  { key: '90D', label: 'Last 90 days', days: 90 },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function timeAgo(iso) {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const hours = Math.floor(mins / 60);
-  const days  = Math.floor(hours / 24);
-  if (days > 0)  return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (mins > 0)  return `${mins}m ago`;
-  return 'just now';
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatCard({ icon: Icon, label, value, sub, color, to }) {
-  const inner = (
-    <div className="rounded-lg p-4 h-full"
-      style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-      <div className="flex items-center justify-between mb-3">
-        <Icon className="w-4 h-4" style={{ color }} />
-        <span className="text-2xl font-bold font-mono" style={{ color: 'var(--wr-text-primary)' }}>{value}</span>
-      </div>
-      <p className="text-xs font-semibold" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{sub}</p>}
-    </div>
-  );
-  return to ? <Link to={to} className="block hover:opacity-90 transition-opacity">{inner}</Link> : inner;
-}
-
-function WorkflowStep({ step, counts, isDone, isActive, isLocked }) {
-  const Icon = step.icon;
-  return (
-    <div className="flex gap-4 py-4 px-5 border-b last:border-0 transition-colors"
-      style={{
-        borderColor: 'var(--wr-border)',
-        backgroundColor: isActive ? `${step.color}08` : 'transparent',
-        opacity: isLocked ? 0.4 : 1,
-      }}>
-      {/* Number badge */}
-      <div className="flex-shrink-0 pt-0.5">
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold font-mono"
-          style={{
-            backgroundColor: isDone ? 'rgba(39,174,96,0.12)' : isActive ? `${step.color}18` : 'rgba(84,110,122,0.1)',
-            border: `1.5px solid ${isDone ? '#27AE60' : isActive ? step.color : 'rgba(84,110,122,0.3)'}`,
-            color: isDone ? '#27AE60' : isActive ? step.color : '#546E7A',
-          }}>
-          {isDone ? <CheckCircle2 className="w-4 h-4" /> : step.num}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <p className="text-sm font-semibold leading-tight"
-              style={{ color: isDone ? 'var(--wr-text-muted)' : 'var(--wr-text-primary)' }}>
-              {step.title}
-            </p>
-            {isDone ? (
-              <p className="text-xs mt-0.5 font-medium" style={{ color: '#27AE60' }}>
-                ✓ {step.doneText(counts)}
-              </p>
-            ) : (
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--wr-text-muted)' }}>
-                {isLocked ? 'Complete the steps above first.' : step.description}
-              </p>
-            )}
-          </div>
-
-          {!isDone && !isLocked && (
-            <Link to={step.to}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all hover:opacity-80"
-              style={{
-                backgroundColor: isActive ? step.color : 'transparent',
-                color: isActive ? '#fff' : 'var(--wr-text-muted)',
-                border: isActive ? `1px solid ${step.color}` : '1px solid var(--wr-border)',
-              }}>
-              {step.actionLabel} <ArrowRight className="w-3 h-3" />
-            </Link>
-          )}
-          {isDone && (
-            <Link to={step.to}
-              className="flex-shrink-0 text-xs transition-opacity hover:opacity-70"
-              style={{ color: 'var(--wr-text-muted)' }}>
-              Edit
-            </Link>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SessionRow({ session }) {
-  const s = SESSION_STATUS[session.status] || SESSION_STATUS.pending;
-  const isActive = ['round1', 'round2'].includes(session.status);
-  return (
-    <Link to={`/sessions/${session.id}`}
-      className="flex items-center gap-3 px-5 py-3 transition-all hover:brightness-110 group"
-      style={{ borderBottom: '1px solid var(--wr-border)' }}>
-      <div className="w-2 h-2 rounded-full flex-shrink-0"
-        style={{ backgroundColor: s.color, boxShadow: isActive ? `0 0 6px ${s.color}` : 'none' }} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{session.name}</p>
-        {session.phase_focus && (
-          <p className="text-xs truncate mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        {session.created_date && (
-          <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{timeAgo(session.created_date)}</span>
-        )}
-        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded"
-          style={{ backgroundColor: s.bg, color: s.color }}>{s.label}</span>
-        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ color: 'var(--wr-text-muted)' }} />
-      </div>
-    </Link>
-  );
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Main export ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { db }   = useWorkspace();
-  const navigate = useNavigate();
+  const { db }     = useWorkspace();
+  const navigate   = useNavigate();
+  const [params, setParams] = useSearchParams();
 
-  const [guideOpen, setGuideOpen] = useState(() => {
-    const stored = localStorage.getItem(GUIDE_KEY);
-    return stored === null ? true : stored === 'true';
-  });
+  const range     = params.get('range')  || '14D';
+  const kpiFilter = params.get('kpi')    || null;
+
+  const setRange     = (v) => { const p = new URLSearchParams(params); p.set('range', v);  setParams(p); };
+  const setKpiFilter = (v) => {
+    const p = new URLSearchParams(params);
+    if (v) p.set('kpi', v); else p.delete('kpi');
+    setParams(p);
+  };
+
+  const rangeDays = RANGES.find(r => r.key === range)?.days ?? 14;
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
@@ -231,80 +93,290 @@ export default function Dashboard() {
   }, [db]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') loadData(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [loadData]);
 
-  const toggleGuide = () => {
-    setGuideOpen(prev => {
-      const next = !prev;
-      localStorage.setItem(GUIDE_KEY, String(next));
-      return next;
-    });
-  };
+  // ── Derived maps ──────────────────────────────────────────────────────────────
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
+  const agentMap   = useMemo(() => Object.fromEntries(data.agents.map(a => [a.id, a])),   [data.agents]);
+  const domainMap  = useMemo(() => Object.fromEntries(data.domains.map(d => [d.id, d])),  [data.domains]);
+  const scenarioMap = useMemo(() => Object.fromEntries(data.scenarios.map(s => [s.id, s])), [data.scenarios]);
 
-  const activeSessions   = useMemo(() => data.sessions.filter(s => ['round1', 'round2'].includes(s.status)), [data.sessions]);
-  const completeSessions = useMemo(() => data.sessions.filter(s => s.status === 'complete'), [data.sessions]);
-
-  const recentSessions = useMemo(() =>
-    [...data.sessions]
-      .sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0))
-      .slice(0, 6),
-    [data.sessions]
+  const inRange = useCallback(
+    (isoDate) => withinDays(isoDate, rangeDays),
+    [rangeDays]
   );
 
-  const completedSessionIds = useMemo(() => new Set(completeSessions.map(s => s.id)), [completeSessions]);
+  // ── Session enrichment ────────────────────────────────────────────────────────
 
-  const findings = useMemo(() => {
-    const completed = data.sessionAgents.filter(sa => completedSessionIds.has(sa.session_id));
-    const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-    for (const sa of completed) {
-      const sev = sa.round2_revised_severity || sa.round1_severity;
-      if (counts[sev] !== undefined) counts[sev]++;
+  const enrichedSessions = useMemo(() => {
+    const saBySession = {};
+    for (const sa of data.sessionAgents) {
+      if (!saBySession[sa.session_id]) saBySession[sa.session_id] = [];
+      saBySession[sa.session_id].push(sa);
     }
-    return { ...counts, total: completed.length };
-  }, [data.sessionAgents, completedSessionIds]);
 
-  const totalAnalyzed = useMemo(
-    () => Object.keys(data.libMap).length + Object.keys(data.sesMap).length,
-    [data.libMap, data.sesMap]
-  );
+    return data.sessions.map(s => {
+      const sas        = saBySession[s.id] || [];
+      const completed  = sas.filter(sa => sa.status === 'complete');
+      const conf       = sas.length > 0 ? completed.length / sas.length : null;
 
-  const counts = useMemo(() => ({
-    domains:          data.domains.length,
-    agents:           data.agents.length,
-    scenarios:        data.scenarios.length,
-    chains:           data.chains.length,
-    sessions:         data.sessions.length,
-    completeSessions: completeSessions.length,
-  }), [data, completeSessions]);
+      const drifts = completed
+        .filter(sa => sa.round1_severity && sa.round2_revised_severity)
+        .map(sa => (SEV_ORDINAL[sa.round2_revised_severity] ?? 0) - (SEV_ORDINAL[sa.round1_severity] ?? 0));
+      const drift = drifts.length ? median(drifts) : null;
 
-  const stepStates = useMemo(() =>
-    STEPS.map(step => {
-      const isDone   = step.check(counts);
-      const reqsMet  = (step.requiresSteps || []).every(n => STEPS[n - 1].check(counts));
-      const isLocked = !isDone && !reqsMet;
-      const isActive = !isDone && reqsMet;
-      return { isDone, isActive, isLocked };
-    }),
-    [counts]
-  );
+      const sevCounts  = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+      for (const sa of sas) {
+        const sev = sa.round2_revised_severity || sa.round1_severity;
+        if (sev && sevCounts[sev] !== undefined) sevCounts[sev]++;
+      }
+      const topSeverity = SEV_KEYS.find(k => sevCounts[k] > 0) || null;
+      const findingCount = sas.length;
 
-  const allStepsDone   = stepStates.every(s => s.isDone);
-  const doneCount      = stepStates.filter(s => s.isDone).length;
-  const currentStepNum = stepStates.findIndex(s => s.isActive) + 1;
-  const isReady        = counts.domains > 0 && counts.agents > 0 && counts.scenarios > 0;
+      const r1Complete   = sas.length > 0 && sas.every(sa => sa.round1_assessment);
+      const r2Complete   = sas.length > 0 && sas.every(sa => sa.round2_rebuttal);
+      const synth        = data.syntheses.find(sy => sy.session_id === s.id);
+
+      return {
+        ...s,
+        agentCount:          sas.length,
+        findingCount,
+        criticalCount:       sevCounts.CRITICAL,
+        topSeverity,
+        confidence:          conf,
+        drift,
+        scenario:            scenarioMap[s.scenario_id]?.name || null,
+        r1_complete:         r1Complete,
+        r2_complete:         r2Complete,
+        synthesis_complete:  !!synth?.summary,
+      };
+    });
+  }, [data.sessions, data.sessionAgents, data.syntheses, scenarioMap]);
+
+  // ── KPI strip data ────────────────────────────────────────────────────────────
+
+  const kpis = useMemo(() => {
+    const rangeEnd   = Date.now();
+    const rangeStart = rangeEnd - rangeDays * 86400000;
+    const prevStart  = rangeStart - rangeDays * 86400000;
+
+    const inRangeSessions = enrichedSessions.filter(s => inRange(s.created_date));
+    const prevSessions    = enrichedSessions.filter(s => {
+      const t = new Date(s.created_date || 0).getTime();
+      return t >= prevStart && t < rangeStart;
+    });
+
+    const rangedSAs = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && inRange(s.created_date);
+    });
+
+    const criticals  = rangedSAs.filter(sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL');
+    const prevCrit   = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      if (!s) return false;
+      const t = new Date(s.created_date || 0).getTime();
+      return t >= prevStart && t < rangeStart && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
+    });
+
+    const openCount  = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && ['round1', 'round2'].includes(s.status);
+    }).length;
+
+    const completedConfs = enrichedSessions.filter(s => inRange(s.created_date) && s.confidence != null).map(s => s.confidence);
+    const avgConf = completedConfs.length ? completedConfs.reduce((a, b) => a + b, 0) / completedConfs.length : null;
+
+    const driftVals = inRangeSessions.filter(s => s.drift != null).map(s => s.drift);
+    const medDrift  = driftVals.length ? median(driftVals) : null;
+
+    const critSpark  = spark14(data.sessionAgents, sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s?.created_date || new Date(0).toISOString();
+    }, sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL' ? 1 : 0);
+
+    const sessSpark  = spark14(enrichedSessions, s => s.created_date || new Date(0).toISOString(), () => 1);
+
+    return {
+      critical: { value: criticals.length, delta: criticals.length - prevCrit.length, spark: critSpark },
+      open:     { value: openCount,         delta: null },
+      sessions: { value: inRangeSessions.length, delta: inRangeSessions.length - prevSessions.length, spark: sessSpark },
+      conf:     { value: avgConf,           delta: null },
+      drift:    { value: medDrift,          delta: null },
+    };
+  }, [enrichedSessions, data.sessionAgents, rangeDays, inRange]);
+
+  // ── Priority queue ────────────────────────────────────────────────────────────
+
+  const priorityItems = useMemo(() => {
+    const items = [];
+
+    // Unresolved criticals — active sessions with CRITICAL findings
+    for (const s of enrichedSessions) {
+      if (!['round1', 'round2', 'active'].includes(s.status)) continue;
+      if ((s.criticalCount || 0) === 0) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'unresolved',
+        severity: 'CRITICAL',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${s.criticalCount} critical`,
+        href:     `/session/${s.id}`,
+        action:   'Review',
+        agents:   [],
+      });
+    }
+
+    // Severity drift — sessions where |drift| >= 2
+    for (const s of enrichedSessions) {
+      if (s.drift == null || Math.abs(s.drift) < 2) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'drift',
+        severity: s.drift > 0 ? 'HIGH' : 'MEDIUM',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${s.drift > 0 ? '+' : ''}${s.drift?.toFixed(1)} avg drift`,
+        href:     `/session/${s.id}`,
+        action:   'Analyse',
+        agents:   [],
+      });
+    }
+
+    // Coverage gaps — domains with no agents
+    for (const d of data.domains) {
+      const agentCount = data.agents.filter(a => a.domain_id === d.id).length;
+      if (agentCount > 0) continue;
+      items.push({
+        kind:     'gap',
+        severity: 'HIGH',
+        title:    `${d.name || 'Unnamed domain'} has no agents`,
+        subtitle: 'Assign at least one agent to this domain',
+        meta:     '0 agents',
+        href:     '/agents',
+        action:   'Assign',
+        agents:   [],
+      });
+    }
+
+    // Stale scenarios — not used in >30d
+    for (const sc of data.scenarios) {
+      if (!withinDays(sc.created_date, 365)) continue; // only flag if scenario exists
+      const lastSession = enrichedSessions
+        .filter(s => s.scenario_id === sc.id)
+        .sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0))[0];
+      if (lastSession && withinDays(lastSession.created_date, 30)) continue;
+      if (!lastSession && withinDays(sc.created_date, 30)) continue;
+      items.push({
+        kind:     'stale',
+        severity: 'LOW',
+        title:    `${sc.name || 'Unnamed scenario'} not assessed recently`,
+        subtitle: lastSession ? `Last session ${Math.floor((Date.now() - new Date(lastSession.created_date).getTime()) / 86400000)}d ago` : 'Never run',
+        meta:     '>30d stale',
+        href:     '/scenarios',
+        action:   'Run',
+        agents:   [],
+      });
+    }
+
+    // Low confidence — complete sessions with conf < 0.65
+    for (const s of enrichedSessions) {
+      if (s.status !== 'complete') continue;
+      if (s.confidence == null || s.confidence >= 0.65) continue;
+      const scenario = scenarioMap[s.scenario_id];
+      items.push({
+        kind:     'lowconf',
+        severity: 'MEDIUM',
+        title:    s.name || `Session ${s.id?.slice(0, 6)}`,
+        subtitle: scenario?.name || 'No scenario',
+        meta:     `${Math.round(s.confidence * 100)}% confidence`,
+        href:     `/session/${s.id}`,
+        action:   'Review',
+        agents:   [],
+      });
+    }
+
+    // Sort: CRITICAL > HIGH > MEDIUM > LOW
+    const ord = { CRITICAL: 3, HIGH: 2, MEDIUM: 1, LOW: 0 };
+    return items.sort((a, b) => (ord[b.severity] || 0) - (ord[a.severity] || 0));
+  }, [enrichedSessions, data.domains, data.agents, data.scenarios, scenarioMap]);
+
+  // ── Findings matrix ───────────────────────────────────────────────────────────
+
+  const { matrixRows, matrixDomainMap, totalFindings } = useMemo(() => {
+    const cutoff = Date.now() - 14 * 86400000;
+
+    const recentSAs = data.sessionAgents.filter(sa => {
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      return s && new Date(s.created_date || 0).getTime() >= cutoff;
+    });
+
+    const byDomain = {};
+    for (const sa of recentSAs) {
+      const agent = agentMap[sa.agent_id];
+      if (!agent) continue;
+      const domId = agent.domain_id || '__none__';
+      if (!byDomain[domId]) byDomain[domId] = { domain_id: domId, CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, spark: Array(14).fill(0) };
+      const sev = sa.round2_revised_severity || sa.round1_severity;
+      if (sev && byDomain[domId][sev] !== undefined) byDomain[domId][sev]++;
+      const s = enrichedSessions.find(x => x.id === sa.session_id);
+      if (s) {
+        const daysAgo = Math.floor((Date.now() - new Date(s.created_date || 0).getTime()) / 86400000);
+        if (daysAgo >= 0 && daysAgo < 14) byDomain[domId].spark[13 - daysAgo]++;
+      }
+    }
+
+    const rows = Object.values(byDomain).sort((a, b) => {
+      const aSum = SEV_KEYS.reduce((s, k) => s + a[k], 0);
+      const bSum = SEV_KEYS.reduce((s, k) => s + b[k], 0);
+      return bSum - aSum;
+    });
+
+    const dMap = {};
+    for (const d of data.domains) {
+      const agentCount = data.agents.filter(a => a.domain_id === d.id).length;
+      dMap[d.id] = { name: d.name, color: d.color, agentCount };
+    }
+
+    const total = rows.reduce((s, r) => s + SEV_KEYS.reduce((ss, k) => ss + r[k], 0), 0);
+    return { matrixRows: rows, matrixDomainMap: dMap, totalFindings: total };
+  }, [data.sessionAgents, data.domains, data.agents, enrichedSessions, agentMap]);
+
+  // ── Coverage panel data ───────────────────────────────────────────────────────
+
+  const coverageDomains = useMemo(() => {
+    return data.domains.map(d => {
+      const agentCount    = data.agents.filter(a => a.domain_id === d.id).length;
+      const domSessions   = enrichedSessions.filter(s => {
+        const sas = data.sessionAgents.filter(sa => sa.session_id === s.id);
+        return sas.some(sa => agentMap[sa.agent_id]?.domain_id === d.id);
+      });
+      const openFindings  = data.sessionAgents.filter(sa => {
+        const s = enrichedSessions.find(x => x.id === sa.session_id);
+        const agent = agentMap[sa.agent_id];
+        return agent?.domain_id === d.id && s && ['round1', 'round2'].includes(s.status);
+      }).length;
+      return { id: d.id, name: d.name, color: d.color, agentCount, sessions: domSessions.length, openFindings };
+    }).sort((a, b) => b.sessions - a.sessions);
+  }, [data.domains, data.agents, data.sessionAgents, enrichedSessions, agentMap]);
+
+  // ── Workspace readiness ───────────────────────────────────────────────────────
+
+  const isWorkspaceReady = data.domains.length > 0 && data.agents.length > 0 && data.scenarios.length > 0;
+
+  // ── Range selector ────────────────────────────────────────────────────────────
+
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   // ── Skeleton ──────────────────────────────────────────────────────────────────
 
-  const Skeleton = ({ h = 'h-32' }) => (
-    <div className={`${h} rounded-lg animate-pulse`}
-      style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }} />
+  const Skeleton = ({ h = 120 }) => (
+    <div style={{ height: h, borderRadius: 8, backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', animation: 'pulse 1.5s ease-in-out infinite' }} />
   );
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -312,311 +384,107 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
       <PageHeader
-        icon={Shield}
-        title="WARROOM"
-        subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        title="Dashboard"
+        subtitle="Analyst Operations Centre"
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleGuide}
-              className="flex items-center gap-2 px-4 py-2 rounded text-sm font-medium transition-all"
-              style={{
-                backgroundColor: guideOpen ? 'rgba(240,165,0,0.1)' : 'transparent',
-                color: guideOpen ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
-                border: `1px solid ${guideOpen ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
-              }}>
-              <BookOpen className="w-3.5 h-3.5" />
-              {guideOpen ? 'Hide Guide' : 'Setup Guide'}
-              {!guideOpen && currentStepNum > 0 && (
-                <span className="w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold ml-0.5"
-                  style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                  {currentStepNum}
-                </span>
-              )}
-            </button>
-            <Link to="/sessions/new">
-              <button className="flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold transition-all"
-                style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                <Plus className="w-4 h-4" />
-                New Session
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Range selector */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setRangeOpen(o => !o)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 6,
+                  backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)',
+                  color: 'var(--wr-text-primary)', fontSize: 12,
+                  fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {RANGES.find(r => r.key === range)?.label}
+                <ChevronDown style={{ width: 12, height: 12 }} />
               </button>
-            </Link>
+              {rangeOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                  backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)',
+                  borderRadius: 6, overflow: 'hidden', minWidth: 140,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                }}>
+                  {RANGES.map(r => (
+                    <button key={r.key} onClick={() => { setRange(r.key); setRangeOpen(false); }} style={{
+                      display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left',
+                      fontSize: 12, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                      backgroundColor: r.key === range ? 'rgba(240,165,0,0.1)' : 'transparent',
+                      color: r.key === range ? 'var(--wr-amber)' : 'var(--wr-text-primary)',
+                      border: 'none', cursor: 'pointer',
+                    }}>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         }
       />
 
-      <div className="p-6 space-y-5">
+      <div style={{ padding: '0 24px 32px', maxWidth: 1440, margin: '0 auto' }}>
 
-        {/* ── Stat cards ──────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-4 gap-4">
-          {loading ? [1,2,3,4].map(i => <Skeleton key={i} h="h-20" />) : (<>
-            <StatCard icon={Swords}     label="Sessions"        color="#2E86AB"
-              value={data.sessions.length}
-              sub={data.sessions.length === 0 ? 'None yet' : `${activeSessions.length} active · ${completeSessions.length} complete`}
-              to="/sessions" />
-            <StatCard icon={Bot}        label="Analyst Agents"  color="#7B2D8B"
-              value={data.agents.length}
-              sub={data.agents.length === 0 ? 'None configured' : `across ${data.domains.length} domain${data.domains.length !== 1 ? 's' : ''}`}
-              to="/agents" />
-            <StatCard icon={Target}     label="Scenarios"       color="#27AE60"
-              value={data.scenarios.length}
-              sub={data.scenarios.length === 0 ? 'None created' : `${data.scenarios.filter(s => s.status === 'active').length || data.scenarios.length} active`}
-              to="/scenarios" />
-            <StatCard icon={TrendingUp} label="Threat Findings" color="#D68910"
-              value={findings.total}
-              sub={findings.total === 0 ? 'From completed sessions' : `${findings.CRITICAL} critical · ${findings.HIGH} high`}
-              to="/reports" />
-          </>)}
+        {/* Setup banner — only when workspace incomplete */}
+        {!loading && !isWorkspaceReady && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 16px', borderRadius: 7, marginBottom: 16,
+            backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)',
+          }}>
+            <AlertTriangle style={{ width: 14, height: 14, color: 'var(--wr-amber)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, color: 'var(--wr-text-primary)', flex: 1 }}>
+              Your workspace needs setup before running assessments — add domains, agents, and scenarios.
+            </span>
+            <Link to="/guide" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--wr-amber)', textDecoration: 'none' }}>
+              Setup Guide →
+            </Link>
+          </div>
+        )}
+
+        {/* KPI Strip */}
+        <div style={{ marginBottom: 16 }}>
+          {loading ? <Skeleton h={88} /> : (
+            <KpiStrip kpis={kpis} activeFilter={kpiFilter} onFilter={setKpiFilter} />
+          )}
         </div>
 
-        {/* ── Main 2+1 grid ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-5">
+        {/* Main 2-column layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-          {/* ── LEFT 2/3 ─────────────────────────────────────────────────── */}
-          <div className="col-span-2 space-y-5">
+          {/* Left column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* Guided workflow */}
-            {guideOpen && (loading ? <Skeleton h="h-80" /> : (
-              <div className="rounded-lg overflow-hidden"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-
-                <div className="px-5 py-4 border-b flex items-center justify-between"
-                  style={{ borderColor: 'var(--wr-border)' }}>
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>
-                      {allStepsDone ? 'Workflow Complete' : 'Getting Started'}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>
-                      {allStepsDone
-                        ? 'All steps complete — your workspace is fully set up.'
-                        : 'Follow these steps to run your first threat assessment'}
-                    </p>
-                  </div>
-                  {allStepsDone
-                    ? <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" style={{ color: '#27AE60' }} />
-                        <span className="text-xs font-semibold" style={{ color: '#27AE60' }}>All done</span>
-                      </div>
-                    : <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-                        {doneCount} / {STEPS.length}
-                      </span>
-                  }
-                </div>
-
-                {!allStepsDone && (
-                  <div className="px-5 pt-3 pb-1">
-                    <div className="h-1 rounded-full w-full" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
-                      <div className="h-1 rounded-full transition-all"
-                        style={{ backgroundColor: 'var(--wr-amber)', width: `${(doneCount / STEPS.length) * 100}%` }} />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  {STEPS.map((step, i) => (
-                    <WorkflowStep
-                      key={step.key}
-                      step={step}
-                      counts={counts}
-                      isDone={stepStates[i].isDone}
-                      isActive={stepStates[i].isActive}
-                      isLocked={stepStates[i].isLocked}
-                    />
-                  ))}
-                </div>
-
-                {isReady && !allStepsDone && (
-                  <div className="px-5 py-4 flex items-center justify-between"
-                    style={{ backgroundColor: 'rgba(39,174,96,0.05)', borderTop: '1px solid rgba(39,174,96,0.2)' }}>
-                    <p className="text-sm" style={{ color: '#27AE60' }}>
-                      Workspace ready — you can start a session now.
-                    </p>
-                    <Link to="/sessions/new">
-                      <button className="flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold flex-shrink-0 ml-4"
-                        style={{ backgroundColor: '#27AE60', color: '#fff' }}>
-                        <Play className="w-3.5 h-3.5" /> Start Session
-                      </button>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Sessions */}
-            {loading ? <Skeleton h="h-64" /> : (
-              <div className="rounded-lg overflow-hidden"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="px-5 py-4 border-b flex items-center justify-between"
-                  style={{ borderColor: 'var(--wr-border)' }}>
-                  <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>Sessions</p>
-                  <Link to="/sessions"
-                    className="text-xs flex items-center gap-1 transition-opacity hover:opacity-70"
-                    style={{ color: 'var(--wr-amber)' }}>
-                    View all <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-
-                {recentSessions.length === 0 ? (
-                  <div className="px-5 py-10 text-center">
-                    <Swords className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: 'var(--wr-amber)' }} />
-                    <p className="text-sm font-medium mb-1" style={{ color: 'var(--wr-text-secondary)' }}>No sessions yet</p>
-                    <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)' }}>
-                      {isReady
-                        ? 'Your workspace is ready — start your first session.'
-                        : 'Complete the setup guide above, then start a session.'}
-                    </p>
-                    {isReady && (
-                      <Link to="/sessions/new">
-                        <button className="inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold"
-                          style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
-                          <Plus className="w-3.5 h-3.5" /> New Session
-                        </button>
-                      </Link>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    {activeSessions.length > 0 && (
-                      <div style={{ borderBottom: '1px solid var(--wr-border)' }}>
-                        <p className="px-5 py-2 text-xs font-bold tracking-widest font-mono"
-                          style={{ backgroundColor: 'rgba(46,134,171,0.04)', color: '#2E86AB' }}>
-                          IN PROGRESS
-                        </p>
-                        {activeSessions.slice(0, 3).map(s => <SessionRow key={s.id} session={s} />)}
-                      </div>
-                    )}
-                    {recentSessions.filter(s => !['round1','round2'].includes(s.status)).length > 0 && (
-                      <div>
-                        {activeSessions.length > 0 && (
-                          <p className="px-5 py-2 text-xs font-bold tracking-widest font-mono"
-                            style={{ backgroundColor: 'rgba(255,255,255,0.02)', color: 'var(--wr-text-muted)' }}>
-                            RECENT
-                          </p>
-                        )}
-                        {recentSessions
-                          .filter(s => !['round1','round2'].includes(s.status))
-                          .slice(0, activeSessions.length > 0 ? 3 : 6)
-                          .map(s => <SessionRow key={s.id} session={s} />)}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+            {/* Priority Queue */}
+            {loading ? <Skeleton h={220} /> : (
+              <PriorityQueue items={priorityItems} kpiFilter={kpiFilter} />
             )}
 
-            {/* Threat findings — only when completed sessions have data */}
-            {!loading && completeSessions.length > 0 && findings.total > 0 && (
-              <div className="rounded-lg overflow-hidden"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="px-5 py-4 border-b flex items-center justify-between"
-                  style={{ borderColor: 'var(--wr-border)' }}>
-                  <p className="text-sm font-bold" style={{ color: 'var(--wr-text-primary)' }}>Threat Findings</p>
-                  <Link to="/reports"
-                    className="text-xs flex items-center gap-1 transition-opacity hover:opacity-70"
-                    style={{ color: 'var(--wr-amber)' }}>
-                    Full report <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-                <div className="px-5 py-4 grid grid-cols-4 gap-3">
-                  {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
-                    <div key={sev} className="rounded p-3 text-center"
-                      style={{ backgroundColor: `${SEV_COLOR[sev]}0d`, border: `1px solid ${SEV_COLOR[sev]}2a` }}>
-                      <p className="text-xl font-bold font-mono" style={{ color: SEV_COLOR[sev] }}>{findings[sev]}</p>
-                      <p className="text-xs font-bold font-mono mt-1" style={{ color: SEV_COLOR[sev], opacity: 0.8 }}>{sev}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {/* Findings Matrix */}
+            {loading ? <Skeleton h={180} /> : (
+              <FindingsMatrix
+                matrix={matrixRows}
+                domainMap={matrixDomainMap}
+                totalFindings={totalFindings}
+              />
+            )}
+
+            {/* Session Feed */}
+            {loading ? <Skeleton h={240} /> : (
+              <SessionFeed sessions={enrichedSessions} kpiFilter={kpiFilter} />
             )}
           </div>
 
-          {/* ── RIGHT 1/3 ─────────────────────────────────────────────────── */}
-          <div className="col-span-1 space-y-5">
-
-            {/* Primary action */}
-            {loading ? <Skeleton h="h-24" /> : (
-              <Link to="/sessions/new" className="block">
-                <div className="rounded-lg p-5 transition-all hover:opacity-90"
-                  style={{ backgroundColor: 'var(--wr-amber)', cursor: 'pointer' }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: '#0D1B2A' }}>Start New Session</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#0D1B2A', opacity: 0.65 }}>
-                        Structured threat assessment with your analyst team
-                      </p>
-                    </div>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
-                      <Swords className="w-5 h-5" style={{ color: '#0D1B2A' }} />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            )}
-
-            {/* Workspace shortcuts */}
-            {loading ? <Skeleton h="h-48" /> : (
-              <div className="rounded-lg overflow-hidden"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <p className="px-4 py-3 text-xs font-bold tracking-widest font-mono border-b"
-                  style={{ color: 'var(--wr-text-muted)', borderColor: 'var(--wr-border)' }}>
-                  WORKSPACE
-                </p>
-                {[
-                  { to: '/domains',   icon: Globe,   label: 'Threat Domains',  sub: `${counts.domains} configured`,  color: '#2E86AB' },
-                  { to: '/agents',    icon: Bot,     label: 'Analyst Agents',  sub: `${counts.agents} added`,        color: '#7B2D8B' },
-                  { to: '/scenarios', icon: Target,  label: 'Scenarios',       sub: `${counts.scenarios} available`, color: '#27AE60' },
-                  { to: '/chains',    icon: Link2,   label: 'Threat Chains',   sub: `${counts.chains} in library`,   color: '#F0A500' },
-                ].map(({ to, icon: Icon, label, sub, color }) => (
-                  <Link key={to} to={to}
-                    className="flex items-center gap-3 px-4 py-3 transition-all hover:brightness-110 group border-b last:border-0"
-                    style={{ borderColor: 'var(--wr-border)' }}>
-                    <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${color}15` }}>
-                      <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-                      <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{sub}</p>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                      style={{ color: 'var(--wr-text-muted)' }} />
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            {/* Analysis tools */}
-            {loading ? <Skeleton h="h-40" /> : (
-              <div className="rounded-lg overflow-hidden"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <p className="px-4 py-3 text-xs font-bold tracking-widest font-mono border-b"
-                  style={{ color: 'var(--wr-text-muted)', borderColor: 'var(--wr-border)' }}>
-                  ANALYSIS TOOLS
-                </p>
-                {[
-                  { to: '/reports',         icon: FileText,  label: 'Reports',         sub: 'Export session findings',         color: '#546E7A' },
-                  { to: '/chain-breaker',   icon: Scissors,  label: 'Chain Breaker',   sub: `${totalAnalyzed} analyses saved`, color: '#C0392B' },
-                  { to: '/threatmap',       icon: Map,       label: 'Threat Map',      sub: 'Visualise threat landscape',      color: '#2E86AB' },
-                  { to: '/agent-analytics', icon: BarChart3, label: 'Agent Analytics', sub: 'Assess agent performance',        color: '#7B2D8B' },
-                ].map(({ to, icon: Icon, label, sub, color }) => (
-                  <Link key={to} to={to}
-                    className="flex items-center gap-3 px-4 py-3 transition-all hover:brightness-110 group border-b last:border-0"
-                    style={{ borderColor: 'var(--wr-border)' }}>
-                    <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${color}15` }}>
-                      <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium" style={{ color: 'var(--wr-text-secondary)' }}>{label}</p>
-                      <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{sub}</p>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                      style={{ color: 'var(--wr-text-muted)' }} />
-                  </Link>
-                ))}
-              </div>
-            )}
+          {/* Right column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <QuickActions />
+            <CoveragePanel domains={coverageDomains} analysts={[]} />
           </div>
         </div>
       </div>
