@@ -4,6 +4,7 @@ import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff } from 'lucid
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import { getModelId, setModelPref, setWorkspaceApiKey } from '@/lib/llm';
+import { getOpenAiKey, setOpenAiKey } from '@/lib/voice';
 import { supabase } from '@/lib/supabase';
 
 const MODELS = [
@@ -44,6 +45,8 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [testStatus, setTestStatus] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [openAiKey, setOpenAiKeyState] = useState(() => getOpenAiKey());
+  const [showOaiKey, setShowOaiKey] = useState(false);
 
   useEffect(() => {
     if (workspace?.anthropic_api_key) setApiKeyState(workspace.anthropic_api_key);
@@ -137,6 +140,38 @@ export default function Settings() {
               Key test failed. Check it is correct and has Messages API access.
             </p>
           )}
+        </div>
+
+        {/* OpenAI API Key (for voice TTS + STT) */}
+        <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Key className="w-4 h-4" style={{ color: '#2E86AB' }} />
+            <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+              OPENAI API KEY <span style={{ color: 'var(--wr-text-muted)', fontWeight: 400 }}>· optional · voice only</span>
+            </h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)' }}>
+            Required for voice features — TTS (agents speak aloud) and push-to-talk transcription via Whisper. Stored locally only.
+          </p>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                type={showOaiKey ? 'text' : 'password'}
+                value={openAiKey}
+                onChange={e => setOpenAiKeyState(e.target.value)}
+                onBlur={() => setOpenAiKey(openAiKey)}
+                placeholder="sk-..."
+                className="w-full px-3 py-2 rounded text-sm font-mono pr-10"
+                style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', outline: 'none' }}
+              />
+              <button onClick={() => setShowOaiKey(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
+                style={{ color: 'var(--wr-text-muted)' }}>
+                {showOaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <WrButton onClick={() => setOpenAiKey(openAiKey)} variant="secondary">Save</WrButton>
+          </div>
         </div>
 
         {/* LLM Model */}
