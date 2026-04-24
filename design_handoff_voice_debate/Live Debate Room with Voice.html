@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AgentDebate — Live Debate Room (Voice + Avatars)</title>
+<meta name="viewport" content="width=1440" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --wr-bg-primary: #0D1B2A;
+    --wr-bg-secondary: #121E2D;
+    --wr-bg-card: #1A2844;
+    --wr-bg-hover: #1F3060;
+    --wr-border: #2A3F5A;
+    --wr-text-primary: #E8EDF5;
+    --wr-text-secondary: #8A9BB5;
+    --wr-text-muted: #546E7A;
+    --wr-amber: #F0A500;
+    --wr-critical: #C0392B;
+    --wr-high: #D68910;
+    --wr-medium: #2E86AB;
+    --wr-low: #27AE60;
+  }
+  html, body { background: var(--wr-bg-primary); color: var(--wr-text-primary); font-family: 'Inter', sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--wr-bg-secondary); }
+  ::-webkit-scrollbar-thumb { background: var(--wr-border); border-radius: 3px; }
+  @keyframes ring1 { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.2); opacity: 0; } }
+  @keyframes ring2 { 0% { transform: scale(1); opacity: .45; } 100% { transform: scale(1.8); opacity: 0; } }
+  @keyframes bounce1 { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+  .speaking-ring::before, .speaking-ring::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid currentColor;
+  }
+  .speaking-ring::before { animation: ring1 1.6s ease-out infinite; }
+  .speaking-ring::after  { animation: ring2 1.6s ease-out infinite .4s; }
+  .listening-ring {
+    box-shadow: 0 0 0 3px rgba(240,165,0,0.35), 0 0 24px rgba(240,165,0,0.35);
+  }
+  @keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+  .annot {
+    position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.04em; color: #F0A500;
+    background: rgba(240,165,0,0.08); border: 1px dashed rgba(240,165,0,0.45);
+    padding: 4px 8px; border-radius: 3px; white-space: nowrap;
+    pointer-events: none; z-index: 30;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ── Agents ────────────────────────────────────────────────────────────────
+const AGENTS = [
+  { id: 'ava',  name: 'Ava Okafor',  role: 'Cyber — APT Analyst',   color: '#2E86AB', hue: 198, voice: 'Verse',   severity: 'CRITICAL' },
+  { id: 'nik',  name: 'Nik Reinhardt', role: 'Geopolitical',         color: '#7B2D8B', hue: 280, voice: 'Sage',    severity: 'HIGH' },
+  { id: 'rhea', name: 'Rhea Castillo', role: 'OSINT · Open Sources', color: '#27AE60', hue: 142, voice: 'Aria',    severity: 'MEDIUM' },
+  { id: 'kai',  name: 'Kai Zhang',    role: 'Cyber · Red Team',      color: '#D68910', hue: 35,  voice: 'Nova',    severity: 'CRITICAL' },
+  { id: 'jon',  name: 'Jon Marek',    role: 'Physical Security',     color: '#C0392B', hue: 12,  voice: 'Ember',   severity: 'HIGH' },
+  { id: 'mei',  name: 'Mei Lin',      role: 'Supply Chain',          color: '#1ABC9C', hue: 170, voice: 'Lark',    severity: 'MEDIUM' },
+];
+
+const SEV_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
+
+// ── Transcript timeline ───────────────────────────────────────────────────
+const TRANSCRIPT = [
+  { kind: 'round', label: 'ROUND 1 · OPENING ASSESSMENTS', t: '14:12:04' },
+  { kind: 'agent', agent: 'ava', t: '14:12:18', severity: 'CRITICAL',
+    text: "Seeing infrastructure overlap with APT29's Q1 campaign. Their disclosure-window targeting TTP matches — we're 24-48h from a credential-harvesting phase." },
+  { kind: 'agent', agent: 'rhea', t: '14:13:02', severity: 'HIGH', tools: ['search_knowledge', 'fetch_url'],
+    text: "Mandiant and CISA both flagged this cluster in advisories this week. Two phishing lures impersonating audit firms observed in the wild — one targeting a peer company in our sector." },
+  { kind: 'voice_user', t: '14:13:40', target: 'ava',
+    text: "Ava — walk me through why you're weighting credential harvesting over data staging here?", voice: true },
+  { kind: 'agent', agent: 'ava', t: '14:13:52', severity: 'CRITICAL', voice: true,
+    text: "Two reasons. Their Q1 operational tempo always led with credentials — never data-first. And the lures Rhea surfaced reuse the same Okta-styled template. If they wanted staging they'd need lateral movement first." },
+  { kind: 'agent', agent: 'nik', t: '14:14:30', severity: 'HIGH',
+    text: "Timing is diagnostic: 11 days pre-earnings is the classic geopolitical signalling window. I'd score this higher if we were closer to the disclosure date — we have buffer." },
+  { kind: 'round', label: 'ROUND 2 · REBUTTALS', t: '14:16:10' },
+  { kind: 'agent', agent: 'kai', t: '14:16:22', severity: 'CRITICAL',
+    text: "Pushing back on Nik's 'buffer' framing. Red-team perspective: 11 days is sufficient for APT29's full kill chain. Their 2024 engagement against a tier-1 bank took 9 days from initial access to exfil." },
+  { kind: 'voice_user', t: '14:17:01', target: 'kai',
+    text: "How confident are you in that 9-day figure, and does it generalize?", voice: true },
+  { kind: 'agent', agent: 'kai', t: '14:17:11', severity: 'CRITICAL', voice: true,
+    text: "Confident on the specific case — that's from the Mandiant M-Trends 2025 report. Generalization is softer; median dwell for this threat actor is 14 days, but the tail goes short." },
+];
+
+// ── Icons ────────────────────────────────────────────────────────────────
+function Ico({ name, size = 14, stroke = 1.8, style, className }) {
+  const s = { width: size, height: size, display: 'inline-block', verticalAlign: '-2px', ...style };
+  const c = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: stroke, strokeLinecap: 'round', strokeLinejoin: 'round', style: s, className };
+  switch (name) {
+    case 'mic':     return <svg {...c}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>;
+    case 'mic-off': return <svg {...c}><path d="M1 1l22 22M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23M12 19v4M8 23h8"/></svg>;
+    case 'send':    return <svg {...c}><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>;
+    case 'play':    return <svg {...c}><path d="m6 4 14 8-14 8V4Z" fill="currentColor"/></svg>;
+    case 'pause':   return <svg {...c}><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>;
+    case 'headphones': return <svg {...c}><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3v4ZM3 19a2 2 0 0 0 2 2h1v-6H3v4Z"/></svg>;
+    case 'volume':  return <svg {...c}><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M19 12a4.5 4.5 0 0 0-2-3.7M22 12a8 8 0 0 0-4-7"/></svg>;
+    case 'hand':    return <svg {...c}><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8 2 2 0 1 1 4 0"/></svg>;
+    case 'search':  return <svg {...c}><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>;
+    case 'globe':   return <svg {...c}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>;
+    case 'x':       return <svg {...c}><path d="M18 6 6 18M6 6l12 12"/></svg>;
+    case 'arrow-l': return <svg {...c}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>;
+    case 'arrow-r': return <svg {...c}><path d="M5 12h14M13 5l7 7-7 7"/></svg>;
+    case 'circle-pause': return <svg {...c}><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg>;
+    case 'settings':return <svg {...c}><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.16-1.5l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2.5-1.5L13.5 3h-3l-.5 2.1a7 7 0 0 0-2.5 1.5l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .5.06 1 .16 1.5l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2.5 1.5L10.5 21h3l.5-2.1a7 7 0 0 0 2.5-1.5l2.3 1 2-3.4-2-1.5c.1-.5.16-1 .16-1.5Z"/></svg>;
+    case 'bolt':    return <svg {...c}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg>;
+    case 'users':   return <svg {...c}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case 'wave':    return <svg {...c}><path d="M2 12h2l2-6 4 12 4-14 4 10 2-6h2"/></svg>;
+    case 'shield':  return <svg {...c}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>;
+    default: return null;
+  }
+}
+
+// ── Avatar (hi-fi, gradient portrait + status ring) ──────────────────────
+function AgentAvatar({ agent, size = 56, status = 'idle', active, onClick, showLabel }) {
+  const initials = agent.name.split(' ').map(s => s[0]).slice(0, 2).join('');
+  const halo = status === 'speaking' ? agent.color
+            : status === 'listening' ? '#F0A500'
+            : status === 'thinking' ? '#F0A500'
+            : active ? agent.color
+            : 'transparent';
+
+  return (
+    <button onClick={onClick} className="relative flex flex-col items-center"
+      style={{ outline: 'none' }}>
+      {/* Speaking rings */}
+      {status === 'speaking' && (
+        <div className="absolute speaking-ring" style={{ width: size, height: size, top: 0, color: agent.color, pointerEvents: 'none' }} />
+      )}
+      <div className="relative flex items-center justify-center font-mono"
+        style={{
+          width: size, height: size, borderRadius: '50%',
+          background: `conic-gradient(from 210deg, oklch(0.58 0.14 ${agent.hue}), oklch(0.38 0.10 ${(agent.hue + 30) % 360}), oklch(0.28 0.08 ${(agent.hue + 60) % 360}), oklch(0.58 0.14 ${agent.hue}))`,
+          boxShadow: status === 'listening' ? '0 0 0 3px rgba(240,165,0,0.55), 0 0 24px rgba(240,165,0,0.35)'
+                    : status === 'thinking' ? '0 0 0 3px rgba(240,165,0,0.35)'
+                    : active ? `0 0 0 2px ${agent.color}` : 'none',
+          color: '#E8EDF5',
+          fontSize: size * 0.32, fontWeight: 700,
+          letterSpacing: '0.02em',
+          border: '2px solid var(--wr-bg-primary)',
+          transition: 'all 0.25s',
+        }}>
+        {/* subtle diagonal sheen */}
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.15) 100%)',
+        }} />
+        <span style={{ position: 'relative' }}>{initials}</span>
+        {/* Status dot */}
+        {status === 'speaking' && (
+          <div className="absolute flex items-center justify-center"
+            style={{ bottom: -2, right: -2, width: size * 0.32, height: size * 0.32, borderRadius: '50%', backgroundColor: agent.color, border: '2px solid var(--wr-bg-primary)' }}>
+            <SpeakingBars color="#fff" size={size * 0.18} />
+          </div>
+        )}
+        {status === 'listening' && (
+          <div className="absolute flex items-center justify-center pulse-dot"
+            style={{ bottom: -2, right: -2, width: size * 0.32, height: size * 0.32, borderRadius: '50%', backgroundColor: '#F0A500', border: '2px solid var(--wr-bg-primary)' }}>
+            <Ico name="mic" size={size * 0.16} style={{ color: '#0D1B2A' }} />
+          </div>
+        )}
+        {status === 'thinking' && (
+          <div className="absolute flex items-center justify-center"
+            style={{ bottom: -2, right: -2, width: size * 0.32, height: size * 0.32, borderRadius: '50%', backgroundColor: 'var(--wr-bg-card)', border: '2px solid var(--wr-bg-primary)' }}>
+            <ThinkingDots size={size * 0.14} />
+          </div>
+        )}
+      </div>
+      {showLabel && (
+        <div className="mt-2 text-center">
+          <p className="text-xs font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{agent.name.split(' ')[0]}</p>
+          <p className="text-[10px] font-mono truncate" style={{ color: 'var(--wr-text-muted)', maxWidth: size + 24 }}>{agent.role.split(' · ')[0].split(' — ')[0]}</p>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function SpeakingBars({ color = '#fff', size = 10 }) {
+  return (
+    <div className="flex items-end gap-[1.5px]" style={{ height: size }}>
+      {[0, 1, 2].map(i => (
+        <div key={i} style={{
+          width: 2, height: size, backgroundColor: color, borderRadius: 1,
+          transformOrigin: 'center',
+          animation: `bounce1 0.9s ease-in-out ${i * 0.12}s infinite`,
+        }} />
+      ))}
+    </div>
+  );
+}
+function ThinkingDots({ size = 6 }) {
+  return (
+    <div className="flex items-center gap-[2px]">
+      {[0,1,2].map(i => (
+        <span key={i} className="pulse-dot" style={{ width: size, height: size, backgroundColor: 'var(--wr-amber)', borderRadius: '50%', animationDelay: `${i * 0.18}s` }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Waveform (static fake, animated via opacity) ─────────────────────────
+function Waveform({ color = '#F0A500', bars = 32, active = true, height = 28 }) {
+  const heights = useMemo(() => Array.from({ length: bars }, (_, i) => 0.2 + Math.abs(Math.sin(i * 0.7) * Math.cos(i * 0.2)) * 0.8), [bars]);
+  return (
+    <div className="flex items-center gap-[2px]" style={{ height }}>
+      {heights.map((h, i) => (
+        <div key={i} style={{
+          width: 2, height: `${h * 100}%`, backgroundColor: color,
+          borderRadius: 1, opacity: active ? 1 : 0.3,
+          animation: active ? `bounce1 ${0.8 + Math.random() * 0.6}s ease-in-out ${i * 0.04}s infinite` : 'none',
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Speaker Stage (hero row of avatars) ──────────────────────────────────
+function SpeakerStage({ speakingId, listeningFor, onAgentClick, selectedId }) {
+  return (
+    <div className="rounded-md p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#C0392B', display: 'inline-block' }} />
+          <p className="text-[11px] font-mono font-bold tracking-[0.1em]" style={{ color: '#C0392B' }}>LIVE · ROUND 2</p>
+          <span className="text-[11px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>·  14:17:42</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>6 analysts · 1 facilitator</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-around py-2 relative">
+        {AGENTS.map(a => {
+          const status = a.id === speakingId ? 'speaking'
+                       : a.id === listeningFor ? 'listening'
+                       : selectedId === a.id ? 'thinking'
+                       : 'idle';
+          return (
+            <AgentAvatar key={a.id} agent={a} size={64} status={status} active={selectedId === a.id}
+              showLabel onClick={() => onAgentClick?.(a.id)} />
+          );
+        })}
+      </div>
+      {/* Speaker caption */}
+      {speakingId && (
+        <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded"
+          style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+          <Waveform color={AGENTS.find(a => a.id === speakingId).color} bars={28} active height={22} />
+          <p className="text-xs italic flex-1" style={{ color: 'var(--wr-text-secondary)' }}>
+            "…Generalization is softer; median dwell for this threat actor is 14 days, but the tail goes short."
+          </p>
+          <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>0:08</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Transcript ───────────────────────────────────────────────────────────
+function RoundDivider({ label, t }) {
+  return (
+    <div className="flex items-center gap-3 my-5">
+      <div className="flex-1 h-px" style={{ backgroundColor: 'var(--wr-border)' }} />
+      <span className="text-[10px] font-bold font-mono tracking-[0.15em] px-3 py-1 rounded"
+        style={{ color: 'var(--wr-text-muted)', backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+        {label} · {t}
+      </span>
+      <div className="flex-1 h-px" style={{ backgroundColor: 'var(--wr-border)' }} />
+    </div>
+  );
+}
+
+function AgentMessage({ msg, agent, playingVoice, onPlay }) {
+  return (
+    <div className="mb-4 flex gap-3">
+      <AgentAvatar agent={agent} size={36} status={playingVoice ? 'speaking' : 'idle'} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span className="text-xs font-bold" style={{ color: agent.color }}>{agent.name}</span>
+          <span className="text-[11px]" style={{ color: 'var(--wr-text-muted)' }}>· {agent.role}</span>
+          <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>{msg.t}</span>
+          {msg.severity && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: `${SEV_COLOR[msg.severity]}18`, color: SEV_COLOR[msg.severity], border: `1px solid ${SEV_COLOR[msg.severity]}40` }}>
+              {msg.severity}
+            </span>
+          )}
+          {msg.voice && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+              style={{ backgroundColor: 'rgba(240,165,0,0.12)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
+              <Ico name="mic" size={9} /> VOICE REPLY
+            </span>
+          )}
+        </div>
+        {msg.tools && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {msg.tools.map((t, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: 'rgba(26,188,156,0.12)', color: '#1ABC9C', border: '1px solid rgba(26,188,156,0.25)' }}>
+                <Ico name={t === 'fetch_url' ? 'globe' : 'search'} size={10} />
+                {t === 'fetch_url' ? 'mandiant.com/…' : 'CISA advisory 2026-04'}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="rounded p-3 text-sm leading-relaxed"
+          style={{
+            backgroundColor: `${agent.color}0a`,
+            borderLeft: `3px solid ${agent.color}`,
+            border: `1px solid ${agent.color}22`,
+            color: 'var(--wr-text-secondary)',
+          }}>
+          {msg.text}
+        </div>
+        {/* Voice playback row */}
+        {msg.voice && (
+          <div className="mt-1.5 flex items-center gap-2 px-2 py-1.5 rounded"
+            style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+            <button onClick={onPlay} className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: agent.color, color: '#0D1B2A' }}>
+              <Ico name={playingVoice ? 'pause' : 'play'} size={11} />
+            </button>
+            <Waveform color={agent.color} bars={48} active={playingVoice} height={18} />
+            <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }}>
+              {playingVoice ? '0:04 / 0:12' : '0:12'}
+            </span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+              style={{ backgroundColor: 'rgba(138,155,181,0.08)', color: 'var(--wr-text-muted)' }}>
+              voice: {agent.voice}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserMessage({ msg, targetAgent }) {
+  return (
+    <div className="mb-4 flex justify-end">
+      <div style={{ maxWidth: '70%' }}>
+        <div className="flex items-center justify-end gap-2 mb-1.5 flex-wrap">
+          <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>{msg.t}</span>
+          {targetAgent && (
+            <span className="text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+              style={{ backgroundColor: `${targetAgent.color}18`, color: targetAgent.color, border: `1px solid ${targetAgent.color}40` }}>
+              → {targetAgent.name.split(' ')[0]}
+            </span>
+          )}
+          {msg.voice && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+              style={{ backgroundColor: 'rgba(240,165,0,0.12)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
+              <Ico name="mic" size={9} /> SPOKEN
+            </span>
+          )}
+          <span className="text-[10px] font-mono font-bold" style={{ color: 'var(--wr-amber)' }}>YOU · FACILITATOR</span>
+        </div>
+        <div className="rounded p-3 text-sm leading-relaxed"
+          style={{
+            backgroundColor: 'rgba(240,165,0,0.08)',
+            borderRight: '3px solid var(--wr-amber)',
+            border: '1px solid rgba(240,165,0,0.25)',
+            color: 'var(--wr-text-primary)',
+          }}>
+          {msg.text}
+        </div>
+        {msg.voice && (
+          <div className="mt-1.5 flex items-center justify-end gap-2 px-2 py-1.5 rounded"
+            style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+            <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>transcribed · 0:06</span>
+            <Waveform color="var(--wr-amber)" bars={30} active={false} height={16} />
+            <button className="w-6 h-6 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
+              <Ico name="play" size={9} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Input composer with push-to-talk + target selector ───────────────────
+function Composer({ targetId, setTargetId, recording, setRecording, hasText, setHasText, onSend }) {
+  const target = AGENTS.find(a => a.id === targetId);
+
+  return (
+    <div className="rounded-md" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+      {/* Target selector chip row */}
+      <div className="px-4 py-2.5 border-b flex items-center gap-2 flex-wrap" style={{ borderColor: 'var(--wr-border)' }}>
+        <span className="text-[10px] font-mono font-bold tracking-[0.1em]" style={{ color: 'var(--wr-text-muted)' }}>ADDRESS</span>
+        <button onClick={() => setTargetId(null)}
+          className="text-[11px] px-2 py-1 rounded font-mono font-semibold transition-all"
+          style={{
+            backgroundColor: !targetId ? 'rgba(240,165,0,0.12)' : 'transparent',
+            color: !targetId ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
+            border: `1px solid ${!targetId ? 'rgba(240,165,0,0.35)' : 'var(--wr-border)'}`,
+          }}>
+          ALL · room
+        </button>
+        {AGENTS.map(a => (
+          <button key={a.id} onClick={() => setTargetId(a.id)}
+            className="text-[11px] px-2 py-1 rounded font-semibold transition-all inline-flex items-center gap-1.5"
+            style={{
+              backgroundColor: targetId === a.id ? `${a.color}18` : 'transparent',
+              color: targetId === a.id ? a.color : 'var(--wr-text-muted)',
+              border: `1px solid ${targetId === a.id ? `${a.color}55` : 'var(--wr-border)'}`,
+            }}>
+            <span aria-hidden className="inline-flex items-center justify-center"
+              style={{
+                width: 16, height: 16, borderRadius: '50%',
+                background: `conic-gradient(from 210deg, oklch(0.58 0.14 ${a.hue}), oklch(0.38 0.10 ${(a.hue+30)%360}), oklch(0.28 0.08 ${(a.hue+60)%360}), oklch(0.58 0.14 ${a.hue}))`,
+                border: '1px solid var(--wr-bg-primary)',
+              }} />
+            {a.name.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+
+      {/* Recording / input row */}
+      {recording ? (
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setRecording(false)}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: '#C0392B', color: '#fff' }}>
+            <Ico name="circle-pause" size={16} />
+          </button>
+          <div className="flex-1 flex items-center gap-3 px-3 py-2 rounded"
+            style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid rgba(192,57,43,0.35)' }}>
+            <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#C0392B' }} />
+            <span className="text-[11px] font-mono font-bold" style={{ color: '#C0392B' }}>RECORDING</span>
+            <Waveform color="#C0392B" bars={60} active height={22} />
+            <span className="text-[11px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>0:04</span>
+          </div>
+          <p className="text-[11px] italic max-w-[240px]" style={{ color: 'var(--wr-text-secondary)' }}>
+            "Ava, how confident are you on the nine day figure—"
+          </p>
+          <button onClick={() => { setRecording(false); onSend?.({ voice: true }); }}
+            className="px-3 py-2 rounded text-xs font-semibold inline-flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
+            <Ico name="send" size={12} /> Send voice
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 py-3 flex items-end gap-3">
+          <button onMouseDown={() => setRecording(true)}
+            title="Hold to speak · Space"
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+            style={{
+              backgroundColor: 'rgba(240,165,0,0.1)',
+              border: '1px solid rgba(240,165,0,0.3)',
+              color: 'var(--wr-amber)',
+            }}>
+            <Ico name="mic" size={15} />
+          </button>
+          <textarea
+            placeholder={target ? `Ask ${target.name.split(' ')[0]} a follow-up…  (⌘↵ to send · hold SPACE to speak)` : "Chat to the room…  (⌘↵ to send · hold SPACE to speak)"}
+            onChange={(e) => setHasText(e.target.value.length > 0)}
+            rows={1}
+            className="flex-1 bg-transparent outline-none resize-none text-sm py-1.5"
+            style={{ color: 'var(--wr-text-primary)', minHeight: 28 }} />
+          <div className="flex items-center gap-1">
+            <button className="w-8 h-8 rounded flex items-center justify-center"
+              style={{ color: 'var(--wr-text-muted)' }}
+              title="Interject — pause the debate to speak">
+              <Ico name="hand" size={15} />
+            </button>
+            <button onClick={() => onSend?.({ voice: false })}
+              disabled={!hasText}
+              className="px-3 py-2 rounded text-xs font-semibold inline-flex items-center gap-1.5 transition-all"
+              style={{
+                backgroundColor: hasText ? 'var(--wr-amber)' : 'var(--wr-bg-hover)',
+                color: hasText ? '#0D1B2A' : 'var(--wr-text-muted)',
+                opacity: hasText ? 1 : 0.5,
+              }}>
+              <Ico name="send" size={12} /> Send
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Hint strip */}
+      <div className="px-4 py-1.5 border-t flex items-center justify-between text-[10px] font-mono" style={{ borderColor: 'var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+        <div className="flex items-center gap-3">
+          <span><kbd className="px-1 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>SPACE</kbd> hold to speak</span>
+          <span><kbd className="px-1 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>⌘ 1–6</kbd> address agent</span>
+          <span><kbd className="px-1 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>H</kbd> raise hand / interject</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1"><Ico name="volume" size={10}/> TTS replies: <span style={{ color: 'var(--wr-text-secondary)' }}>ON · Auto-play</span></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Right rail: roster + voice settings ──────────────────────────────────
+function AgentRosterRow({ agent, status, muted, onToggleMute, onAddress }) {
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2.5 border-b" style={{ borderColor: 'var(--wr-border)' }}>
+      <AgentAvatar agent={agent} size={32} status={status} />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold truncate" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</p>
+        <p className="text-[10px] font-mono truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.role}</p>
+      </div>
+      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+        style={{ backgroundColor: `${SEV_COLOR[agent.severity]}15`, color: SEV_COLOR[agent.severity] }}>
+        {agent.severity.slice(0,4)}
+      </span>
+      <button onClick={onToggleMute} className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0" title={muted ? 'Unmute TTS' : 'Mute TTS'}
+        style={{ color: muted ? 'var(--wr-text-muted)' : 'var(--wr-amber)' }}>
+        <Ico name={muted ? 'mic-off' : 'volume'} size={13} />
+      </button>
+      <button onClick={onAddress} className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0" title="Address this agent"
+        style={{ color: 'var(--wr-text-muted)' }}>
+        <Ico name="arrow-r" size={13} />
+      </button>
+    </div>
+  );
+}
+
+function RightRail({ speakingId, setTargetId, muted, setMuted }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+        <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--wr-border)' }}>
+          <p className="text-[11px] font-mono font-bold tracking-[0.1em]" style={{ color: 'var(--wr-text-secondary)' }}>ROSTER · 6 AGENTS</p>
+          <span className="text-[11px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>R2 · 4 / 6 spoken</span>
+        </div>
+        {AGENTS.map(a => (
+          <AgentRosterRow key={a.id} agent={a}
+            status={a.id === speakingId ? 'speaking' : 'idle'}
+            muted={muted[a.id]}
+            onToggleMute={() => setMuted(m => ({ ...m, [a.id]: !m[a.id] }))}
+            onAddress={() => setTargetId(a.id)}
+          />
+        ))}
+      </div>
+
+      <div className="rounded-md p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+        <p className="text-[11px] font-mono font-bold tracking-[0.1em] mb-3" style={{ color: 'var(--wr-text-secondary)' }}>VOICE · AUDIO</p>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--wr-text-primary)' }}>Auto-play TTS</p>
+              <p className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>Agents speak responses aloud</p>
+            </div>
+            <div className="w-9 h-5 rounded-full relative flex items-center px-0.5"
+              style={{ backgroundColor: 'var(--wr-amber)' }}>
+              <div className="w-4 h-4 rounded-full bg-white" style={{ marginLeft: 16 }} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--wr-text-primary)' }}>Push-to-talk</p>
+              <p className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>Hold SPACE to speak</p>
+            </div>
+            <div className="w-9 h-5 rounded-full relative flex items-center px-0.5"
+              style={{ backgroundColor: 'var(--wr-amber)' }}>
+              <div className="w-4 h-4 rounded-full bg-white" style={{ marginLeft: 16 }} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--wr-text-primary)' }}>Interrupt to speak</p>
+              <p className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>Pause agent audio when you start talking</p>
+            </div>
+            <div className="w-9 h-5 rounded-full relative flex items-center px-0.5"
+              style={{ backgroundColor: 'var(--wr-bg-hover)' }}>
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: 'var(--wr-text-muted)' }} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium" style={{ color: 'var(--wr-text-primary)' }}>Playback speed</p>
+              <p className="text-[10px] font-mono" style={{ color: 'var(--wr-amber)' }}>1.25×</p>
+            </div>
+            <div className="flex items-center gap-1">
+              {['0.75','1.0','1.25','1.5','2.0'].map(s => (
+                <button key={s} className="flex-1 py-1 rounded text-[10px] font-mono"
+                  style={{
+                    backgroundColor: s === '1.25' ? 'rgba(240,165,0,0.12)' : 'transparent',
+                    color: s === '1.25' ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
+                    border: `1px solid ${s === '1.25' ? 'rgba(240,165,0,0.35)' : 'var(--wr-border)'}`,
+                  }}>{s}×</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-md p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+        <p className="text-[11px] font-mono font-bold tracking-[0.1em] mb-2" style={{ color: 'var(--wr-text-secondary)' }}>FACILITATOR CONTROLS</p>
+        <div className="space-y-1">
+          {[
+            { label: 'Raise hand · interject', sub: 'Pauses the active speaker', icon: 'hand' },
+            { label: 'Call on next agent', sub: 'Nik.Geo has not yet responded', icon: 'arrow-r' },
+            { label: 'Advance to synthesis', sub: '4 / 6 rebuttals received', icon: 'bolt' },
+          ].map((x, i) => (
+            <button key={i} className="w-full flex items-center gap-2 px-2 py-2 rounded text-left transition-all"
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(138,155,181,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+              <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: 'rgba(240,165,0,0.08)', color: 'var(--wr-amber)' }}>
+                <Ico name={x.icon} size={13} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium" style={{ color: 'var(--wr-text-primary)' }}>{x.label}</p>
+                <p className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>{x.sub}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App shell ────────────────────────────────────────────────────────────
+function Annot({ text, top, left, right }) {
+  return <div className="annot" style={{ top, left, right }}>{text}</div>;
+}
+
+function App() {
+  const [speakingId, setSpeakingId] = useState('kai');
+  const [listeningFor, setListeningFor] = useState(null);
+  const [targetId, setTargetId] = useState('kai');
+  const [recording, setRecording] = useState(false);
+  const [hasText, setHasText] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [playingVoiceFor, setPlayingVoiceFor] = useState(null);
+  const [muted, setMuted] = useState({});
+  const [showNotes, setShowNotes] = useState(true);
+
+  // Rotate speaker for demo
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSpeakingId(curr => {
+        const ids = AGENTS.map(a => a.id);
+        const next = ids[(ids.indexOf(curr) + 1) % ids.length];
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleSend = ({ voice }) => {
+    setHasText(false);
+    if (voice && targetId) {
+      setListeningFor(null);
+      setSpeakingId(null);
+      setTimeout(() => setSpeakingId(targetId), 400);
+    }
+  };
+
+  useEffect(() => { document.body.classList.toggle('hide-annot', !showNotes); }, [showNotes]);
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-6 py-4 border-b"
+        style={{ borderColor: 'var(--wr-border)' }}>
+        <div className="flex items-center gap-3">
+          <button className="w-8 h-8 rounded flex items-center justify-center"
+            style={{ border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+            <Ico name="arrow-l" size={14} />
+          </button>
+          <div>
+            <h1 className="text-base font-bold tracking-[0.05em] font-mono" style={{ color: 'var(--wr-text-primary)' }}>
+              MSP ransomware pivot <span style={{ color: 'var(--wr-text-muted)' }}>· LIVE DEBATE</span>
+            </h1>
+            <p className="text-[11px] mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>
+              Session s04 · started 14:12 UTC · facilitated by you
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowNotes(!showNotes)}
+            className="font-mono text-[11px] font-bold px-3 py-1.5 rounded"
+            style={{
+              backgroundColor: showNotes ? 'rgba(240,165,0,0.08)' : 'transparent',
+              color: showNotes ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
+              border: `1px solid ${showNotes ? 'rgba(240,165,0,0.35)' : 'var(--wr-border)'}`,
+            }}>{showNotes ? 'HIDE NOTES' : 'SHOW NOTES'}</button>
+          <button className="text-xs font-semibold px-3 py-1.5 rounded inline-flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--wr-bg-card)', color: 'var(--wr-text-secondary)', border: '1px solid var(--wr-border)' }}>
+            <Ico name="headphones" size={12} /> Audio on
+          </button>
+          <button className="text-xs font-semibold px-3 py-1.5 rounded inline-flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
+            <Ico name="bolt" size={12} /> Advance to synthesis
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-5 p-6" style={{ gridTemplateColumns: '1fr 340px' }}>
+        {/* Main column */}
+        <div className="space-y-5">
+          <div className="relative">
+            <SpeakerStage
+              speakingId={speakingId}
+              listeningFor={listeningFor}
+              onAgentClick={(id) => { setSelectedId(id === selectedId ? null : id); setTargetId(id); }}
+              selectedId={selectedId}
+            />
+            {showNotes && <Annot top={-14} left={12} text="① Avatars live at the center — portrait-style, animated rings for speaking/listening/thinking" />}
+          </div>
+
+          {/* Transcript */}
+          <div className="relative rounded-md p-5"
+            style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+            {showNotes && <Annot top={-14} left={12} text="② Transcript: every voice reply has an inline play/pause with waveform + per-agent TTS voice" />}
+            {TRANSCRIPT.map((m, i) => {
+              if (m.kind === 'round') return <RoundDivider key={i} label={m.label} t={m.t} />;
+              if (m.kind === 'agent') {
+                const a = AGENTS.find(x => x.id === m.agent);
+                return <AgentMessage key={i} msg={m} agent={a}
+                  playingVoice={playingVoiceFor === i}
+                  onPlay={() => setPlayingVoiceFor(playingVoiceFor === i ? null : i)} />;
+              }
+              if (m.kind === 'voice_user') {
+                const t = AGENTS.find(x => x.id === m.target);
+                return <UserMessage key={i} msg={m} targetAgent={t} />;
+              }
+              return null;
+            })}
+            {/* Active agent composing */}
+            <div className="flex gap-3 opacity-90">
+              <AgentAvatar agent={AGENTS.find(a => a.id === speakingId)} size={36} status="speaking" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold" style={{ color: AGENTS.find(a => a.id === speakingId).color }}>
+                    {AGENTS.find(a => a.id === speakingId).name}
+                  </span>
+                  <span className="pulse-dot text-[10px] font-mono font-bold" style={{ color: AGENTS.find(a => a.id === speakingId).color }}>
+                    SPEAKING · via TTS
+                  </span>
+                </div>
+                <div className="rounded p-3 flex items-center gap-3"
+                  style={{
+                    backgroundColor: `${AGENTS.find(a => a.id === speakingId).color}0a`,
+                    borderLeft: `3px solid ${AGENTS.find(a => a.id === speakingId).color}`,
+                    border: `1px solid ${AGENTS.find(a => a.id === speakingId).color}22`,
+                  }}>
+                  <Waveform color={AGENTS.find(a => a.id === speakingId).color} bars={56} active height={20} />
+                  <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>live transcript generating…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative">
+            <Composer
+              targetId={targetId} setTargetId={setTargetId}
+              recording={recording} setRecording={setRecording}
+              hasText={hasText} setHasText={setHasText}
+              onSend={handleSend}
+            />
+            {showNotes && <Annot top={-14} left={12} text="③ Composer: hold-to-talk, address a specific agent, keyboard shortcuts, chat fallback" />}
+          </div>
+        </div>
+
+        {/* Right rail */}
+        <div className="relative">
+          <RightRail speakingId={speakingId} setTargetId={setTargetId} muted={muted} setMuted={setMuted} />
+          {showNotes && <Annot top={-14} right={12} text="④ Roster shows per-agent status + mute/address in one click" />}
+        </div>
+      </div>
+
+      {/* Design notes */}
+      <div className="px-6 pb-10">
+        <div className="rounded-md p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+          <p className="text-[11px] font-mono font-bold tracking-[0.12em] mb-4" style={{ color: 'var(--wr-text-secondary)' }}>
+            DESIGN NOTES · HOW TO BUILD THIS
+          </p>
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            {[
+              { n: '01', t: 'Avatars = identity at a glance', b: 'Portrait-style conic-gradient avatars keyed to each agent\'s domain hue. Status is carried by rings (speaking = expanding aura in the agent\'s color, listening = amber halo + mic badge, thinking = subtle amber ring + dots).' },
+              { n: '02', t: 'Voice is optional on both sides', b: 'Facilitator: push-to-talk (hold SPACE or the mic button), transcribed live, target a specific agent via chips. Agents: TTS replies auto-play when on, with per-message play/pause, waveform scrubber, and per-agent voice labels.' },
+              { n: '03', t: 'Addressing a specific agent', b: 'The composer\'s target chips (or ⌘1–6) scope your question. Addressed agent speaks first; others can rebut. Clicking an avatar in the Stage also selects it as target.' },
+              { n: '04', t: 'Interrupt & raise hand', b: 'The hand button pauses the active TTS stream, injects your input, then the agent resumes or replies. This is the "raise hand" moment — essential when agents are mid-stream.' },
+              { n: '05', t: 'Implementation', b: 'Voice in: Web Speech API or whisper streaming. Voice out: OpenAI / ElevenLabs TTS, one voice per agent (persisted on the Agent entity). Use WebAudio for the waveform driven by real audio levels — the stubs shown here are decorative.' },
+              { n: '06', t: 'Accessibility', b: 'Every voice message has a text transcript by default. Captions are always on, TTS is opt-in per agent and globally. All controls are reachable by keyboard (SPACE, ⌘+digit, H, ↵).' },
+            ].map(x => (
+              <div key={x.n}>
+                <p className="font-mono text-[11px] font-bold tracking-[0.1em]" style={{ color: 'var(--wr-amber)' }}>{x.n}</p>
+                <p className="text-sm font-semibold mt-1" style={{ color: 'var(--wr-text-primary)' }}>{x.t}</p>
+                <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{x.b}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

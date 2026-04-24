@@ -119,9 +119,31 @@
       transparent 6px 12px
     );
   }
+
+  .agent-ring-1 {
+    animation: ring1 1.6s ease-out infinite;
+  }
+  .agent-ring-2 {
+    animation: ring2 1.6s ease-out infinite 0.4s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .agent-ring-1, .agent-ring-2 { animation: none; }
+  }
 }
 
 @keyframes pulseDot {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.35; }
+}
+@keyframes ring1 {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes ring2 {
+  0%   { transform: scale(1);   opacity: 0.45; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes bounce1 {
+  0%, 100% { transform: scaleY(0.3); }
+  50%       { transform: scaleY(1); }
 }
