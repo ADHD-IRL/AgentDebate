@@ -7,14 +7,12 @@ import { setWorkspaceApiKey } from '@/lib/llm';
 const WorkspaceContext = createContext(null);
 const WORKSPACE_KEY = 'agd_last_workspace';
 
-function scopedEntity(entity, workspaceId, userId, { noCreatedBy = false, noWorkspaceId = false } = {}) {
-  const wsFilter  = noWorkspaceId ? {} : { workspace_id: workspaceId };
-  const wsPayload = noWorkspaceId ? {} : { workspace_id: workspaceId };
-  const byPayload = noCreatedBy   ? {} : { created_by: userId };
+function scopedEntity(entity, workspaceId, userId, { noCreatedBy = false } = {}) {
+  const byPayload = noCreatedBy ? {} : { created_by: userId };
   return {
-    list:      (sort, limit) => entity.filter(wsFilter, sort, limit),
-    filter:    (filters = {}, sort, limit) => entity.filter({ ...filters, ...wsFilter }, sort, limit),
-    create:    (data) => entity.create({ ...data, ...wsPayload, ...byPayload }),
+    list:      (sort, limit) => entity.filter({ workspace_id: workspaceId }, sort, limit),
+    filter:    (filters = {}, sort, limit) => entity.filter({ ...filters, workspace_id: workspaceId }, sort, limit),
+    create:    (data) => entity.create({ ...data, workspace_id: workspaceId, ...byPayload }),
     update:    (id, data) => entity.update(id, data),
     delete:    (id) => entity.delete(id),
     get:       (id) => entity.get(id),
@@ -39,6 +37,9 @@ export const WorkspaceProvider = ({ children }) => {
   const initWorkspace = async (userId) => {
     setIsLoading(true);
     try {
+      // Ensure profile row exists (trigger may not have fired for older accounts)
+      await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true });
+
       // Load workspaces the user is a member of
       const { data: members } = await supabase
         .from('workspace_members')
@@ -61,21 +62,51 @@ export const WorkspaceProvider = ({ children }) => {
         }
       }
 
+      // Check if user owns a workspace but has no member record (broken state)
+      const { data: ownedWorkspaces } = await supabase
+        .from('workspaces')
+        .select('*')
+        .eq('owner_id', userId);
+
+      if (ownedWorkspaces?.length > 0) {
+        const ws = ownedWorkspaces[0];
+        // Repair the missing member record
+        const { error: memberErr } = await supabase.from('workspace_members').insert({
+          workspace_id: ws.id,
+          user_id: userId,
+          role: 'admin',
+        });
+        if (!memberErr) {
+          activateWorkspace(ws);
+          return;
+        }
+      }
+
       // No workspace — create one automatically
-      const { data: ws } = await supabase
+      const { data: ws, error: wsErr } = await supabase
         .from('workspaces')
         .insert({ name: 'My Workspace', owner_id: userId })
         .select()
         .single();
 
-      if (ws) {
-        await supabase.from('workspace_members').insert({
-          workspace_id: ws.id,
-          user_id: userId,
-          role: 'admin',
-        });
-        activateWorkspace(ws);
+      if (wsErr || !ws) {
+        console.error('Failed to create workspace:', wsErr);
+        return;
       }
+
+      const { error: memberErr } = await supabase.from('workspace_members').insert({
+        workspace_id: ws.id,
+        user_id: userId,
+        role: 'admin',
+      });
+
+      if (memberErr) {
+        console.error('Failed to add user to workspace_members:', memberErr);
+        // Workspace exists but user isn't a member — cannot proceed safely
+        return;
+      }
+
+      activateWorkspace(ws);
     } catch (err) {
       console.error('Workspace init failed:', err);
     } finally {
@@ -104,13 +135,13 @@ export const WorkspaceProvider = ({ children }) => {
     return {
       Agent:            scopedEntity(e.Agent, workspace.id, user.id),
       Session:          scopedEntity(e.Session, workspace.id, user.id),
-      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
+      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id, user.id, { noCreatedBy: true }),
       Scenario:         scopedEntity(e.Scenario, workspace.id, user.id),
       Domain:           scopedEntity(e.Domain, workspace.id, user.id),
       Threat:           scopedEntity(e.Threat, workspace.id, user.id),
       Chain:            scopedEntity(e.Chain, workspace.id, user.id),
-      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
-      SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
+      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id, { noCreatedBy: true }),
+      SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id, { noCreatedBy: true }),
       AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
     };
   }, [workspace, user]);
