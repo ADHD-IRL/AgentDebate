@@ -230,11 +230,11 @@ export default function SplashPage() {
       }} />
 
       {/* Left: Hero panel (desktop) */}
-      <div className="hidden md:block" style={{ flex: '1 1 0', position: 'relative', overflow: 'hidden' }}>
+      <div className="hidden md:block" style={{ flex: '1 1 0', position: 'relative', overflow: 'hidden', backgroundColor: '#060e17' }}>
         <img
           src="/splash-hero.jpg"
           alt="AgentDebate — Structured Multi-Agent Risk Assessment"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center center' }}
         />
         <div style={{
           position: 'absolute', inset: 0,
