@@ -9,6 +9,7 @@ import { WorkspaceProvider, useWorkspace } from '@/lib/WorkspaceContext';
 import AppLayout from '@/components/layout/AppLayout';
 import LoginPage from '@/pages/LoginPage';
 import SignupPage from '@/pages/SignupPage';
+import SplashPage from '@/pages/SplashPage';
 import Dashboard from '@/pages/Dashboard';
 import Domains from '@/pages/Domains';
 import Scenarios from '@/pages/Scenarios';
@@ -54,7 +55,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/login"  element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login"  element={isAuthenticated ? <Navigate to="/" replace /> : <SplashPage />} />
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <SignupPage />} />
 
       <Route element={
