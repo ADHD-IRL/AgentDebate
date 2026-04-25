@@ -188,7 +188,7 @@ export default function Dashboard() {
 
     const openCount  = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
-      return s && ['round1', 'round2'].includes(s.status);
+      return s && ['round1', 'round2'].includes(s.status) && sa.round1_assessment;
     }).length;
 
     const completedConfs = enrichedSessions.filter(s => inRange(s.created_date) && s.confidence != null).map(s => s.confidence);
