@@ -37,6 +37,9 @@ export const WorkspaceProvider = ({ children }) => {
   const initWorkspace = async (userId) => {
     setIsLoading(true);
     try {
+      // Ensure profile row exists (trigger may not have fired for older accounts)
+      await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true });
+
       // Load workspaces the user is a member of
       const { data: members } = await supabase
         .from('workspace_members')
@@ -59,21 +62,51 @@ export const WorkspaceProvider = ({ children }) => {
         }
       }
 
+      // Check if user owns a workspace but has no member record (broken state)
+      const { data: ownedWorkspaces } = await supabase
+        .from('workspaces')
+        .select('*')
+        .eq('owner_id', userId);
+
+      if (ownedWorkspaces?.length > 0) {
+        const ws = ownedWorkspaces[0];
+        // Repair the missing member record
+        const { error: memberErr } = await supabase.from('workspace_members').insert({
+          workspace_id: ws.id,
+          user_id: userId,
+          role: 'admin',
+        });
+        if (!memberErr) {
+          activateWorkspace(ws);
+          return;
+        }
+      }
+
       // No workspace — create one automatically
-      const { data: ws } = await supabase
+      const { data: ws, error: wsErr } = await supabase
         .from('workspaces')
         .insert({ name: 'My Workspace', owner_id: userId })
         .select()
         .single();
 
-      if (ws) {
-        await supabase.from('workspace_members').insert({
-          workspace_id: ws.id,
-          user_id: userId,
-          role: 'admin',
-        });
-        activateWorkspace(ws);
+      if (wsErr || !ws) {
+        console.error('Failed to create workspace:', wsErr);
+        return;
       }
+
+      const { error: memberErr } = await supabase.from('workspace_members').insert({
+        workspace_id: ws.id,
+        user_id: userId,
+        role: 'admin',
+      });
+
+      if (memberErr) {
+        console.error('Failed to add user to workspace_members:', memberErr);
+        // Workspace exists but user isn't a member — cannot proceed safely
+        return;
+      }
+
+      activateWorkspace(ws);
     } catch (err) {
       console.error('Workspace init failed:', err);
     } finally {
