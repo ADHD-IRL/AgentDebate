@@ -39,7 +39,7 @@ const LoadingScreen = () => (
 const RequireAuth = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -55,8 +55,10 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/login"  element={isAuthenticated ? <Navigate to="/" replace /> : <SplashPage />} />
-      <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <SignupPage />} />
+      {/* Splash is always the entry point — shows login form or "continue" if already authed */}
+      <Route path="/"      element={<SplashPage />} />
+      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/signup" element={isAuthenticated ? <Navigate to="/sessions" replace /> : <SignupPage />} />
 
       <Route element={
         <RequireAuth>
@@ -67,7 +69,7 @@ const AppRoutes = () => {
           </WorkspaceProvider>
         </RequireAuth>
       }>
-        <Route path="/"                     element={<Dashboard />} />
+        <Route path="/dashboard"            element={<Dashboard />} />
         <Route path="/domains"              element={<Domains />} />
         <Route path="/scenarios"            element={<Scenarios />} />
         <Route path="/threats"              element={<Threats />} />
