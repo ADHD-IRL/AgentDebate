@@ -53,7 +53,7 @@ export default function Agents() {
   };
 
   const handleClone = async (agent) => {
-    const { id, created_date, updated_date, ...rest } = agent;
+    const { id, created_at, workspace_id, created_by, ...rest } = agent;
     await db.Agent.create({ ...rest, name: `${rest.name} (Copy)` });
     load();
   };

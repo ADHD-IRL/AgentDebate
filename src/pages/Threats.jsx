@@ -141,7 +141,7 @@ export default function Threats() {
 
   const load = async () => {
     if (!db) return;
-    const [t,d,s] = await Promise.all([db.Threat.list('-created_date', 500), db.Domain.list('-created_date', 500), db.Scenario.list('-created_date', 500)]);
+    const [t,d,s] = await Promise.all([db.Threat.list('-created_at', 500), db.Domain.list('-created_at', 500), db.Scenario.list('-created_at', 500)]);
     setThreats(t); setDomains(d); setScenarios(s); setLoading(false);
   };
 

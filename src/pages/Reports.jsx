@@ -232,7 +232,7 @@ export default function Reports() {
       <div class="cover-title">${execSession.name}</div>
       <div class="cover-subtitle">Executive Threat Assessment Report</div>
       <div class="cover-meta">
-        <div class="cover-meta-item"><div class="cover-meta-label">Date</div><div class="cover-meta-value">${new Date(execSession.created_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+        <div class="cover-meta-item"><div class="cover-meta-label">Date</div><div class="cover-meta-value">${new Date(execSession.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
         ${execSession.phase_focus ? `<div class="cover-meta-item"><div class="cover-meta-label">Phase</div><div class="cover-meta-value">${execSession.phase_focus}</div></div>` : ''}
         ${execScenario ? `<div class="cover-meta-item"><div class="cover-meta-label">Scenario</div><div class="cover-meta-value">${execScenario.name}</div></div>` : ''}
         ${execDomain ? `<div class="cover-meta-item"><div class="cover-meta-label">Domain</div><div class="cover-meta-value">${execDomain.name}</div></div>` : ''}
@@ -519,7 +519,7 @@ export default function Reports() {
       html += `<h1>AgentDebate SESSION REPORT</h1>
       <h2 style="border:none;margin-top:4px;font-size:22px;">${session.name}</h2>
       <div class="meta">
-        <span>Date: <span class="badge">${new Date(session.created_date).toLocaleDateString()}</span></span>
+        <span>Date: <span class="badge">${new Date(session.created_at).toLocaleDateString()}</span></span>
         <span>Phase: <span class="badge">${session.phase_focus || '—'}</span></span>
         <span>Status: <span class="badge">${session.status?.toUpperCase()}</span></span>
       </div>`;
@@ -608,7 +608,7 @@ export default function Reports() {
     if (selectedSections.has('cover')) {
       lines.push(`# AgentDebate SESSION REPORT`);
       lines.push(`## ${session.name}`);
-      lines.push(`**Date:** ${new Date(session.created_date).toLocaleDateString()}`);
+      lines.push(`**Date:** ${new Date(session.created_at).toLocaleDateString()}`);
       lines.push(`**Phase:** ${session.phase_focus || '—'}`);
       lines.push(`**Status:** ${session.status?.toUpperCase()}`);
       lines.push('');

@@ -165,7 +165,7 @@ export default function Scenarios() {
     // If user edited it locally this browser session, allow running
     if (scenarioEditedAt[scen.id]) return false;
     // Compare scenario's updated_date vs the latest session's created_date
-    const latestSessionDate = Math.max(...relatedSessions.map(s => new Date(s.created_date).getTime()));
+    const latestSessionDate = Math.max(...relatedSessions.map(s => new Date(s.created_at).getTime()));
     const scenarioUpdated = new Date(scen.updated_date).getTime();
     return scenarioUpdated <= latestSessionDate;
   };

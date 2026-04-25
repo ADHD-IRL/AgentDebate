@@ -17,9 +17,13 @@ const TABLE = {
 
 function applySort(query, sort) {
   if (!sort) return query.order('created_at', { ascending: true });
-  const { field, order } = typeof sort === 'object' && !Array.isArray(sort)
-    ? sort
-    : { field: sort[0], order: sort[1] || 'asc' };
+  if (typeof sort === 'string') {
+    const desc = sort.startsWith('-');
+    return query.order(desc ? sort.slice(1) : sort, { ascending: !desc });
+  }
+  const { field, order } = Array.isArray(sort)
+    ? { field: sort[0], order: sort[1] || 'asc' }
+    : sort;
   return query.order(field, { ascending: order === 'asc' });
 }
 

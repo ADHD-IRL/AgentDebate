@@ -46,7 +46,7 @@ export default function Sessions() {
   useEffect(() => {
     if (!db) return;
     // Load sessions first so the list always shows, even if enrichment fails
-    db.Session.list('-created_date').then(s => {
+    db.Session.list('-created_at').then(s => {
       setSessions(s);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -217,7 +217,7 @@ export default function Sessions() {
                           </span>
                         )}
                         {session.phase_focus && <span>· {session.phase_focus}</span>}
-                        <span>{new Date(session.created_date).toLocaleDateString()}</span>
+                        <span>{new Date(session.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
 
