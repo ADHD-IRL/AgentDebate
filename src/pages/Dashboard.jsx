@@ -129,13 +129,16 @@ export default function Dashboard() {
         .map(sa => (SEV_ORDINAL[sa.round2_revised_severity] ?? 0) - (SEV_ORDINAL[sa.round1_severity] ?? 0));
       const drift = drifts.length ? median(drifts) : null;
 
+      // Only count agents that have actually produced assessments
+      const ranSAs = sas.filter(sa => sa.round1_assessment);
+
       const sevCounts  = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-      for (const sa of sas) {
+      for (const sa of ranSAs) {
         const sev = sa.round2_revised_severity || sa.round1_severity;
         if (sev && sevCounts[sev] !== undefined) sevCounts[sev]++;
       }
       const topSeverity = SEV_KEYS.find(k => sevCounts[k] > 0) || null;
-      const findingCount = sas.length;
+      const findingCount = ranSAs.length;
 
       const r1Complete   = sas.length > 0 && sas.every(sa => sa.round1_assessment);
       const r2Complete   = sas.length > 0 && sas.every(sa => sa.round2_rebuttal);
@@ -175,12 +178,12 @@ export default function Dashboard() {
       return s && inRange(s.created_date);
     });
 
-    const criticals  = rangedSAs.filter(sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL');
+    const criticals  = rangedSAs.filter(sa => sa.round1_assessment && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL');
     const prevCrit   = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
       if (!s) return false;
       const t = new Date(s.created_date || 0).getTime();
-      return t >= prevStart && t < rangeStart && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
+      return t >= prevStart && t < rangeStart && sa.round1_assessment && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
     });
 
     const openCount  = data.sessionAgents.filter(sa => {
@@ -217,7 +220,7 @@ export default function Dashboard() {
 
     // Unresolved criticals — active sessions with CRITICAL findings
     for (const s of enrichedSessions) {
-      if (!['round1', 'round2', 'active'].includes(s.status)) continue;
+      if (!['round1', 'round2'].includes(s.status)) continue;
       if ((s.criticalCount || 0) === 0) continue;
       const scenario = scenarioMap[s.scenario_id];
       items.push({
@@ -226,7 +229,7 @@ export default function Dashboard() {
         title:    s.name || `Session ${s.id?.slice(0, 6)}`,
         subtitle: scenario?.name || 'No scenario',
         meta:     `${s.criticalCount} critical`,
-        href:     `/session/${s.id}`,
+        href:     `/sessions/${s.id}`,
         action:   'Review',
         agents:   [],
       });
@@ -242,7 +245,7 @@ export default function Dashboard() {
         title:    s.name || `Session ${s.id?.slice(0, 6)}`,
         subtitle: scenario?.name || 'No scenario',
         meta:     `${s.drift > 0 ? '+' : ''}${s.drift?.toFixed(1)} avg drift`,
-        href:     `/session/${s.id}`,
+        href:     `/sessions/${s.id}`,
         action:   'Analyse',
         agents:   [],
       });
@@ -295,7 +298,7 @@ export default function Dashboard() {
         title:    s.name || `Session ${s.id?.slice(0, 6)}`,
         subtitle: scenario?.name || 'No scenario',
         meta:     `${Math.round(s.confidence * 100)}% confidence`,
-        href:     `/session/${s.id}`,
+        href:     `/sessions/${s.id}`,
         action:   'Review',
         agents:   [],
       });
@@ -313,7 +316,8 @@ export default function Dashboard() {
 
     const recentSAs = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
-      return s && new Date(s.created_date || 0).getTime() >= cutoff;
+      // Only include agents that have actually produced an assessment
+      return s && sa.round1_assessment && new Date(s.created_date || 0).getTime() >= cutoff;
     });
 
     const byDomain = {};

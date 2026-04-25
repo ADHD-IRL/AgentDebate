@@ -7,10 +7,10 @@ import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
 
 const STATUS_CONFIG = {
-  pending: { color: '#546E7A', label: 'PENDING' },
-  round1:  { color: '#2E86AB', label: 'ROUND 1' },
-  round2:  { color: '#D68910', label: 'ROUND 2' },
-  complete:{ color: '#27AE60', label: 'COMPLETE' },
+  pending:  { color: '#546E7A', label: 'DRAFT',    draft: true },
+  round1:   { color: '#2E86AB', label: 'ROUND 1',  draft: false },
+  round2:   { color: '#D68910', label: 'ROUND 2',  draft: false },
+  complete: { color: '#27AE60', label: 'COMPLETE', draft: false },
 };
 
 export default function Sessions() {
@@ -73,20 +73,33 @@ export default function Sessions() {
             const dom = domainById(session.domain_id);
             const sc = scenarioById(session.scenario_id);
             const status = STATUS_CONFIG[session.status] || STATUS_CONFIG.pending;
+            const isDraft = status.draft;
+            const dest = session.mode === 'live' && !isDraft
+              ? `/sessions/${session.id}/live`
+              : `/sessions/${session.id}`;
             return (
-              <Link key={session.id} to={`/sessions/${session.id}`} className="block rounded p-4 flex items-center gap-4 transition-all duration-200 hover:border-amber-500/50 hover:shadow-[0_0_16px_rgba(240,165,0,0.18)]"
-                style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+              <Link key={session.id} to={dest} className="block rounded p-4 flex items-center gap-4 transition-all duration-200 hover:border-amber-500/50 hover:shadow-[0_0_16px_rgba(240,165,0,0.18)]"
+                style={{
+                  backgroundColor: isDraft ? 'var(--wr-bg-secondary)' : 'var(--wr-bg-card)',
+                  border: isDraft ? '1px dashed var(--wr-border)' : '1px solid var(--wr-border)',
+                  opacity: isDraft ? 0.75 : 1,
+                }}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{session.name}</h3>
-                    <span className="text-xs px-2 py-0.5 rounded font-bold font-mono" style={{ backgroundColor: `${status.color}22`, color: status.color }}>
+                    <h3 className="font-semibold" style={{ color: isDraft ? 'var(--wr-text-secondary)' : 'var(--wr-text-primary)' }}>{session.name}</h3>
+                    <span className="text-xs px-2 py-0.5 rounded font-bold font-mono" style={{ backgroundColor: `${status.color}22`, color: status.color, border: isDraft ? `1px dashed ${status.color}` : 'none' }}>
                       {status.label}
                     </span>
+                    {isDraft && session.mode === 'live' && (
+                      <span className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(46,134,171,0.12)', color: '#2E86AB', border: '1px solid rgba(46,134,171,0.3)' }}>
+                        LIVE MODE
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--wr-text-muted)' }}>
                     {sc && <span>{sc.name}</span>}
                     {dom && <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: `${dom.color}22`, color: dom.color }}>{dom.name}</span>}
-                    {session.phase_focus && <span>📍 {session.phase_focus}</span>}
+                    {session.phase_focus && <span>· {session.phase_focus}</span>}
                     <span>{session.agent_ids?.length || 0} agents</span>
                     <span>{new Date(session.created_date).toLocaleDateString()}</span>
                   </div>

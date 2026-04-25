@@ -384,7 +384,7 @@ export default function LiveDebateRoom() {
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
-            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'round1' });
+            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'r1_done' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
             await attachTTS(tempId, assessment, sa.agent_id);
           },
@@ -434,7 +434,7 @@ export default function LiveDebateRoom() {
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
-            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'round2' });
+            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
             await attachTTS(tempId, assessment, sa.agent_id);
           },

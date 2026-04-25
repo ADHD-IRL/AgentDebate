@@ -4,42 +4,35 @@ import { Search, Radio } from 'lucide-react';
 import { Card, CardHeader, SevPill, SEV_COLOR, SEV_ORDINAL, timeAgo, AmberLink } from './atoms';
 
 const STATUS_META = {
-  pending:   { label: 'PENDING',   color: 'var(--wr-text-muted)', progress: 0 },
-  active:    { label: 'ACTIVE',    color: '#27AE60',              progress: null },
-  complete:  { label: 'COMPLETE',  color: 'var(--wr-amber)',      progress: 100 },
-  archived:  { label: 'ARCHIVED',  color: 'var(--wr-text-muted)', progress: 100 },
+  pending:  { label: 'DRAFT',    color: 'var(--wr-text-muted)', progress: 0   },
+  round1:   { label: 'ROUND 1',  color: '#2E86AB',              progress: 33  },
+  round2:   { label: 'ROUND 2',  color: '#D68910',              progress: 66  },
+  complete: { label: 'COMPLETE', color: 'var(--wr-amber)',      progress: 100 },
 };
-
-function sessionProgress(session) {
-  const steps = [session.r1_complete, session.r2_complete, session.synthesis_complete];
-  const done  = steps.filter(Boolean).length;
-  return Math.round((done / 3) * 100);
-}
 
 function StatusCell({ session }) {
   const raw    = session.status || 'pending';
   const meta   = STATUS_META[raw] || STATUS_META.pending;
-  const pct    = raw === 'active' ? sessionProgress(session) : meta.progress;
   const isLive = session.mode === 'live';
+  const isInProgress = raw === 'round1' || raw === 'round2';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {isLive && raw === 'active' && (
-          <Radio style={{ width: 9, height: 9, color: '#27AE60', flexShrink: 0 }} />
+        {isLive && isInProgress && (
+          <Radio style={{ width: 9, height: 9, color: meta.color, flexShrink: 0 }} />
         )}
         <span style={{
           fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
           letterSpacing: '0.08em', color: meta.color,
+          fontStyle: raw === 'pending' ? 'italic' : 'normal',
         }}>
-          {isLive && raw === 'active' ? 'LIVE' : meta.label}
+          {meta.label}
         </span>
       </div>
-      {pct != null && (
-        <div style={{ height: 3, width: '100%', borderRadius: 2, backgroundColor: 'var(--wr-border)' }}>
-          <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, backgroundColor: meta.color, transition: 'width 0.4s' }} />
-        </div>
-      )}
+      <div style={{ height: 3, width: '100%', borderRadius: 2, backgroundColor: 'var(--wr-border)' }}>
+        <div style={{ height: '100%', width: `${meta.progress}%`, borderRadius: 2, backgroundColor: meta.color, transition: 'width 0.4s' }} />
+      </div>
     </div>
   );
 }
@@ -72,11 +65,12 @@ export default function SessionFeed({ sessions = [], kpiFilter }) {
   const [tab,    setTab]    = useState('ALL');
   const [search, setSearch] = useState('');
 
-  const activeCount   = sessions.filter(s => s.status === 'active').length;
+  const activeCount   = sessions.filter(s => s.status === 'round1' || s.status === 'round2').length;
   const completeCount = sessions.filter(s => s.status === 'complete').length;
 
   const visible = sessions.filter(s => {
-    const tabOk    = tab === 'ALL' || (tab === 'ACTIVE' && s.status === 'active') || (tab === 'COMPLETE' && s.status === 'complete');
+    const isActive = s.status === 'round1' || s.status === 'round2';
+    const tabOk    = tab === 'ALL' || (tab === 'ACTIVE' && isActive) || (tab === 'COMPLETE' && s.status === 'complete');
     const searchOk = !search || (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.scenario || '').toLowerCase().includes(search.toLowerCase());
     const kpiOk    = !kpiFilter || kpiFilter !== 'critical' || (s.criticalCount || 0) > 0;
     return tabOk && searchOk && kpiOk;
@@ -147,7 +141,7 @@ export default function SessionFeed({ sessions = [], kpiFilter }) {
             <tbody>
               {visible.map((s, i) => {
                 const isLast   = i === visible.length - 1;
-                const href     = s.mode === 'live' ? `/live/${s.id}` : `/session/${s.id}`;
+                const href     = s.mode === 'live' ? `/sessions/${s.id}/live` : `/sessions/${s.id}`;
                 const topSev   = s.topSeverity;
                 return (
                   <tr
