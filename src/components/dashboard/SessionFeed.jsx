@@ -147,7 +147,7 @@ export default function SessionFeed({ sessions = [], kpiFilter }) {
             <tbody>
               {visible.map((s, i) => {
                 const isLast   = i === visible.length - 1;
-                const href     = s.mode === 'live' ? `/live/${s.id}` : `/session/${s.id}`;
+                const href     = s.mode === 'live' ? `/sessions/${s.id}/live` : `/sessions/${s.id}`;
                 const topSev   = s.topSeverity;
                 return (
                   <tr
