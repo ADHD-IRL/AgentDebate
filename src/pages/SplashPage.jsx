@@ -238,11 +238,11 @@ export default function SplashPage() {
         />
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(to right, transparent 55%, rgba(10,18,28,0.7) 80%, rgba(10,18,28,0.97) 100%)',
+          background: 'linear-gradient(transparent 25%, rgba(10,18,28,0.7) 80%, rgba(10,18,28,0.97) 100%)',
         }} />
         <div style={{ position: 'absolute', bottom: 28, left: 40 }}>
           <p style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)' }}>
-            ANALYZE DUAL-USE RISK · INFORM ALL SECTOR DECISIONS
+            ANALYZE AND SURFACE RISK · INFORM CRITICAL DECISIONS
           </p>
         </div>
       </div>
