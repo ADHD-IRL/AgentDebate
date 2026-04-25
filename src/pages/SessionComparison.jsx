@@ -227,7 +227,7 @@ export default function SessionComparison() {
   useEffect(() => {
     if (!db) return;
     Promise.all([
-      db.Session.list('-created_date', 100),
+      db.Session.list('-created_at', 100),
       db.Agent.list(),
       db.SessionAgent.list(),
     ]).then(([s, a, sa]) => {

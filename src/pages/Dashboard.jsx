@@ -167,22 +167,22 @@ export default function Dashboard() {
     const rangeStart = rangeEnd - rangeDays * 86400000;
     const prevStart  = rangeStart - rangeDays * 86400000;
 
-    const inRangeSessions = enrichedSessions.filter(s => inRange(s.created_date));
+    const inRangeSessions = enrichedSessions.filter(s => inRange(s.created_at));
     const prevSessions    = enrichedSessions.filter(s => {
-      const t = new Date(s.created_date || 0).getTime();
+      const t = new Date(s.created_at || 0).getTime();
       return t >= prevStart && t < rangeStart;
     });
 
     const rangedSAs = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
-      return s && inRange(s.created_date);
+      return s && inRange(s.created_at);
     });
 
     const criticals  = rangedSAs.filter(sa => sa.round1_assessment && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL');
     const prevCrit   = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
       if (!s) return false;
-      const t = new Date(s.created_date || 0).getTime();
+      const t = new Date(s.created_at || 0).getTime();
       return t >= prevStart && t < rangeStart && sa.round1_assessment && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
     });
 
@@ -191,7 +191,7 @@ export default function Dashboard() {
       return s && ['round1', 'round2'].includes(s.status) && sa.round1_assessment;
     }).length;
 
-    const completedConfs = enrichedSessions.filter(s => inRange(s.created_date) && s.confidence != null).map(s => s.confidence);
+    const completedConfs = enrichedSessions.filter(s => inRange(s.created_at) && s.confidence != null).map(s => s.confidence);
     const avgConf = completedConfs.length ? completedConfs.reduce((a, b) => a + b, 0) / completedConfs.length : null;
 
     const driftVals = inRangeSessions.filter(s => s.drift != null).map(s => s.drift);
@@ -199,10 +199,10 @@ export default function Dashboard() {
 
     const critSpark  = spark14(data.sessionAgents, sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
-      return s?.created_date || new Date(0).toISOString();
+      return s?.created_at || new Date(0).toISOString();
     }, sa => (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL' ? 1 : 0);
 
-    const sessSpark  = spark14(enrichedSessions, s => s.created_date || new Date(0).toISOString(), () => 1);
+    const sessSpark  = spark14(enrichedSessions, s => s.created_at || new Date(0).toISOString(), () => 1);
 
     return {
       critical: { value: criticals.length, delta: criticals.length - prevCrit.length, spark: critSpark },
@@ -269,17 +269,17 @@ export default function Dashboard() {
 
     // Stale scenarios — not used in >30d
     for (const sc of data.scenarios) {
-      if (!withinDays(sc.created_date, 365)) continue; // only flag if scenario exists
+      if (!withinDays(sc.created_at, 365)) continue; // only flag if scenario exists
       const lastSession = enrichedSessions
         .filter(s => s.scenario_id === sc.id)
-        .sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0))[0];
-      if (lastSession && withinDays(lastSession.created_date, 30)) continue;
-      if (!lastSession && withinDays(sc.created_date, 30)) continue;
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+      if (lastSession && withinDays(lastSession.created_at, 30)) continue;
+      if (!lastSession && withinDays(sc.created_at, 30)) continue;
       items.push({
         kind:     'stale',
         severity: 'LOW',
         title:    `${sc.name || 'Unnamed scenario'} not assessed recently`,
-        subtitle: lastSession ? `Last session ${Math.floor((Date.now() - new Date(lastSession.created_date).getTime()) / 86400000)}d ago` : 'Never run',
+        subtitle: lastSession ? `Last session ${Math.floor((Date.now() - new Date(lastSession.created_at).getTime()) / 86400000)}d ago` : 'Never run',
         meta:     '>30d stale',
         href:     '/scenarios',
         action:   'Run',
@@ -317,7 +317,7 @@ export default function Dashboard() {
     const recentSAs = data.sessionAgents.filter(sa => {
       const s = enrichedSessions.find(x => x.id === sa.session_id);
       // Only include agents that have actually produced an assessment
-      return s && sa.round1_assessment && new Date(s.created_date || 0).getTime() >= cutoff;
+      return s && sa.round1_assessment && new Date(s.created_at || 0).getTime() >= cutoff;
     });
 
     const byDomain = {};
@@ -330,7 +330,7 @@ export default function Dashboard() {
       if (sev && byDomain[domId][sev] !== undefined) byDomain[domId][sev]++;
       const s = enrichedSessions.find(x => x.id === sa.session_id);
       if (s) {
-        const daysAgo = Math.floor((Date.now() - new Date(s.created_date || 0).getTime()) / 86400000);
+        const daysAgo = Math.floor((Date.now() - new Date(s.created_at || 0).getTime()) / 86400000);
         if (daysAgo >= 0 && daysAgo < 14) byDomain[domId].spark[13 - daysAgo]++;
       }
     }
