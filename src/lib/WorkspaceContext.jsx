@@ -7,11 +7,14 @@ import { setWorkspaceApiKey } from '@/lib/llm';
 const WorkspaceContext = createContext(null);
 const WORKSPACE_KEY = 'agd_last_workspace';
 
-function scopedEntity(entity, workspaceId, userId) {
+function scopedEntity(entity, workspaceId, userId, { noCreatedBy = false, noWorkspaceId = false } = {}) {
+  const wsFilter  = noWorkspaceId ? {} : { workspace_id: workspaceId };
+  const wsPayload = noWorkspaceId ? {} : { workspace_id: workspaceId };
+  const byPayload = noCreatedBy   ? {} : { created_by: userId };
   return {
-    list:      (sort, limit) => entity.filter({ workspace_id: workspaceId }, sort, limit),
-    filter:    (filters = {}, sort, limit) => entity.filter({ ...filters, workspace_id: workspaceId }, sort, limit),
-    create:    (data) => entity.create({ ...data, workspace_id: workspaceId, created_by: userId }),
+    list:      (sort, limit) => entity.filter(wsFilter, sort, limit),
+    filter:    (filters = {}, sort, limit) => entity.filter({ ...filters, ...wsFilter }, sort, limit),
+    create:    (data) => entity.create({ ...data, ...wsPayload, ...byPayload }),
     update:    (id, data) => entity.update(id, data),
     delete:    (id) => entity.delete(id),
     get:       (id) => entity.get(id),
@@ -101,13 +104,13 @@ export const WorkspaceProvider = ({ children }) => {
     return {
       Agent:            scopedEntity(e.Agent, workspace.id, user.id),
       Session:          scopedEntity(e.Session, workspace.id, user.id),
-      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id, user.id),
+      SessionAgent:     scopedEntity(e.SessionAgent, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
       Scenario:         scopedEntity(e.Scenario, workspace.id, user.id),
       Domain:           scopedEntity(e.Domain, workspace.id, user.id),
       Threat:           scopedEntity(e.Threat, workspace.id, user.id),
       Chain:            scopedEntity(e.Chain, workspace.id, user.id),
-      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id),
-      SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id),
+      SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
+      SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id, { noCreatedBy: true, noWorkspaceId: true }),
       AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
     };
   }, [workspace, user]);
