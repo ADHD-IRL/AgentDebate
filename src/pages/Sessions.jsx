@@ -45,19 +45,23 @@ export default function Sessions() {
 
   useEffect(() => {
     if (!db) return;
-    Promise.all([
-      db.Session.list('-created_date'),
+    // Load sessions first so the list always shows, even if enrichment fails
+    db.Session.list('-created_date').then(s => {
+      setSessions(s);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+
+    // Enrichment data — failures are non-fatal
+    Promise.allSettled([
       db.SessionAgent.list(),
       db.SessionSynthesis.list(),
       db.Domain.list(),
       db.Scenario.list(),
-    ]).then(([s, sa, sy, d, sc]) => {
-      setSessions(s);
-      setSessionAgents(sa);
-      setSyntheses(sy);
-      setDomains(d);
-      setScenarios(sc);
-      setLoading(false);
+    ]).then(([sa, sy, d, sc]) => {
+      if (sa.status === 'fulfilled') setSessionAgents(sa.value);
+      if (sy.status === 'fulfilled') setSyntheses(sy.value);
+      if (d.status  === 'fulfilled') setDomains(d.value);
+      if (sc.status === 'fulfilled') setScenarios(sc.value);
     });
   }, [db]);
 
