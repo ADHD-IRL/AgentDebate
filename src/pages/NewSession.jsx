@@ -98,11 +98,7 @@ export default function NewSession() {
       for (const agent of selectedAgents) {
         await db.SessionAgent.create({ session_id: session.id, agent_id: agent.id, status: 'pending' });
       }
-      if (form.mode === 'live') {
-        navigate(`/sessions/${session.id}/live`);
-      } else {
-        navigate(`/sessions/${session.id}`);
-      }
+      navigate(`/sessions/${session.id}`);
     } catch (err) {
       setSaveError(err.message || 'Failed to create session');
       setSaving(false);
@@ -321,7 +317,7 @@ export default function NewSession() {
             disabled={saving || selectedAgents.length < 1 || !form.name}
             className="px-8"
           >
-            {saving ? 'Creating...' : <><ChevronRight className="w-4 h-4" /> {form.mode === 'live' ? 'Enter Debate Room' : 'Start Session'}</>}
+            {saving ? 'Creating...' : <><ChevronRight className="w-4 h-4" /> Create Session</>}
           </WrButton>
         </div>
       </div>

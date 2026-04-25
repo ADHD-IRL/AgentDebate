@@ -531,6 +531,14 @@ export default function SessionWorkspace() {
           {session.phase_focus && <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>}
         </div>
         <div className="flex items-center gap-2">
+          {session.mode === 'live' && (
+            <Link to={`/sessions/${id}/live`}>
+              <WrButton size="sm" style={{ backgroundColor: 'rgba(46,134,171,0.15)', borderColor: 'rgba(46,134,171,0.4)', color: '#2E86AB' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#2E86AB', display: 'inline-block', marginRight: 4 }} />
+                Enter Debate Room
+              </WrButton>
+            </Link>
+          )}
           <Link to={`/sessions/${id}/results`}>
             <WrButton variant="outline" size="sm"><BarChart2 className="w-3.5 h-3.5" /> Results</WrButton>
           </Link>
@@ -571,6 +579,32 @@ export default function SessionWorkspace() {
 
       {/* Content */}
       <div className="p-6">
+        {/* Unrun banner — pending sessions that haven't been started yet */}
+        {session.status === 'pending' && (
+          <div className="mb-5 rounded p-4 flex items-center gap-4"
+            style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px dashed var(--wr-border)' }}>
+            <div className="flex-1">
+              <p className="text-xs font-bold tracking-widest font-mono mb-1" style={{ color: 'var(--wr-text-muted)' }}>
+                SESSION NOT STARTED
+              </p>
+              <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                {session.mode === 'live'
+                  ? 'This session is ready. Enter the debate room to begin live AI moderation.'
+                  : 'This session is ready. Generate Round 1 assessments from the tabs below to begin.'}
+              </p>
+            </div>
+            {session.mode === 'live' ? (
+              <Link to={`/sessions/${id}/live`}>
+                <WrButton>Enter Debate Room</WrButton>
+              </Link>
+            ) : (
+              <WrButton onClick={() => { setTab('ROUND 1'); }}>
+                Start Round 1
+              </WrButton>
+            )}
+          </div>
+        )}
+
         {(tab === 'ROUND 1' || tab === 'ROUND 2') && (
           <>
             {genError && (
