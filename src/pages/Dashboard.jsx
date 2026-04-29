@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
+import { useAuth } from '@/lib/AuthContext';
 import { parseAnalysisConfigs } from '@/lib/chainBreakStorage';
-import { AlertTriangle, ChevronDown } from 'lucide-react';
+import { AlertTriangle, ChevronDown, LogOut } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 import KpiStrip      from '@/components/dashboard/KpiStrip';
@@ -52,9 +53,15 @@ const RANGES = [
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { db }     = useWorkspace();
-  const navigate   = useNavigate();
+  const { db }        = useWorkspace();
+  const { signOut }   = useAuth();
+  const navigate      = useNavigate();
   const [params, setParams] = useSearchParams();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   const range     = params.get('range')  || '14D';
   const kpiFilter = params.get('kpi')    || null;
@@ -429,6 +436,24 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            {/* Sign out */}
+            <button
+              onClick={handleSignOut}
+              title="Sign out"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 10px', borderRadius: 6,
+                backgroundColor: 'transparent', border: '1px solid var(--wr-border)',
+                color: 'var(--wr-text-muted)', fontSize: 11,
+                fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#C0392B'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--wr-text-muted)'; e.currentTarget.style.borderColor = 'var(--wr-border)'; }}
+            >
+              <LogOut style={{ width: 12, height: 12 }} />
+              Sign out
+            </button>
           </div>
         }
       />

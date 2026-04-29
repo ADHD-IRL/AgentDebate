@@ -40,7 +40,7 @@ function AuthenticatedPanel({ user, signOut }) {
 
       {/* Continue button */}
       <button
-        onClick={() => navigate('/sessions')}
+        onClick={() => navigate('/dashboard')}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           width: '100%', padding: '13px 16px', borderRadius: 6, border: 'none', marginBottom: 12,
@@ -100,7 +100,7 @@ function LoginPanel() {
     setLoading(true);
     try {
       await signIn({ email, password });
-      navigate('/sessions');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Sign in failed. Check your credentials.');
     } finally {
