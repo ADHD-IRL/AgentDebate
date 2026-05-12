@@ -34,7 +34,7 @@ const MODELS = [
   },
 ];
 
-const MODEL_MAP = { claude_sonnet_4_6: 'claude-sonnet-4-5', claude_opus_4_6: 'claude-opus-4-5', claude_haiku: 'claude-3-haiku-20240307' };
+const MODEL_MAP = { claude_sonnet_4_6: 'claude-sonnet-4-6', claude_opus_4_6: 'claude-opus-4-7', claude_haiku: 'claude-haiku-4-5-20251001' };
 
 export default function Settings() {
   const { workspace, refreshWorkspace } = useWorkspace();
@@ -75,7 +75,7 @@ export default function Settings() {
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey.trim(), 'anthropic-version': '2023-06-01' },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey.trim(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
         body: JSON.stringify({ model: MODEL_MAP[currentModel] || 'claude-sonnet-4-5', max_tokens: 16, messages: [{ role: 'user', content: 'Hi' }] }),
       });
       setTestStatus(res.ok ? 'ok' : 'error');
