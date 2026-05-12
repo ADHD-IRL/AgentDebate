@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe } from 'lucide-react';
+import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe, Link2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import SeverityBadge from '@/components/ui/SeverityBadge';
@@ -31,6 +31,7 @@ export default function NewSession() {
   const [domains, setDomains] = useState([]);
   const [scenarios, setScenarios] = useState([]);
   const [agents, setAgents] = useState([]);
+  const [chains, setChains] = useState([]);
   const [selectedAgents, setSelectedAgents] = useState([]);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({
@@ -39,6 +40,8 @@ export default function NewSession() {
     scenario_id: searchParams.get('scenario') || '',
     phase_focus: '',
     context_override: '',
+    facilitator_note: '',
+    pinned_chain_ids: [],
     mode: searchParams.get('mode') === 'live' ? 'live' : 'classic',
     source_pins: [],
   });
@@ -63,8 +66,18 @@ export default function NewSession() {
       db.Domain.list(),
       db.Scenario.list(),
       db.Agent.list(),
-    ]).then(([d,s,a]) => { setDomains(d); setScenarios(s); setAgents(a); });
+      db.Chain.list(),
+    ]).then(([d,s,a,ch]) => { setDomains(d); setScenarios(s); setAgents(a); setChains(ch); });
   }, [db]);
+
+  const togglePinnedChain = (chainId) => {
+    const current = form.pinned_chain_ids;
+    if (current.includes(chainId)) {
+      set('pinned_chain_ids', current.filter(id => id !== chainId));
+    } else if (current.length < 3) {
+      set('pinned_chain_ids', [...current, chainId]);
+    }
+  };
 
   const toggleAgent = (agent) => {
     if (selectedAgents.find(a => a.id === agent.id)) {
@@ -89,6 +102,8 @@ export default function NewSession() {
         scenario_id: form.scenario_id || null,
         phase_focus: form.phase_focus,
         context_override: form.context_override,
+        facilitator_note: form.facilitator_note || null,
+        pinned_chain_ids: form.pinned_chain_ids,
         mode: form.mode,
         source_pins: form.source_pins,
         status: 'pending',
@@ -171,6 +186,21 @@ export default function NewSession() {
             </WrSelect>
             <WrInput label="PHASE / FOCUS" value={form.phase_focus} onChange={v => set('phase_focus',v)} placeholder="e.g. Design Phase, Week 4..." className="col-span-2" />
           </div>
+
+          {/* Facilitator note */}
+          <div className="mt-4">
+            <label className="block text-xs font-bold tracking-widest font-mono mb-1.5" style={{ color: 'var(--wr-text-muted)' }}>
+              FACILITATOR NOTE <span style={{ color: 'var(--wr-text-muted)', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <textarea
+              value={form.facilitator_note}
+              onChange={e => set('facilitator_note', e.target.value)}
+              placeholder="Guidance injected into Round 2 agent prompts — e.g. 'Focus on supply chain dependencies...'"
+              rows={2}
+              className="w-full text-xs px-3 py-2 rounded outline-none resize-none"
+              style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }}
+            />
+          </div>
           {selectedScenario?.context_document && (
             <div className="mt-4 p-3 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
               <p className="text-xs font-bold font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>CONTEXT DOCUMENT PREVIEW</p>
@@ -248,6 +278,55 @@ export default function NewSession() {
             </div>
           </div>
         </div>
+
+        {/* Pinned Chains — inject chain context into agent prompts */}
+        {chains.length > 0 && (
+          <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />
+                <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>PIN THREAT CHAINS</h2>
+              </div>
+              <span className="text-xs" style={{ color: form.pinned_chain_ids.length >= 3 ? '#C0392B' : 'var(--wr-text-muted)' }}>
+                {form.pinned_chain_ids.length}/3 selected
+              </span>
+            </div>
+            <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>
+              Select up to 3 chains to inject as context into agent prompts — agents will reason about compound threats.
+            </p>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {chains.map(chain => {
+                const isSelected = form.pinned_chain_ids.includes(chain.id);
+                const isDisabled = !isSelected && form.pinned_chain_ids.length >= 3;
+                return (
+                  <button
+                    key={chain.id}
+                    onClick={() => !isDisabled && togglePinnedChain(chain.id)}
+                    disabled={isDisabled}
+                    className="w-full text-left p-2 rounded flex items-center gap-2 transition-colors"
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
+                      border: `1px solid ${isSelected ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
+                      opacity: isDisabled ? 0.4 : 1,
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <div className="flex-shrink-0 w-3.5 h-3.5 rounded border flex items-center justify-center"
+                      style={{ borderColor: isSelected ? 'var(--wr-amber)' : 'var(--wr-border)', backgroundColor: isSelected ? 'var(--wr-amber)' : 'transparent' }}>
+                      {isSelected && <span style={{ color: '#0D1B2A', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{chain.name}</p>
+                      <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>
+                        {chain.steps?.length || 0} steps{chain.description ? ` · ${chain.description.slice(0, 60)}` : ''}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Source Documents — shown for Live Debate mode */}
         {form.mode === 'live' && (

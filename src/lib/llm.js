@@ -142,10 +142,66 @@ Return ONLY the JSON object.`;
   return JSON.parse(match ? match[0] : text);
 }
 
+// --- generateRound0 ---
+export async function generateRound0({ agent, scenarioContext, phaseFocus }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
+Your cognitive bias: ${agent.cognitive_bias}
+Your red-team focus: ${agent.red_team_focus}
+
+You are about to enter a structured red team analysis session.
+
+SCENARIO CONTEXT:
+${(scenarioContext || '').slice(0, 1500)}
+
+PHASE/FOCUS: ${phaseFocus || 'General analysis'}
+
+Write a brief pre-session self-briefing (100-150 words) — the mental preparation you do before the analysis begins:
+- What lens you will apply from your discipline
+- What assumption you most want to challenge in this scenario
+- What your biggest concern going into this session is
+
+Write in first person as the expert. Be direct and specific.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 400 });
+  return { briefing: text.trim() };
+}
+
+function parseMarkers(fullText, fallbackSeverity) {
+  const lines = fullText.trimEnd().split('\n');
+  let severity = fallbackSeverity || 'HIGH';
+  let confidence = null;
+  let compound_chain_text = '';
+  let markerEnd = lines.length;
+
+  for (let i = lines.length - 1; i >= 0 && markerEnd - i <= 5; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const sev = line.match(/^SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
+    if (sev) { severity = sev[1].toUpperCase(); markerEnd = Math.min(markerEnd, i); continue; }
+    const conf = line.match(/^CONFIDENCE:\s*(\d+)/i);
+    if (conf) { confidence = Math.min(100, Math.max(0, parseInt(conf[1], 10))); markerEnd = Math.min(markerEnd, i); continue; }
+    const chain = line.match(/^COMPOUND_CHAIN:\s*(.+)/i);
+    if (chain) { compound_chain_text = chain[1].trim(); markerEnd = Math.min(markerEnd, i); continue; }
+    break;
+  }
+
+  const assessment = lines.slice(0, markerEnd).join('\n').trim();
+  return { assessment, severity, confidence, compound_chain_text };
+}
+
 // --- generateRound1 ---
-export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [] }) {
+export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
+    : '';
+
+  const chainSection = chainContext
+    ? `\nPINNED THREAT CHAINS (use these as context for compound threat reasoning):\n${chainContext}\n`
+    : '';
+
+  const facilSection = facilitator_note
+    ? `\nFACILITATOR NOTE: ${facilitator_note}\n`
     : '';
 
   const prompt = `You are ${agent.name}, ${agent.persona_description}
@@ -160,7 +216,7 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}
+${threatSection}${chainSection}${facilSection}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
@@ -168,23 +224,27 @@ Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
 ${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
 
-After your assessment, on the very last line output exactly:
+After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+CONFIDENCE: [0-100 integer representing your confidence this assessment is correct]
+COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
 Write in first person as the expert. Be specific and opinionated.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200 });
-  const lines = fullText.split('\n');
-  let severity = agent.severity_default || 'HIGH';
-  let assessment = fullText;
-  const lastLine = lines[lines.length - 1];
-  const m = lastLine.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
-  if (m) { severity = m[1].toUpperCase(); assessment = lines.slice(0, -1).join('\n').trim(); }
-  return { assessment, severity };
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1300 });
+  return parseMarkers(fullText, agent.severity_default);
 }
 
 // --- generateRound2 ---
-export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [] }) {
+export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
+  const chainSection = chainContext
+    ? `\nPINNED THREAT CHAINS (reference for compound chain reasoning):\n${chainContext}\n`
+    : '';
+
+  const facilSection = facilitator_note
+    ? `\nFACILITATOR NOTE: ${facilitator_note}\n`
+    : '';
+
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -195,32 +255,48 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
 Now write your Round 2 rebuttal (250-400 words) covering:
 1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
 2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
 3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
-After your rebuttal, on the very last line output exactly:
+After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+CONFIDENCE: [0-100 integer representing your confidence in this revised assessment]
+COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
 Be direct. Name names. Change your position if persuaded.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 900 });
-  const lines = fullText.split('\n');
-  let severity = agent.severity_default || 'HIGH';
-  let assessment = fullText;
-  const lastLine = lines[lines.length - 1];
-  const m = lastLine.match(/SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
-  if (m) { severity = m[1].toUpperCase(); assessment = lines.slice(0, -1).join('\n').trim(); }
-  return { assessment, severity };
+  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1000 });
+  return parseMarkers(fullText, agent.severity_default);
+}
+
+// --- generateReaction ---
+export async function generateReaction({ agent, triggerText, scenarioContext }) {
+  const prompt = `You are ${agent.name}, ${agent.persona_description}
+Your cognitive bias: ${agent.cognitive_bias}
+
+SCENARIO CONTEXT:
+${(scenarioContext || '').slice(0, 800)}
+
+You just read this finding from another analyst:
+"${(triggerText || '').slice(0, 400)}"
+
+React in 1-2 sentences — in character. Express genuine agreement, concern, or pushback from your disciplinary lens. No headings or preamble.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 120 });
+  return text.trim();
 }
 
 // --- streaming variants ---
-export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], onToken, onDone }) {
+export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
     : '';
+
+  const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
+  const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
 
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
@@ -234,7 +310,7 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}
+${threatSection}${chainSection}${facilSection}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
@@ -247,10 +323,13 @@ SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
 Write in first person as the expert. Be specific and opinionated.`;
 
-  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200, onToken, onDone });
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1300, onToken, onDone });
 }
 
-export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], onToken, onDone }) {
+export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
+  const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
+  const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
+
   const prompt = `You are ${agent.name}, ${agent.persona_description}
 ${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
 ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
@@ -261,7 +340,7 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
 Now write your Round 2 rebuttal (250-400 words) covering:
 1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
 2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
@@ -272,7 +351,7 @@ SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
 Be direct. Name names. Change your position if persuaded.`;
 
-  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 900, onToken, onDone });
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1000, onToken, onDone });
 }
 
 export async function generateAgentReply({ agent, question, priorMessages, scenarioContext, onToken, onDone }) {
