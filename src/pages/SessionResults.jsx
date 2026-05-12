@@ -36,6 +36,7 @@ function SeverityShiftRow({ sa, agent }) {
   const shift = r1 && r2 ? SEV_ORDER[r2] - SEV_ORDER[r1] : null;
   const ShiftIcon = shift === null ? null : shift > 0 ? TrendingUp : shift < 0 ? TrendingDown : Minus;
   const shiftColor = shift === null ? '#546E7A' : shift > 0 ? '#C0392B' : shift < 0 ? '#27AE60' : '#8A9BB5';
+  const confidence = sa.round2_confidence ?? sa.round1_confidence;
   return (
     <div className="flex items-center gap-3 py-2 border-b" style={{ borderColor: 'var(--wr-border)' }}>
       <div className="flex-1 min-w-0">
@@ -43,6 +44,11 @@ function SeverityShiftRow({ sa, agent }) {
         <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent?.discipline}</p>
       </div>
       <div className="flex items-center gap-2">
+        {confidence != null && (
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(46,134,171,0.12)', color: '#2E86AB' }}>
+            {confidence}%
+          </span>
+        )}
         {r1 && <SeverityBadge severity={r1} size="xs" />}
         {r2 && r1 && (
           <>

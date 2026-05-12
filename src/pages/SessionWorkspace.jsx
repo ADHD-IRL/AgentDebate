@@ -1,24 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { generateRound1, generateRound2, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
+import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
 
-const STATUS_COLOR = { pending:'#546E7A', round1:'#2E86AB', round2:'#D68910', complete:'#27AE60' };
-
 function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
+  const [briefExpanded, setBriefExpanded] = useState(false);
   const isGenerating = sa.status === (round === 1 ? 'generating_r1' : 'generating_r2');
   const text = round === 1 ? sa.round1_assessment : sa.round2_rebuttal;
   const severity = round === 1 ? sa.round1_severity : sa.round2_revised_severity;
+  const confidence = round === 1 ? sa.round1_confidence : sa.round2_confidence;
   const color = agent?.domain_color || '#F0A500';
 
   return (
@@ -30,8 +30,38 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate }) {
             <p className="text-xs font-mono" style={{ color }}>Agent {agent?.name}</p>
             <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{agent?.discipline}</p>
           </div>
-          {severity && <SeverityBadge severity={severity} />}
+          <div className="flex items-center gap-2">
+            {confidence != null && (
+              <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)' }}>
+                {confidence}%
+              </span>
+            )}
+            {severity && <SeverityBadge severity={severity} />}
+          </div>
         </div>
+
+        {/* Round 0 pre-brief collapsible */}
+        {sa.round0_briefing && (
+          <div className="mb-3 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+            <button
+              onClick={() => setBriefExpanded(!briefExpanded)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs"
+              style={{ color: 'var(--wr-text-muted)' }}
+            >
+              <span className="flex items-center gap-1.5 font-mono tracking-wider">
+                <BookOpen className="w-3 h-3" /> PRE-SESSION BRIEF
+              </span>
+              {briefExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+            {briefExpanded && (
+              <div className="px-3 pb-3">
+                <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)' }}>
+                  {sa.round0_briefing}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {isGenerating ? (
           <div className="flex items-center gap-2 py-4">
@@ -125,8 +155,7 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
               'Assembling final synthesis report...',
               'Uploading and storing synthesis output...',
             ].map((step, i) => {
-              const isActive = synthStatus === step;
-              const isDone = synthStatus && [
+              const STEPS = [
                 'Collecting agent assessments...',
                 'Analyzing Round 1 assessments across all agents...',
                 'Cross-referencing Round 2 rebuttals and severity shifts...',
@@ -137,7 +166,9 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
                 'Extracting sharpest insights and attributions...',
                 'Assembling final synthesis report...',
                 'Uploading and storing synthesis output...',
-              ].indexOf(synthStatus) > i;
+              ];
+              const isActive = synthStatus === step;
+              const isDone = synthStatus && STEPS.indexOf(synthStatus) > i;
               return (
                 <div key={i} className="flex items-center gap-2.5 py-1">
                   <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
@@ -271,10 +302,18 @@ export default function SessionWorkspace() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [genError, setGenError] = useState(null);
   const [threats, setThreats] = useState([]);
-  const [extractedThreats, setExtractedThreats] = useState(null); // null = not run, [] = run + empty, [...] = results
+  const [extractedThreats, setExtractedThreats] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [savingThreats, setSavingThreats] = useState(false);
   const [selectedThreats, setSelectedThreats] = useState(new Set());
+  const [pinnedChains, setPinnedChains] = useState([]);
+  const [facilitatorNote, setFacilitatorNote] = useState('');
+  const [briefingAll, setBriefingAll] = useState(false);
+  const [reactions, setReactions] = useState([]);
+  const [showReactions, setShowReactions] = useState(false);
+  const [loadingReactions, setLoadingReactions] = useState(false);
+  const [criticalToast, setCriticalToast] = useState(null);
+  const toastTimer = useRef(null);
 
   const load = async () => {
     if (!db) return;
@@ -290,11 +329,23 @@ export default function SessionWorkspace() {
     setAgents(ag);
     setScenarios(sc);
     setSynthesis(synth[0] || null);
-    // Load threats for the session's scenario
-    const scenarioId = sess[0]?.scenario_id;
+
+    const sessionData = sess[0];
+    if (sessionData?.facilitator_note) setFacilitatorNote(sessionData.facilitator_note);
+
+    const scenarioId = sessionData?.scenario_id;
     if (scenarioId) {
       const t = await db.Threat.filter({ scenario_id: scenarioId });
       setThreats(t);
+    }
+
+    // Load pinned chains
+    const pinnedIds = sessionData?.pinned_chain_ids || [];
+    if (pinnedIds.length > 0) {
+      const allChains = await db.Chain.list();
+      setPinnedChains(allChains.filter(c => pinnedIds.includes(c.id)));
+    } else {
+      setPinnedChains([]);
     }
   };
 
@@ -303,11 +354,51 @@ export default function SessionWorkspace() {
   const getAgent = (agentId) => agents.find(a => a.id === agentId);
   const scenario = scenarios.find(s => s.id === session?.scenario_id);
 
+  const buildChainContext = () => {
+    if (!pinnedChains.length) return '';
+    return pinnedChains.map(c => {
+      const steps = (c.steps || []).map(s => `  Step ${s.step_number}: ${s.step_text}`).join('\n');
+      return `[${c.name}]\n${c.description || ''}\n${steps}`;
+    }).join('\n\n');
+  };
+
+  const showCriticalToast = (agentName, severity) => {
+    if (severity !== 'CRITICAL') return;
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setCriticalToast(agentName);
+    toastTimer.current = setTimeout(() => setCriticalToast(null), 7000);
+  };
+
+  const briefAllAgents = async () => {
+    setBriefingAll(true);
+    const scenarioCtx = scenario?.context_document || '';
+    for (const sa of sessionAgents) {
+      const agent = getAgent(sa.agent_id);
+      if (!agent) continue;
+      try {
+        const { briefing } = await generateRound0({
+          agent: { ...agent },
+          scenarioContext: scenarioCtx,
+          phaseFocus: session?.phase_focus || '',
+        });
+        await db.SessionAgent.update(sa.id, { round0_briefing: briefing });
+      } catch { /* skip failures silently */ }
+    }
+    setBriefingAll(false);
+    load();
+  };
+
   const generateRound = async (round) => {
     setGeneratingAll(true);
     setGenError(null);
     setProgress({ current: 0, total: sessionAgents.length });
     const others = round === 2 ? sessionAgents.filter(sa => sa.round1_assessment) : [];
+    const chainContext = buildChainContext();
+
+    // Save facilitator note to session if changed
+    if (facilitatorNote !== (session?.facilitator_note || '')) {
+      await db.Session.update(id, { facilitator_note: facilitatorNote });
+    }
 
     for (let i = 0; i < sessionAgents.length; i++) {
       const sa = sessionAgents[i];
@@ -318,6 +409,7 @@ export default function SessionWorkspace() {
 
       const statusKey = round === 1 ? 'generating_r1' : 'generating_r2';
       await db.SessionAgent.update(sa.id, { status: statusKey });
+      setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, status: statusKey } : s));
 
       const othersText = others
         .filter(o => o.agent_id !== sa.agent_id)
@@ -333,19 +425,26 @@ export default function SessionWorkspace() {
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
         threatCatalog: threats,
+        chainContext,
+        facilitator_note: facilitatorNote,
       });
 
       const updates = round === 1 ? {
         round1_assessment: res.assessment,
         round1_severity: res.severity || agent.severity_default,
+        round1_confidence: res.confidence,
+        compound_chain_text: res.compound_chain_text || null,
         status: 'r1_done',
       } : {
         round2_rebuttal: res.assessment,
         round2_revised_severity: res.severity || sa.round1_severity,
+        round2_confidence: res.confidence,
+        compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
         status: 'complete',
       };
 
       await db.SessionAgent.update(sa.id, updates);
+      showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
 
       if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
     }
@@ -371,6 +470,8 @@ export default function SessionWorkspace() {
       return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
     }).join('\n\n');
 
+    const chainContext = buildChainContext();
+
     try {
       const fn2 = round === 1 ? generateRound1 : generateRound2;
       const res = await fn2({
@@ -379,19 +480,26 @@ export default function SessionWorkspace() {
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
         threatCatalog: threats,
+        chainContext,
+        facilitator_note: facilitatorNote,
       });
 
       const updates = round === 1 ? {
         round1_assessment: res.assessment,
         round1_severity: res.severity || agent.severity_default,
+        round1_confidence: res.confidence,
+        compound_chain_text: res.compound_chain_text || null,
         status: 'r1_done',
       } : {
         round2_rebuttal: res.assessment,
         round2_revised_severity: res.severity || sa.round1_severity,
+        round2_confidence: res.confidence,
+        compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
         status: 'complete',
       };
 
       await db.SessionAgent.update(sa.id, updates);
+      showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
     } catch (e) {
       await db.SessionAgent.update(sa.id, { status: 'pending' });
       setGenError(e.message || 'Generation failed');
@@ -403,6 +511,35 @@ export default function SessionWorkspace() {
     const field = round === 1 ? 'round1_assessment' : 'round2_rebuttal';
     await db.SessionAgent.update(sa.id, { [field]: text });
     load();
+  };
+
+  const generateReactions = async () => {
+    const r1Done = sessionAgents.filter(sa => sa.round1_assessment);
+    if (r1Done.length < 2) return;
+    setLoadingReactions(true);
+    setReactions([]);
+    const scenarioCtx = scenario?.context_document || '';
+    const newReactions = [];
+
+    for (const sa of r1Done) {
+      const agent = getAgent(sa.agent_id);
+      if (!agent) continue;
+      // React to another agent's assessment (next in list)
+      const others = r1Done.filter(o => o.agent_id !== sa.agent_id);
+      if (!others.length) continue;
+      const target = others[Math.floor(Math.random() * others.length)];
+      const targetAgent = getAgent(target.agent_id);
+      try {
+        const text = await generateReaction({
+          agent: { ...agent },
+          triggerText: target.round1_assessment,
+          scenarioContext: scenarioCtx,
+        });
+        newReactions.push({ agentName: agent.name, targetName: targetAgent?.name, text, color: agent.domain_color || '#F0A500' });
+        setReactions([...newReactions]);
+      } catch { /* skip */ }
+    }
+    setLoadingReactions(false);
   };
 
   const generateSynthesis = async () => {
@@ -516,6 +653,23 @@ export default function SessionWorkspace() {
 
   return (
     <div style={{ backgroundColor: 'var(--wr-bg-primary)', minHeight: '100vh' }}>
+      {/* CRITICAL escalation toast */}
+      {criticalToast && (
+        <div
+          className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg"
+          style={{ backgroundColor: '#C0392B', color: '#fff', maxWidth: 340 }}
+        >
+          <BellRing className="w-4 h-4 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs font-bold tracking-widest font-mono">CRITICAL ESCALATION</p>
+            <p className="text-xs mt-0.5">{criticalToast} has assessed CRITICAL severity</p>
+          </div>
+          <button onClick={() => setCriticalToast(null)} className="opacity-70 hover:opacity-100 flex-shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="border-b px-6 py-4 flex items-center gap-4" style={{ borderColor: 'var(--wr-border)', backgroundColor: 'var(--wr-bg-secondary)' }}>
         <Link to="/sessions" className="text-xs flex items-center gap-1" style={{ color: 'var(--wr-text-muted)' }}>
@@ -527,6 +681,11 @@ export default function SessionWorkspace() {
             <span className="text-xs px-2 py-0.5 rounded font-bold font-mono" style={{ backgroundColor: `${statusColor}22`, color: statusColor }}>
               {session.status?.toUpperCase()}
             </span>
+            {pinnedChains.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(46,134,171,0.15)', color: '#2E86AB' }}>
+                {pinnedChains.length} chain{pinnedChains.length !== 1 ? 's' : ''} pinned
+              </span>
+            )}
           </div>
           {session.phase_focus && <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>}
         </div>
@@ -543,17 +702,30 @@ export default function SessionWorkspace() {
             <WrButton variant="outline" size="sm"><BarChart2 className="w-3.5 h-3.5" /> Results</WrButton>
           </Link>
           {(tab === 'ROUND 1' || tab === 'ROUND 2') && (
-            <WrButton
-              size="sm"
-              onClick={() => generateRound(round)}
-              disabled={generatingAll}
-            >
-              {generatingAll ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {progress.current}/{progress.total}</>
-              ) : (
-                <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
-              )}
-            </WrButton>
+            <>
+              <WrButton
+                variant="secondary"
+                size="sm"
+                onClick={briefAllAgents}
+                disabled={briefingAll}
+                title="Generate pre-session briefings for all agents"
+              >
+                {briefingAll
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Briefing...</>
+                  : <><BookOpen className="w-3.5 h-3.5" /> Brief Agents</>}
+              </WrButton>
+              <WrButton
+                size="sm"
+                onClick={() => generateRound(round)}
+                disabled={generatingAll}
+              >
+                {generatingAll ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {progress.current}/{progress.total}</>
+                ) : (
+                  <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
+                )}
+              </WrButton>
+            </>
           )}
           {tab === 'SYNTHESIS' && (
             <WrButton size="sm" onClick={generateSynthesis} disabled={generatingSynthesis}>
@@ -579,7 +751,7 @@ export default function SessionWorkspace() {
 
       {/* Content */}
       <div className="p-6">
-        {/* Unrun banner — pending sessions that haven't been started yet */}
+        {/* Unrun banner */}
         {session.status === 'pending' && (
           <div className="mb-5 rounded p-4 flex items-center gap-4"
             style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px dashed var(--wr-border)' }}>
@@ -607,6 +779,21 @@ export default function SessionWorkspace() {
 
         {(tab === 'ROUND 1' || tab === 'ROUND 2') && (
           <>
+            {/* Facilitator note — shown in Round 2 tab */}
+            {tab === 'ROUND 2' && (
+              <div className="mb-4 rounded p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                <p className="text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>FACILITATOR NOTE</p>
+                <textarea
+                  value={facilitatorNote}
+                  onChange={e => setFacilitatorNote(e.target.value)}
+                  placeholder="Add a note to guide agents in Round 2 — e.g. focus on supply chain dependencies..."
+                  rows={2}
+                  className="w-full text-xs px-3 py-2 rounded outline-none resize-none"
+                  style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }}
+                />
+              </div>
+            )}
+
             {genError && (
               <div className="mb-4 rounded p-3 flex items-start gap-2" style={{ backgroundColor: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', color: '#C0392B' }}>
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -617,17 +804,39 @@ export default function SessionWorkspace() {
                 <button onClick={() => setGenError(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">✕</button>
               </div>
             )}
+
+            {/* Per-agent progress panel */}
             {generatingAll && progress.total > 0 && (
               <div className="mb-4 rounded p-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>Generating {tab}...</span>
                   <span className="text-xs font-mono" style={{ color: 'var(--wr-amber)' }}>{progress.current}/{progress.total}</span>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  {sessionAgents.map((sa, i) => {
+                    const agent = getAgent(sa.agent_id);
+                    const isDone = i < progress.current;
+                    const isActive = i === progress.current - 1 && !isDone;
+                    return (
+                      <div key={sa.id} className="flex flex-col items-center gap-1" title={agent?.name}>
+                        <span className="text-xs font-mono" style={{
+                          color: isDone ? '#27AE60' : isActive ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
+                        }}>
+                          {isDone ? '✓' : isActive ? '●' : '○'}
+                        </span>
+                        <span className="text-xs truncate max-w-[60px]" style={{ color: 'var(--wr-text-muted)', fontSize: '9px' }}>
+                          {agent?.name?.split(' ')[0]}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="w-full h-1 rounded-full" style={{ backgroundColor: 'var(--wr-border)' }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${(progress.current/progress.total)*100}%`, backgroundColor: 'var(--wr-amber)' }} />
                 </div>
               </div>
             )}
+
             <div className="grid grid-cols-3 gap-4">
               {sessionAgents.map(sa => (
                 <AgentAssessmentCard
@@ -640,6 +849,51 @@ export default function SessionWorkspace() {
                 />
               ))}
             </div>
+
+            {/* Live reactions feed */}
+            {tab === 'ROUND 1' && sessionAgents.some(sa => sa.round1_assessment) && (
+              <div className="mt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <button
+                    onClick={() => { setShowReactions(!showReactions); if (!showReactions && reactions.length === 0) generateReactions(); }}
+                    className="flex items-center gap-2 text-xs font-mono tracking-wider"
+                    style={{ color: showReactions ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    {showReactions ? 'HIDE REACTIONS' : 'SHOW LIVE REACTIONS'}
+                  </button>
+                  {showReactions && reactions.length > 0 && (
+                    <button onClick={generateReactions} className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                      <RefreshCw className="w-3 h-3 inline mr-1" />refresh
+                    </button>
+                  )}
+                </div>
+                {showReactions && (
+                  <div className="rounded p-4 space-y-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                    {loadingReactions ? (
+                      <div className="flex items-center gap-2 py-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--wr-amber)' }} />
+                        <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>Generating reactions...</span>
+                      </div>
+                    ) : reactions.length === 0 ? (
+                      <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>No reactions yet.</p>
+                    ) : (
+                      reactions.map((r, i) => (
+                        <div key={i} className="flex gap-3">
+                          <div className="w-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color, minHeight: 20 }} />
+                          <div>
+                            <p className="text-xs font-semibold" style={{ color: 'var(--wr-text-primary)' }}>
+                              {r.agentName} <span style={{ color: 'var(--wr-text-muted)', fontWeight: 400 }}>re: {r.targetName}</span>
+                            </p>
+                            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{r.text}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -655,7 +909,6 @@ export default function SessionWorkspace() {
 
         {tab === 'THREATS' && (
           <div className="space-y-6 max-w-4xl">
-            {/* Existing scenario threats */}
             <div>
               <h3 className="text-xs font-bold tracking-widest font-mono mb-3" style={{ color: 'var(--wr-text-muted)' }}>
                 SCENARIO THREATS ({threats.length})
@@ -684,7 +937,6 @@ export default function SessionWorkspace() {
               )}
             </div>
 
-            {/* Extract new threats from session */}
             <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
               <div className="flex items-start justify-between mb-4">
                 <div>
