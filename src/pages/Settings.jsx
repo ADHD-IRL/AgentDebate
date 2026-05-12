@@ -75,13 +75,12 @@ export default function Settings() {
     setTestStatus(null);
     setTestError('');
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/anthropic', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey.trim(),
           'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
           model: MODEL_MAP[currentModel] || 'claude-haiku-4-5-20251001',
