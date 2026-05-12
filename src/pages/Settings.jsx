@@ -44,6 +44,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testStatus, setTestStatus] = useState(null);
+  const [testError, setTestError] = useState('');
   const [testing, setTesting] = useState(false);
   const [openAiKey, setOpenAiKeyState] = useState(() => getOpenAiKey());
   const [showOaiKey, setShowOaiKey] = useState(false);
@@ -69,18 +70,35 @@ export default function Settings() {
   };
 
   const handleTestKey = async () => {
-    if (!apiKey.trim()) { setTestStatus('error'); return; }
+    if (!apiKey.trim()) { setTestStatus('error'); setTestError('No key entered.'); return; }
     setTesting(true);
     setTestStatus(null);
+    setTestError('');
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey.trim(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: MODEL_MAP[currentModel] || 'claude-sonnet-4-5', max_tokens: 16, messages: [{ role: 'user', content: 'Hi' }] }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey.trim(),
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: MODEL_MAP[currentModel] || 'claude-haiku-4-5-20251001',
+          max_tokens: 16,
+          messages: [{ role: 'user', content: 'Hi' }],
+        }),
       });
-      setTestStatus(res.ok ? 'ok' : 'error');
-    } catch {
+      if (res.ok) {
+        setTestStatus('ok');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setTestStatus('error');
+        setTestError(`HTTP ${res.status}${data?.error?.message ? ': ' + data.error.message : ''}`);
+      }
+    } catch (e) {
       setTestStatus('error');
+      setTestError(e.message || 'Network error');
     } finally {
       setTesting(false);
     }
@@ -137,7 +155,7 @@ export default function Settings() {
           )}
           {testStatus === 'error' && (
             <p className="text-xs mt-2" style={{ color: '#C0392B' }}>
-              Key test failed. Check it is correct and has Messages API access.
+              Key test failed.{testError ? ` ${testError}` : ' Check it is correct and has Messages API access.'}
             </p>
           )}
         </div>
