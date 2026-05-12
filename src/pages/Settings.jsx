@@ -97,8 +97,9 @@ export default function Settings() {
         setTestError(`HTTP ${res.status}${data?.error?.message ? ': ' + data.error.message : ''}`);
       }
     } catch (e) {
+      console.error('API key test failed:', e);
       setTestStatus('error');
-      setTestError(e.message || 'Network error');
+      setTestError(e?.message || 'Network error — check browser console for details');
     } finally {
       setTesting(false);
     }
