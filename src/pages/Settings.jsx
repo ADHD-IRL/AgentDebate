@@ -49,21 +49,47 @@ export default function Settings() {
   const [openAiKey, setOpenAiKeyState] = useState(() => getOpenAiKey());
   const [showOaiKey, setShowOaiKey] = useState(false);
 
+  const [saveError, setSaveError] = useState('');
+
   useEffect(() => {
-    if (workspace?.anthropic_api_key) setApiKeyState(workspace.anthropic_api_key);
+    // Prefer localStorage so the key survives if Supabase RLS ever blocks the read
+    const localKey = localStorage.getItem('agd_anthropic_key');
+    if (localKey) {
+      setApiKeyState(localKey);
+    } else if (workspace?.anthropic_api_key) {
+      setApiKeyState(workspace.anthropic_api_key);
+    }
     const stored = localStorage.getItem('agd_llm_model') || 'claude_sonnet_4_6';
     setCurrentModel(stored);
   }, [workspace]);
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError('');
+    const trimmed = apiKey.trim();
     try {
-      await supabase.from('workspaces').update({ anthropic_api_key: apiKey.trim() }).eq('id', workspace.id);
-      setWorkspaceApiKey(apiKey.trim());
+      // Persist locally first — this always works regardless of RLS
+      localStorage.setItem('agd_anthropic_key', trimmed);
+      setWorkspaceApiKey(trimmed);
       setModelPref(currentModel);
-      if (refreshWorkspace) await refreshWorkspace();
+
+      // Also persist to Supabase for cross-device sync
+      const { error } = await supabase
+        .from('workspaces')
+        .update({ anthropic_api_key: trimmed })
+        .eq('id', workspace.id);
+      if (error) {
+        console.error('Workspace update failed:', error);
+        setSaveError(`DB: ${error.message}`);
+      } else {
+        if (refreshWorkspace) await refreshWorkspace();
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      console.error('Save failed:', e);
+      setSaveError(e?.message || 'Unexpected error');
     } finally {
       setSaving(false);
     }
@@ -246,6 +272,9 @@ export default function Settings() {
             <div className="flex items-center gap-1.5 text-xs" style={{ color: '#27AE60' }}>
               <CheckCircle2 className="w-3.5 h-3.5" /> Settings saved.
             </div>
+          )}
+          {saveError && (
+            <p className="text-xs" style={{ color: '#C0392B' }}>Save error: {saveError}</p>
           )}
         </div>
 
