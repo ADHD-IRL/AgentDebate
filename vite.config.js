@@ -9,4 +9,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/api/anthropic': {
+        target: 'https://api.anthropic.com/v1/messages',
+        changeOrigin: true,
+        rewrite: () => '',
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        },
+      },
+    },
+  },
 });

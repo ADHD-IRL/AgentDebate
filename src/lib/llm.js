@@ -5,6 +5,9 @@ const MODEL_MAP = {
 };
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
+// Use backend proxy to avoid CORS preflight failures on deployed origins.
+const ANTHROPIC_URL = '/api/anthropic';
+
 // Workspace key set by WorkspaceContext on load (takes priority)
 let _workspaceApiKey = '';
 export function setWorkspaceApiKey(key) { _workspaceApiKey = key || ''; }
@@ -34,13 +37,12 @@ export async function callAnthropicStream({ messages, maxTokens = 2000, system, 
   if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
   const body = { model: getModelId(), max_tokens: maxTokens, messages, stream: true };
   if (system) body.system = system;
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': key,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
   });
@@ -95,13 +97,12 @@ async function callAnthropic({ messages, maxTokens = 2000, system }) {
   if (!key) throw new Error('No Anthropic API key configured. Add it in Settings.');
   const body = { model: getModelId(), max_tokens: maxTokens, messages };
   if (system) body.system = system;
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': key,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify(body),
   });
@@ -480,13 +481,12 @@ Use tools if you need specific facts, recent incidents, or technical detail — 
   const toolCallLog = [];
 
   for (let i = 0; i < 4; i++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
         model: getModelId(),
@@ -526,13 +526,12 @@ Use tools if you need specific facts, recent incidents, or technical detail — 
   }
 
   // Safety fallback — strip tools and get plain response
-  const fallback = await fetch('https://api.anthropic.com/v1/messages', {
+  const fallback = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': key,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({ model: getModelId(), max_tokens: 400, system, messages: [{ role: 'user', content: userMsg }] }),
   });
