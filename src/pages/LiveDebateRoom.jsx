@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert, Volume2, VolumeX, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert, Volume2, VolumeX, ArrowRight, StopCircle, Trash2, RotateCcw } from 'lucide-react';
 import {
   generateRound1Stream, generateRound2Stream,
   generateAgentReply, generateAgentReplyWithTools,
@@ -322,12 +322,36 @@ export default function LiveDebateRoom() {
   }, [autoPlayTTS, mutedAgents, voices]);
 
   // Interrupt: pause current TTS + abort stream
+  const cancelRef = useRef(false);
+
   const interrupt = useCallback(() => {
     if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
     streamControllerRef.current?.abort();
     setCurrentSpeakerId(null);
     setPlayingMessageId(null);
   }, []);
+
+  const stopRound = useCallback(() => {
+    cancelRef.current = true;
+    interrupt();
+  }, [interrupt]);
+
+  const resetAgent = useCallback(async (sa, round) => {
+    const updates = round === 1
+      ? { round1_assessment: null, round1_severity: null, status: 'pending' }
+      : { round2_rebuttal: null, round2_revised_severity: null, status: 'r1_done' };
+    await db.SessionAgent.update(sa.id, updates);
+    setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, ...updates } : s));
+    setMessages(prev => prev.filter(m => !(m.agentId === sa.agent_id && m.round === round)));
+    setAgentStatus(s => ({ ...s, [sa.agent_id]: round === 1 ? 'idle' : 'done' }));
+  }, [db, id]);
+
+  const resetAllAgents = useCallback(async (round) => {
+    for (const sa of sessionAgents) {
+      await resetAgent(sa, round);
+    }
+    setPhase(round === 1 ? 'idle' : 'r1done');
+  }, [sessionAgents, resetAgent]);
 
   // Play/pause toggle for a message
   const handlePlayPause = useCallback((msgId) => {
@@ -362,12 +386,14 @@ export default function LiveDebateRoom() {
 
   const startRound1 = async () => {
     if (running) return;
+    cancelRef.current = false;
     setRunning(true); setPhase('r1');
     const sysMsg = { role: 'system', content: 'ROUND 1 — INDEPENDENT ASSESSMENTS' };
     push(sysMsg);
     await db.SessionMessage.create({ session_id: id, ...sysMsg, round: 1, metadata: {} });
 
     for (const sa of sessionAgents) {
+      if (cancelRef.current) { cancelRef.current = false; break; }
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round1_assessment) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
@@ -408,6 +434,7 @@ export default function LiveDebateRoom() {
 
   const startRound2 = async () => {
     if (running) return;
+    cancelRef.current = false;
     setRunning(true); setPhase('r2');
     setAgentStatus(s => Object.fromEntries(Object.keys(s).map(k => [k, 'idle'])));
     const sysMsg = { role: 'system', content: 'ROUND 2 — CROSS-AGENT REBUTTALS' };
@@ -422,7 +449,8 @@ export default function LiveDebateRoom() {
       .map(sa => `=== ${profiles[sa.agent_id]?.name} ===\n${sa.round1_assessment}`)
       .join('\n\n---\n\n');
 
-    for (const sa of sessionAgents) {
+    for (const sa of freshAgents) {
+      if (cancelRef.current) { cancelRef.current = false; break; }
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round2_rebuttal) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
@@ -569,16 +597,40 @@ export default function LiveDebateRoom() {
             style={{ backgroundColor: toolsEnabled ? 'rgba(26,188,156,0.12)' : 'transparent', border: `1px solid ${toolsEnabled ? '#1ABC9C' : 'var(--wr-border)'}`, color: toolsEnabled ? '#1ABC9C' : 'var(--wr-text-muted)' }}>
             <FlaskConical className="w-3 h-3" /> TOOLS {toolsEnabled ? 'ON' : 'OFF'}
           </button>
-          {[
-            { label: 'ROUND 1', can: canR1, action: startRound1, color: '#2E86AB' },
-            { label: 'ROUND 2', can: canR2, action: startRound2, color: '#D68910' },
-          ].map(({ label, can, action, color }) => (
-            <button key={label} onClick={action} disabled={!can}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{ backgroundColor: can ? `${color}18` : 'transparent', border: `1px solid ${can ? color : 'var(--wr-border)'}`, color: can ? color : 'var(--wr-text-muted)' }}>
-              <Play className="w-3 h-3" /> {label}
+          {running ? (
+            <button onClick={stopRound}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+              style={{ backgroundColor: 'rgba(192,57,43,0.12)', border: '1px solid #C0392B', color: '#C0392B' }}>
+              <StopCircle className="w-3 h-3" /> STOP
             </button>
-          ))}
+          ) : (
+            <>
+              {[
+                { label: 'ROUND 1', can: canR1, action: startRound1, color: '#2E86AB' },
+                { label: 'ROUND 2', can: canR2, action: startRound2, color: '#D68910' },
+              ].map(({ label, can, action, color }) => (
+                <button key={label} onClick={action} disabled={!can}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: can ? `${color}18` : 'transparent', border: `1px solid ${can ? color : 'var(--wr-border)'}`, color: can ? color : 'var(--wr-text-muted)' }}>
+                  <Play className="w-3 h-3" /> {label}
+                </button>
+              ))}
+              {phase === 'r1done' && (
+                <button onClick={() => resetAllAgents(1)} title="Clear all Round 1 assessments"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                  style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+                  <RotateCcw className="w-3 h-3" /> RESET R1
+                </button>
+              )}
+              {phase === 'r2done' && (
+                <button onClick={() => resetAllAgents(2)} title="Clear all Round 2 assessments"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                  style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+                  <RotateCcw className="w-3 h-3" /> RESET R2
+                </button>
+              )}
+            </>
+          )}
           <button disabled={!canSynth} onClick={() => navigate(`/sessions/${id}?autoSynth=1`)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ backgroundColor: canSynth ? 'rgba(240,165,0,0.15)' : 'transparent', border: `1px solid ${canSynth ? 'var(--wr-amber)' : 'var(--wr-border)'}`, color: canSynth ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}>
@@ -708,15 +760,39 @@ export default function LiveDebateRoom() {
               if (!agent) return null;
               const s = agentStatus[sa.agent_id] || 'idle';
               const status = s === 'streaming' ? 'speaking' : (s === 'thinking' || s === 'researching') ? 'thinking' : 'idle';
+              const hasR1 = !!sa.round1_assessment;
+              const hasR2 = !!sa.round2_rebuttal;
               return (
-                <RosterRow key={sa.agent_id}
-                  agent={agent}
-                  color={colors[sa.agent_id]}
-                  status={status}
-                  muted={!!mutedAgents[sa.agent_id]}
-                  onToggleMute={() => setMutedAgents(m => ({ ...m, [sa.agent_id]: !m[sa.agent_id] }))}
-                  onAddress={() => setTargetAgentId(prev => prev === sa.agent_id ? null : sa.agent_id)}
-                />
+                <div key={sa.agent_id}>
+                  <RosterRow
+                    agent={agent}
+                    color={colors[sa.agent_id]}
+                    status={status}
+                    muted={!!mutedAgents[sa.agent_id]}
+                    onToggleMute={() => setMutedAgents(m => ({ ...m, [sa.agent_id]: !m[sa.agent_id] }))}
+                    onAddress={() => setTargetAgentId(prev => prev === sa.agent_id ? null : sa.agent_id)}
+                  />
+                  {!running && (hasR1 || hasR2) && (
+                    <div className="flex gap-1 px-3 pb-2">
+                      {hasR1 && (
+                        <button onClick={() => resetAgent(sa, 1)}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded font-mono"
+                          style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}
+                          title="Clear Round 1 assessment">
+                          <RotateCcw className="w-2.5 h-2.5" /> R1
+                        </button>
+                      )}
+                      {hasR2 && (
+                        <button onClick={() => resetAgent(sa, 2)}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded font-mono"
+                          style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}
+                          title="Clear Round 2 assessment">
+                          <RotateCcw className="w-2.5 h-2.5" /> R2
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
