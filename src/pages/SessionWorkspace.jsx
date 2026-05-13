@@ -117,7 +117,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
   );
 }
 
-function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus }) {
+function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError }) {
   const [resolvedText, setResolvedText] = useState('');
 
   useEffect(() => {
@@ -135,10 +135,21 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
       <div className="flex flex-col items-center justify-center py-16">
         <Sparkles className="w-10 h-10 mb-4" style={{ color: 'var(--wr-amber)' }} />
         <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--wr-text-primary)' }}>Generate Synthesis</h3>
-        <p className="text-sm mb-6 text-center max-w-md" style={{ color: 'var(--wr-text-secondary)' }}>
-          Complete Round 2 first, then generate the synthesis report.
-        </p>
-        <WrButton size="lg" onClick={onGenerate}>
+        {synthError ? (
+          <div className="mb-6 rounded p-3 max-w-md w-full flex items-start gap-2" style={{ backgroundColor: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)' }}>
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#C0392B' }} />
+            <p className="text-xs" style={{ color: '#C0392B' }}>{synthError}</p>
+          </div>
+        ) : !r2Done ? (
+          <p className="text-sm mb-6 text-center max-w-md" style={{ color: 'var(--wr-text-secondary)' }}>
+            Complete Round 2 first, then generate the synthesis report.
+          </p>
+        ) : (
+          <p className="text-sm mb-6 text-center max-w-md" style={{ color: 'var(--wr-text-secondary)' }}>
+            All agents have completed Round 2. Ready to generate the synthesis report.
+          </p>
+        )}
+        <WrButton size="lg" onClick={onGenerate} disabled={!r2Done}>
           <Sparkles className="w-4 h-4" /> Generate Synthesis
         </WrButton>
       </div>
@@ -313,6 +324,7 @@ export default function SessionWorkspace() {
   const [scenarios, setScenarios] = useState([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [genError, setGenError] = useState(null);
+  const [synthError, setSynthError] = useState(null);
   const [threats, setThreats] = useState([]);
   const [extractedThreats, setExtractedThreats] = useState(null);
   const [extracting, setExtracting] = useState(false);
@@ -617,6 +629,7 @@ export default function SessionWorkspace() {
 
   const generateSynthesis = async () => {
     setGeneratingSynthesis(true);
+    setSynthError(null);
     setSynthStatus('Collecting agent assessments...');
 
     const SYNTH_STEPS = [
@@ -672,7 +685,7 @@ export default function SessionWorkspace() {
       setSynthStatus('Complete.');
       load();
     } catch (e) {
-      setGenError(e.message || 'Synthesis failed — check API key and try again');
+      setSynthError(e.message || 'Synthesis failed — check your Anthropic API key and try again.');
       load();
     } finally {
       timers.forEach(clearTimeout);
@@ -1007,6 +1020,8 @@ export default function SessionWorkspace() {
             onGenerate={generateSynthesis}
             generating={generatingSynthesis}
             synthStatus={synthStatus}
+            r2Done={sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal)}
+            synthError={synthError}
           />
         )}
 
