@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, Trash2, Radio, CheckCircle2, Circle } from 'lucide-react';
+import { Swords, Plus, Trash2, Radio, CheckCircle2, Circle, RotateCcw, AlertTriangle, X } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
@@ -42,6 +42,8 @@ export default function Sessions() {
   const [domains,       setDomains]       = useState([]);
   const [scenarios,     setScenarios]     = useState([]);
   const [loading,       setLoading]       = useState(true);
+  const [resetConfirmId, setResetConfirmId] = useState(null);
+  const [resetting,      setResetting]      = useState(false);
 
   useEffect(() => {
     if (!db) return;
@@ -90,6 +92,37 @@ export default function Sessions() {
     if (!confirm(`Delete session "${session.name}"? This cannot be undone.`)) return;
     await db.Session.delete(session.id);
     setSessions(prev => prev.filter(s => s.id !== session.id));
+  };
+
+  const handleReset = async (e, session) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResetting(true);
+    try {
+      const agents = await db.SessionAgent.filter({ session_id: session.id });
+      const resetUpdates = {
+        round1_assessment: null, round1_severity: null, round1_confidence: null,
+        round2_rebuttal: null, round2_revised_severity: null, round2_confidence: null,
+        compound_chain_text: null, round0_briefing: null, status: 'pending',
+      };
+      await Promise.all(agents.map(sa => db.SessionAgent.update(sa.id, resetUpdates)));
+
+      // Remove synthesis
+      const synths = await db.SessionSynthesis.filter({ session_id: session.id });
+      await Promise.all(synths.map(sy => db.SessionSynthesis.delete(sy.id)));
+
+      await db.Session.update(session.id, { status: 'pending' });
+
+      // Refresh local state
+      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: 'pending' } : s));
+      setSessionAgents(prev => prev.map(sa =>
+        sa.session_id === session.id ? { ...sa, ...resetUpdates } : sa
+      ));
+      setSyntheses(prev => prev.filter(sy => sy.session_id !== session.id));
+    } finally {
+      setResetting(false);
+      setResetConfirmId(null);
+    }
   };
 
   return (
@@ -274,16 +307,76 @@ export default function Sessions() {
                   )}
                 </div>
 
-                {/* Delete button — must stop propagation so Link doesn't navigate */}
-                <button
-                  onClick={(e) => handleDelete(e, session)}
-                  style={{ position: 'absolute', top: 12, right: 12, padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#C0392B', opacity: 0.5 }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                  onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-                  title="Delete session"
-                >
-                  <Trash2 style={{ width: 14, height: 14 }} />
-                </button>
+                {/* Action buttons */}
+                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setResetConfirmId(session.id); }}
+                    style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#D68910', opacity: 0.5 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                    title="Reset all agent assessments"
+                  >
+                    <RotateCcw style={{ width: 14, height: 14 }} />
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, session)}
+                    style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#C0392B', opacity: 0.5 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                    title="Delete session"
+                  >
+                    <Trash2 style={{ width: 14, height: 14 }} />
+                  </button>
+                </div>
+
+                {/* Inline reset confirmation overlay */}
+                {resetConfirmId === session.id && (
+                  <div
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    style={{
+                      position: 'absolute', inset: 0, borderRadius: 'inherit', zIndex: 10,
+                      backgroundColor: 'rgba(15,15,20,0.92)',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+                      padding: 24,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <AlertTriangle style={{ width: 18, height: 18, color: '#D68910', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: '#D68910', letterSpacing: '0.08em' }}>
+                        RESET ALL ASSESSMENTS?
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11.5, color: 'var(--wr-text-muted)', textAlign: 'center', maxWidth: 340, lineHeight: 1.5 }}>
+                      This will clear all Round 1 and Round 2 agent assessments, pre-session briefings, confidence scores, and the synthesis report for <strong style={{ color: 'var(--wr-text-secondary)' }}>{session.name}</strong>. The session and its agents will remain but all generated data will be permanently deleted.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={(e) => handleReset(e, session)}
+                        disabled={resetting}
+                        style={{
+                          padding: '7px 18px', borderRadius: 5, border: '1px solid #C0392B',
+                          backgroundColor: 'rgba(192,57,43,0.15)', color: '#C0392B',
+                          fontSize: 11.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                          cursor: resetting ? 'not-allowed' : 'pointer', letterSpacing: '0.06em',
+                          opacity: resetting ? 0.6 : 1,
+                        }}
+                      >
+                        {resetting ? 'RESETTING...' : 'YES, RESET'}
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setResetConfirmId(null); }}
+                        style={{
+                          padding: '7px 18px', borderRadius: 5, border: '1px solid var(--wr-border)',
+                          backgroundColor: 'transparent', color: 'var(--wr-text-muted)',
+                          fontSize: 11.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', cursor: 'pointer',
+                          letterSpacing: '0.06em',
+                        }}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                )}
               </Link>
             );
           })}
