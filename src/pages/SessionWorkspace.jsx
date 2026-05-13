@@ -4,14 +4,14 @@ import { generateRound1, generateRound2, generateRound0, generateReaction, gener
 import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, Volume2 } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, Volume2, StopCircle, Trash2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
 
-function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking }) {
+function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking, onReset }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -97,6 +97,11 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
               {onSpeak && (
                 <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking} title="Speak this assessment">
                   {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
+                </WrButton>
+              )}
+              {onReset && (
+                <WrButton variant="secondary" size="xs" onClick={onReset} title="Clear this assessment">
+                  <Trash2 className="w-3 h-3" />
                 </WrButton>
               )}
             </div>
@@ -322,6 +327,7 @@ export default function SessionWorkspace() {
   const [criticalToast, setCriticalToast] = useState(null);
   const toastTimer = useRef(null);
   const [speakingAgentId, setSpeakingAgentId] = useState(null);
+  const cancelRef = useRef(false);
 
   const load = async () => {
     if (!db) return;
@@ -426,7 +432,22 @@ export default function SessionWorkspace() {
     load();
   };
 
+  const resetAgent = async (sa, round) => {
+    const updates = round === 1
+      ? { round1_assessment: null, round1_severity: null, round1_confidence: null, compound_chain_text: null, status: 'pending' }
+      : { round2_rebuttal: null, round2_revised_severity: null, round2_confidence: null, status: 'r1_done' };
+    await db.SessionAgent.update(sa.id, updates);
+    setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, ...updates } : s));
+  };
+
+  const resetAllAgents = async (round) => {
+    for (const sa of sessionAgents) {
+      await resetAgent(sa, round);
+    }
+  };
+
   const generateRound = async (round) => {
+    cancelRef.current = false;
     setGeneratingAll(true);
     setGenError(null);
     setProgress({ current: 0, total: sessionAgents.length });
@@ -439,6 +460,10 @@ export default function SessionWorkspace() {
     }
 
     for (let i = 0; i < sessionAgents.length; i++) {
+      if (cancelRef.current) {
+        cancelRef.current = false;
+        break;
+      }
       const sa = sessionAgents[i];
       const agent = getAgent(sa.agent_id);
       if (!agent) continue;
@@ -487,13 +512,16 @@ export default function SessionWorkspace() {
       if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
     }
 
+    const allDone = round === 1
+      ? sessionAgents.every(sa => sa.round1_assessment)
+      : sessionAgents.every(sa => sa.round2_rebuttal);
     const newStatus = round === 1 ? 'round1' : 'round2';
     await db.Session.update(id, { status: newStatus });
     setGeneratingAll(false);
     setProgress({ current: 0, total: 0 });
 
-    // After round 2, switch to synthesis tab and auto-generate
-    if (round === 2) {
+    // After round 2 fully completes, switch to synthesis and auto-generate
+    if (round === 2 && allDone) {
       setTab('SYNTHESIS');
       setTimeout(() => generateSynthesis(), 500);
     } else {
@@ -773,17 +801,30 @@ export default function SessionWorkspace() {
                   ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Briefing...</>
                   : <><BookOpen className="w-3.5 h-3.5" /> Brief Agents</>}
               </WrButton>
-              <WrButton
-                size="sm"
-                onClick={() => generateRound(round)}
-                disabled={generatingAll}
-              >
-                {generatingAll ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {progress.current}/{progress.total}</>
-                ) : (
-                  <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
-                )}
-              </WrButton>
+              {generatingAll ? (
+                <WrButton size="sm" variant="secondary" onClick={() => { cancelRef.current = true; }} style={{ borderColor: '#C0392B', color: '#C0392B' }}>
+                  <StopCircle className="w-3.5 h-3.5" /> Stop
+                </WrButton>
+              ) : (
+                <>
+                  <WrButton
+                    size="sm"
+                    onClick={() => generateRound(round)}
+                    disabled={generatingAll}
+                  >
+                    <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
+                  </WrButton>
+                  <WrButton
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => resetAllAgents(round)}
+                    title={`Clear all ${tab} assessments`}
+                    style={{ color: 'var(--wr-text-muted)' }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Reset All
+                  </WrButton>
+                </>
+              )}
             </>
           )}
           {tab === 'SYNTHESIS' && (
@@ -907,6 +948,7 @@ export default function SessionWorkspace() {
                   onUpdate={(text) => updateAgentText(sa, round, text)}
                   onSpeak={getOpenAiKey() ? speakAssessment : null}
                   speaking={speakingAgentId === getAgent(sa.agent_id)?.id}
+                  onReset={!generatingAll ? () => resetAgent(sa, round) : null}
                 />
               ))}
             </div>
