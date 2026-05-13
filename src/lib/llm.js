@@ -80,7 +80,7 @@ export async function callAnthropicStream({ messages, maxTokens = 2000, system, 
     if (streamError) break;
   }
   if (streamError) throw streamError;
-  onDone?.(fullText);
+  await onDone?.(fullText);
   return fullText;
 }
 
