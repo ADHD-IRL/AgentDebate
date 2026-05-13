@@ -115,6 +115,14 @@ export default function Settings() {
         }),
       });
       if (res.ok) {
+        // Save immediately on successful test so sessions can use the key right away
+        const trimmed = apiKey.trim();
+        localStorage.setItem('agd_anthropic_key', trimmed);
+        setWorkspaceApiKey(trimmed);
+        supabase.from('workspaces').update({ anthropic_api_key: trimmed }).eq('id', workspace?.id).then(({ error }) => {
+          if (error) console.warn('Workspace sync failed (key saved locally):', error.message);
+          else if (refreshWorkspace) refreshWorkspace();
+        });
         setTestStatus('ok');
       } else {
         const data = await res.json().catch(() => ({}));
@@ -176,7 +184,7 @@ export default function Settings() {
           </div>
           {testStatus === 'ok' && (
             <p className="text-xs mt-2 flex items-center gap-1" style={{ color: '#27AE60' }}>
-              <CheckCircle2 className="w-3.5 h-3.5" /> Key is valid and working.
+              <CheckCircle2 className="w-3.5 h-3.5" /> Key verified and saved — sessions will use this key.
             </p>
           )}
           {testStatus === 'error' && (
