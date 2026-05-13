@@ -106,8 +106,9 @@ async function callAnthropic({ messages, maxTokens = 2000, system }) {
     },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || 'Anthropic API error');
+  const data = await res.json().catch(() => null);
+  if (!res.ok || (data && data.error)) throw new Error(data?.error?.message || `Anthropic API error ${res.status}`);
+  if (!data) throw new Error(`Anthropic API error ${res.status} (non-JSON response)`);
   return data.content[0].text.trim();
 }
 
