@@ -223,7 +223,7 @@ export default function LiveDebateRoom() {
   const [currentSpeakerId, setCurrentSpeakerId]   = useState(null);
   const [playingMessageId, setPlayingMessageId]   = useState(null);
   const [mutedAgents, setMutedAgents]             = useState({});
-  const [autoPlayTTS, setAutoPlayTTS]             = useState(false);
+  const [autoPlayTTS, setAutoPlayTTS]             = useState(true);
   const [playbackSpeed, setPlaybackSpeed]         = useState(1.0);
 
   const transcriptRef       = useRef(null);
@@ -384,6 +384,8 @@ export default function LiveDebateRoom() {
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
+            // Update local state so Round 2 othersCtx sees the fresh assessment
+            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, status: 'r1_done' } : s));
             await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'r1_done' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
             await attachTTS(tempId, assessment, sa.agent_id);
@@ -412,7 +414,10 @@ export default function LiveDebateRoom() {
     push(sysMsg);
     await db.SessionMessage.create({ session_id: id, ...sysMsg, round: 2, metadata: {} });
 
-    const othersCtx = (currentId) => sessionAgents
+    // Fetch fresh agents from DB — local sessionAgents state may be stale
+    const freshAgents = await db.SessionAgent.filter({ session_id: id });
+    setSessionAgents(freshAgents);
+    const othersCtx = (currentId) => freshAgents
       .filter(sa => sa.agent_id !== currentId && sa.round1_assessment)
       .map(sa => `=== ${profiles[sa.agent_id]?.name} ===\n${sa.round1_assessment}`)
       .join('\n\n---\n\n');
@@ -434,6 +439,7 @@ export default function LiveDebateRoom() {
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
+            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' } : s));
             await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
             await attachTTS(tempId, assessment, sa.agent_id);
@@ -573,7 +579,7 @@ export default function LiveDebateRoom() {
               <Play className="w-3 h-3" /> {label}
             </button>
           ))}
-          <button disabled={!canSynth} onClick={() => navigate(`/sessions/${id}`)}
+          <button disabled={!canSynth} onClick={() => navigate(`/sessions/${id}?autoSynth=1`)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ backgroundColor: canSynth ? 'rgba(240,165,0,0.15)' : 'transparent', border: `1px solid ${canSynth ? 'var(--wr-amber)' : 'var(--wr-border)'}`, color: canSynth ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}>
             <Zap className="w-3 h-3" /> SYNTHESIZE

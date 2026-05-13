@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
 import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
 import { useWorkspace } from '@/lib/WorkspaceContext';
@@ -295,6 +295,7 @@ function SessionSettingsPanel({ session, sessionAgents, getAgent, onSaved }) {
 
 export default function SessionWorkspace() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { db, workspace } = useWorkspace();
   const [session, setSession] = useState(null);
   const [sessionAgents, setSessionAgents] = useState([]);
@@ -357,6 +358,19 @@ export default function SessionWorkspace() {
   };
 
   useEffect(() => { load(); }, [id, db]);
+
+  // Auto-trigger synthesis when navigated from LiveDebateRoom with ?autoSynth=1
+  const autoSynthFiredRef = useRef(false);
+  useEffect(() => {
+    if (!searchParams.get('autoSynth') || autoSynthFiredRef.current) return;
+    if (!session || generatingSynthesis) return;
+    if (synthesis) return; // already done
+    const allR2Done = sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal);
+    if (!allR2Done) return;
+    autoSynthFiredRef.current = true;
+    setTab('SYNTHESIS');
+    generateSynthesis();
+  }, [session, sessionAgents, synthesis, generatingSynthesis, searchParams]);
 
   const getAgent = (agentId) => agents.find(a => a.id === agentId);
   const scenario = scenarios.find(s => s.id === session?.scenario_id);
