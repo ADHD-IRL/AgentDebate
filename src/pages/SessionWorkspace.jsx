@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
+import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing } from 'lucide-react';
@@ -446,6 +447,15 @@ export default function SessionWorkspace() {
       await db.SessionAgent.update(sa.id, updates);
       showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
 
+      // Speak the assessment if OpenAI key is present
+      if (getOpenAiKey()) {
+        const text = res.assessment?.substring(0, 400) || '';
+        const voiceId = DEFAULT_VOICES[i % DEFAULT_VOICES.length];
+        synthesize(text, voiceId)
+          .then(({ url }) => { new Audio(url).play(); })
+          .catch(() => {});
+      }
+
       if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
     }
 
@@ -453,7 +463,14 @@ export default function SessionWorkspace() {
     await db.Session.update(id, { status: newStatus });
     setGeneratingAll(false);
     setProgress({ current: 0, total: 0 });
-    load();
+
+    // After round 2, switch to synthesis tab and auto-generate
+    if (round === 2) {
+      setTab('SYNTHESIS');
+      setTimeout(() => generateSynthesis(), 500);
+    } else {
+      load();
+    }
   };
 
   const generateSingleAgent = async (sa, round) => {
@@ -500,6 +517,15 @@ export default function SessionWorkspace() {
 
       await db.SessionAgent.update(sa.id, updates);
       showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
+
+      if (getOpenAiKey()) {
+        const text = res.assessment?.substring(0, 400) || '';
+        const agentIdx = sessionAgents.findIndex(s => s.agent_id === sa.agent_id);
+        const voiceId = DEFAULT_VOICES[agentIdx % DEFAULT_VOICES.length];
+        synthesize(text, voiceId)
+          .then(({ url }) => { new Audio(url).play(); })
+          .catch(() => {});
+      }
     } catch (e) {
       await db.SessionAgent.update(sa.id, { status: 'pending' });
       setGenError(e.message || 'Generation failed');
@@ -586,6 +612,9 @@ export default function SessionWorkspace() {
       }
       await db.Session.update(id, { status: 'complete' });
       setSynthStatus('Complete.');
+      load();
+    } catch (e) {
+      setGenError(e.message || 'Synthesis failed — check API key and try again');
       load();
     } finally {
       timers.forEach(clearTimeout);
