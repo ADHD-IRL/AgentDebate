@@ -4,14 +4,14 @@ import { generateRound1, generateRound2, generateRound0, generateReaction, gener
 import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, Volume2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
 
-function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate }) {
+function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -94,6 +94,11 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate }) {
             <div className="flex gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--wr-border)' }}>
               <WrButton variant="secondary" size="xs" onClick={() => { setEditText(text); setEditing(true); }}>Edit</WrButton>
               <WrButton variant="secondary" size="xs" onClick={onGenerate}><RefreshCw className="w-3 h-3" /> Regen</WrButton>
+              {onSpeak && (
+                <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking} title="Speak this assessment">
+                  {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
+                </WrButton>
+              )}
             </div>
           </div>
         ) : (
@@ -315,6 +320,7 @@ export default function SessionWorkspace() {
   const [loadingReactions, setLoadingReactions] = useState(false);
   const [criticalToast, setCriticalToast] = useState(null);
   const toastTimer = useRef(null);
+  const [speakingAgentId, setSpeakingAgentId] = useState(null);
 
   const load = async () => {
     if (!db) return;
@@ -368,6 +374,23 @@ export default function SessionWorkspace() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setCriticalToast(agentName);
     toastTimer.current = setTimeout(() => setCriticalToast(null), 7000);
+  };
+
+  const speakAssessment = async (text, agent) => {
+    if (!getOpenAiKey() || !text) return;
+    const agentIdx = sessionAgents.findIndex(sa => sa.agent_id === agent?.id);
+    const voiceId = DEFAULT_VOICES[agentIdx % DEFAULT_VOICES.length];
+    setSpeakingAgentId(agent?.id);
+    try {
+      const { url } = await synthesize(text.substring(0, 500), voiceId);
+      const audio = new Audio(url);
+      audio.onended = () => setSpeakingAgentId(null);
+      audio.onerror = () => setSpeakingAgentId(null);
+      await audio.play();
+    } catch (e) {
+      console.warn('TTS failed:', e.message);
+      setSpeakingAgentId(null);
+    }
   };
 
   const briefAllAgents = async () => {
@@ -447,15 +470,6 @@ export default function SessionWorkspace() {
       await db.SessionAgent.update(sa.id, updates);
       showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
 
-      // Speak the assessment if OpenAI key is present
-      if (getOpenAiKey()) {
-        const text = res.assessment?.substring(0, 400) || '';
-        const voiceId = DEFAULT_VOICES[i % DEFAULT_VOICES.length];
-        synthesize(text, voiceId)
-          .then(({ url }) => { new Audio(url).play(); })
-          .catch(() => {});
-      }
-
       if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
     }
 
@@ -517,15 +531,6 @@ export default function SessionWorkspace() {
 
       await db.SessionAgent.update(sa.id, updates);
       showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
-
-      if (getOpenAiKey()) {
-        const text = res.assessment?.substring(0, 400) || '';
-        const agentIdx = sessionAgents.findIndex(s => s.agent_id === sa.agent_id);
-        const voiceId = DEFAULT_VOICES[agentIdx % DEFAULT_VOICES.length];
-        synthesize(text, voiceId)
-          .then(({ url }) => { new Audio(url).play(); })
-          .catch(() => {});
-      }
     } catch (e) {
       await db.SessionAgent.update(sa.id, { status: 'pending' });
       setGenError(e.message || 'Generation failed');
@@ -589,14 +594,25 @@ export default function SessionWorkspace() {
     );
 
     try {
+      // Fetch fresh data from DB — state may be stale if called right after round generation
+      const [freshSess, freshAgents, freshAgentDefs, freshScenarios] = await Promise.all([
+        db.Session.filter({ id }),
+        db.SessionAgent.filter({ session_id: id }),
+        db.Agent.list(),
+        db.Scenario.list(),
+      ]);
+      const sess = freshSess[0] || session;
+      const agentMap = Object.fromEntries(freshAgentDefs.map(a => [a.id, a]));
+      const scenarioDef = freshScenarios.find(s => s.id === sess?.scenario_id);
+
       const res = await generateSynthesisLLM({
-        session: { ...session },
-        sessionAgents: sessionAgents.map(sa => ({
+        session: sess,
+        sessionAgents: freshAgents.map(sa => ({
           ...sa,
-          agentName: getAgent(sa.agent_id)?.name,
-          discipline: getAgent(sa.agent_id)?.discipline,
+          agentName: agentMap[sa.agent_id]?.name,
+          discipline: agentMap[sa.agent_id]?.discipline,
         })),
-        scenarioContext: scenario?.context_document || '',
+        scenarioContext: scenarioDef?.context_document || '',
       });
 
       const existing = synthesis;
@@ -875,6 +891,8 @@ export default function SessionWorkspace() {
                   round={round}
                   onGenerate={() => generateSingleAgent(sa, round)}
                   onUpdate={(text) => updateAgentText(sa, round, text)}
+                  onSpeak={getOpenAiKey() ? speakAssessment : null}
+                  speaking={speakingAgentId === getAgent(sa.agent_id)?.id}
                 />
               ))}
             </div>
