@@ -1,11 +1,12 @@
 import { Sparkline, Delta, SEV_COLOR } from './atoms';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const TILES = [
-  { key: 'critical', label: 'Critical findings', format: 'count', good: 'down', severe: true },
-  { key: 'open',     label: 'Open findings',     format: 'count', good: 'down', severe: false },
-  { key: 'sessions', label: 'Sessions / period', format: 'count', good: 'up',   severe: false },
-  { key: 'conf',     label: 'Avg. confidence',   format: 'pct',   good: 'up',   severe: false },
-  { key: 'drift',    label: 'Median R1→R2 drift', format: 'signed', good: 'down', severe: false },
+  { key: 'critical', label: 'Critical findings', format: 'count', good: 'down', severe: true,  tip: 'Filter sessions by critical-severity findings' },
+  { key: 'open',     label: 'Open findings',     format: 'count', good: 'down', severe: false, tip: 'Filter to sessions with findings still in review' },
+  { key: 'sessions', label: 'Sessions / period', format: 'count', good: 'up',   severe: false, tip: 'Filter to sessions in the selected date range' },
+  { key: 'conf',     label: 'Avg. confidence',   format: 'pct',   good: 'up',   severe: false, tip: 'Average agent completion rate across sessions' },
+  { key: 'drift',    label: 'Median R1→R2 drift', format: 'signed', good: 'down', severe: false, tip: 'Median severity change from Round 1 to Round 2 (positive = escalated)' },
 ];
 
 function fmt(value, format) {
@@ -30,8 +31,9 @@ export default function KpiStrip({ kpis, activeFilter, onFilter }) {
         const color  = tile.severe && kpi.value > 0 ? SEV_COLOR.CRITICAL : 'var(--wr-text-primary)';
 
         return (
+          <Tooltip key={tile.key}>
+          <TooltipTrigger asChild>
           <button
-            key={tile.key}
             onClick={() => onFilter(active ? null : tile.key)}
             style={{
               flex: 1,
@@ -87,6 +89,9 @@ export default function KpiStrip({ kpis, activeFilter, onFilter }) {
               }} />
             )}
           </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{tile.tip}</TooltipContent>
+          </Tooltip>
         );
       })}
     </div>
