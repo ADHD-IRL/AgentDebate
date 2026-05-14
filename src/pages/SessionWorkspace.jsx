@@ -128,7 +128,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
   );
 }
 
-function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError }) {
+function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError, streamText }) {
   const [resolvedText, setResolvedText] = useState('');
 
   useEffect(() => {
@@ -169,61 +169,26 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
 
   if (generating) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <div className="w-full max-w-md rounded-lg p-6" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-          <div className="flex items-center gap-3 mb-5">
-            <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" style={{ color: 'var(--wr-amber)' }} />
-            <span className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>SYNTHESIS ENGINE RUNNING</span>
-          </div>
-          <div className="space-y-2">
-            {[
-              'Collecting agent assessments...',
-              'Analyzing Round 1 assessments across all agents...',
-              'Cross-referencing Round 2 rebuttals and severity shifts...',
-              'Identifying consensus findings and contested positions...',
-              'Mapping compound threat chains from agent interactions...',
-              'Surfacing blind spots and uncovered threat vectors...',
-              'Formulating priority mitigations...',
-              'Extracting sharpest insights and attributions...',
-              'Assembling final synthesis report...',
-              'Uploading and storing synthesis output...',
-            ].map((step, i) => {
-              const STEPS = [
-                'Collecting agent assessments...',
-                'Analyzing Round 1 assessments across all agents...',
-                'Cross-referencing Round 2 rebuttals and severity shifts...',
-                'Identifying consensus findings and contested positions...',
-                'Mapping compound threat chains from agent interactions...',
-                'Surfacing blind spots and uncovered threat vectors...',
-                'Formulating priority mitigations...',
-                'Extracting sharpest insights and attributions...',
-                'Assembling final synthesis report...',
-                'Uploading and storing synthesis output...',
-              ];
-              const isActive = synthStatus === step;
-              const isDone = synthStatus && STEPS.indexOf(synthStatus) > i;
-              return (
-                <div key={i} className="flex items-center gap-2.5 py-1">
-                  <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                    {isDone ? (
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--wr-low)' }} />
-                    ) : isActive ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--wr-amber)' }} />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--wr-border)' }} />
-                    )}
-                  </div>
-                  <span className="text-xs font-mono" style={{
-                    color: isDone ? 'var(--wr-low)' : isActive ? 'var(--wr-text-primary)' : 'var(--wr-text-muted)',
-                    fontWeight: isActive ? 600 : 400,
-                  }}>
-                    {step}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+      <div className="py-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: 'var(--wr-amber)' }} />
+          <span className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>
+            {synthStatus || 'SYNTHESIS ENGINE RUNNING'}
+          </span>
         </div>
+        {streamText ? (
+          <div className="rounded p-4 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-y-auto max-h-[60vh]"
+            style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-secondary)' }}>
+            {streamText}
+            <span className="inline-block w-1.5 h-3 ml-0.5 animate-pulse" style={{ backgroundColor: 'var(--wr-amber)' }} />
+          </div>
+        ) : (
+          <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+            <div className="h-2 rounded w-3/4 mb-2 animate-pulse" style={{ backgroundColor: 'var(--wr-border)' }} />
+            <div className="h-2 rounded w-1/2 mb-2 animate-pulse" style={{ backgroundColor: 'var(--wr-border)' }} />
+            <div className="h-2 rounded w-2/3 animate-pulse" style={{ backgroundColor: 'var(--wr-border)' }} />
+          </div>
+        )}
       </div>
     );
   }
@@ -328,6 +293,7 @@ export default function SessionWorkspace() {
   const [sessionAgents, setSessionAgents] = useState([]);
   const [agents, setAgents] = useState([]);
   const [synthesis, setSynthesis] = useState(null);
+  const [synthStreamText, setSynthStreamText] = useState('');
   const [tab, setTab] = useState('ROUND 1');
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingSynthesis, setGeneratingSynthesis] = useState(false);
@@ -658,23 +624,8 @@ export default function SessionWorkspace() {
   const generateSynthesis = async () => {
     setGeneratingSynthesis(true);
     setSynthError(null);
+    setSynthStreamText('');
     setSynthStatus('Collecting agent assessments...');
-
-    const SYNTH_STEPS = [
-      { delay: 800,  msg: 'Analyzing Round 1 assessments across all agents...' },
-      { delay: 2500, msg: 'Cross-referencing Round 2 rebuttals and severity shifts...' },
-      { delay: 5000, msg: 'Identifying consensus findings and contested positions...' },
-      { delay: 9000, msg: 'Mapping compound threat chains from agent interactions...' },
-      { delay: 14000, msg: 'Surfacing blind spots and uncovered threat vectors...' },
-      { delay: 19000, msg: 'Formulating priority mitigations...' },
-      { delay: 24000, msg: 'Extracting sharpest insights and attributions...' },
-      { delay: 29000, msg: 'Assembling final synthesis report...' },
-      { delay: 34000, msg: 'Uploading and storing synthesis output...' },
-    ];
-
-    const timers = SYNTH_STEPS.map(({ delay, msg }) =>
-      setTimeout(() => setSynthStatus(msg), delay)
-    );
 
     try {
       // Fetch fresh data from DB — state may be stale if called right after round generation
@@ -688,6 +639,7 @@ export default function SessionWorkspace() {
       const agentMap = Object.fromEntries(freshAgentDefs.map(a => [a.id, a]));
       const scenarioDef = freshScenarios.find(s => s.id === sess?.scenario_id);
 
+      setSynthStatus('Streaming synthesis...');
       const res = await generateSynthesisLLM({
         session: sess,
         sessionAgents: freshAgents.map(sa => ({
@@ -696,6 +648,7 @@ export default function SessionWorkspace() {
           discipline: agentMap[sa.agent_id]?.discipline,
         })),
         scenarioContext: scenarioDef?.context_document || '',
+        onToken: (_tok, full) => setSynthStreamText(full),
       });
 
       const existing = synthesis;
@@ -710,13 +663,13 @@ export default function SessionWorkspace() {
         await db.SessionSynthesis.create(synthData);
       }
       await db.Session.update(id, { status: 'complete' });
-      setSynthStatus('Complete.');
+      setSynthStreamText('');
       load();
     } catch (e) {
       setSynthError(e.message || 'Synthesis failed — check your Anthropic API key and try again.');
+      setSynthStreamText('');
       load();
     } finally {
-      timers.forEach(clearTimeout);
       setGeneratingSynthesis(false);
       setSynthStatus('');
     }
@@ -1083,6 +1036,7 @@ export default function SessionWorkspace() {
             synthStatus={synthStatus}
             r2Done={sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal)}
             synthError={synthError}
+            streamText={synthStreamText}
           />
         )}
 

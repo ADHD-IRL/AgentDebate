@@ -632,7 +632,7 @@ function parseCompoundChains(chainsText) {
   return chains;
 }
 
-export async function generateSynthesis({ session, sessionAgents, scenarioContext }) {
+export async function generateSynthesis({ session, sessionAgents, scenarioContext, onToken }) {
   const truncated = (scenarioContext || '').substring(0, 1500);
   const agentsText = sessionAgents.map(sa => {
     const parts = [`=== ${sa.agentName} (${sa.discipline}) ===`];
@@ -685,7 +685,11 @@ List 2-4 chains. Each must have at least 3 steps.)
 
 Write analytically. Be specific. Cite agents by name.`;
 
-  const synthesis = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1800 });
+  const synthesis = await callAnthropicStream({
+    messages: [{ role: 'user', content: prompt }],
+    maxTokens: 1800,
+    onToken,
+  });
   const chainsSection = extractSection(synthesis, 'COMPOUND CHAINS');
   const compound_chains = parseCompoundChains(chainsSection);
   return { synthesis, compound_chains, synthesis_url: null };
