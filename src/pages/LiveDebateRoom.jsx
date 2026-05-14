@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert, Volume2, VolumeX, ArrowRight, StopCircle, Trash2, RotateCcw } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   generateRound1Stream, generateRound2Stream,
   generateAgentReply, generateAgentReplyWithTools,
@@ -156,12 +157,22 @@ function RosterRow({ agent, color, status, muted, onToggleMute, onAddress }) {
           {sev.slice(0, 4)}
         </span>
       )}
-      <button onClick={onToggleMute} title={muted ? 'Unmute TTS' : 'Mute TTS'} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: muted ? 'var(--wr-text-muted)' : 'var(--wr-amber)' }}>
-        {muted ? <VolumeX style={{ width: 12, height: 12 }} /> : <Volume2 style={{ width: 12, height: 12 }} />}
-      </button>
-      <button onClick={onAddress} title="Address this agent" style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--wr-text-muted)' }}>
-        <ArrowRight style={{ width: 12, height: 12 }} />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button onClick={onToggleMute} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: muted ? 'var(--wr-text-muted)' : 'var(--wr-amber)' }}>
+            {muted ? <VolumeX style={{ width: 12, height: 12 }} /> : <Volume2 style={{ width: 12, height: 12 }} />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">{muted ? 'Unmute TTS for this agent' : 'Mute TTS for this agent'}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button onClick={onAddress} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--wr-text-muted)' }}>
+            <ArrowRight style={{ width: 12, height: 12 }} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Direct your next message to this agent only</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -592,50 +603,80 @@ export default function LiveDebateRoom() {
           {scenario && <span className="text-xs truncate hidden sm:block" style={{ color: 'var(--wr-text-muted)' }}>· {scenario.name}</span>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => setToolsEnabled(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
-            style={{ backgroundColor: toolsEnabled ? 'rgba(26,188,156,0.12)' : 'transparent', border: `1px solid ${toolsEnabled ? '#1ABC9C' : 'var(--wr-border)'}`, color: toolsEnabled ? '#1ABC9C' : 'var(--wr-text-muted)' }}>
-            <FlaskConical className="w-3 h-3" /> TOOLS {toolsEnabled ? 'ON' : 'OFF'}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button onClick={() => setToolsEnabled(v => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                style={{ backgroundColor: toolsEnabled ? 'rgba(26,188,156,0.12)' : 'transparent', border: `1px solid ${toolsEnabled ? '#1ABC9C' : 'var(--wr-border)'}`, color: toolsEnabled ? '#1ABC9C' : 'var(--wr-text-muted)' }}>
+                <FlaskConical className="w-3 h-3" /> TOOLS {toolsEnabled ? 'ON' : 'OFF'}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Allow agents to use web search and document fetch during the debate</TooltipContent>
+          </Tooltip>
           {running ? (
-            <button onClick={stopRound}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
-              style={{ backgroundColor: 'rgba(192,57,43,0.12)', border: '1px solid #C0392B', color: '#C0392B' }}>
-              <StopCircle className="w-3 h-3" /> STOP
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={stopRound}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                  style={{ backgroundColor: 'rgba(192,57,43,0.12)', border: '1px solid #C0392B', color: '#C0392B' }}>
+                  <StopCircle className="w-3 h-3" /> STOP
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Stop generation after the current agent finishes</TooltipContent>
+            </Tooltip>
           ) : (
             <>
               {[
-                { label: 'ROUND 1', can: canR1, action: startRound1, color: '#2E86AB' },
-                { label: 'ROUND 2', can: canR2, action: startRound2, color: '#D68910' },
-              ].map(({ label, can, action, color }) => (
-                <button key={label} onClick={action} disabled={!can}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: can ? `${color}18` : 'transparent', border: `1px solid ${can ? color : 'var(--wr-border)'}`, color: can ? color : 'var(--wr-text-muted)' }}>
-                  <Play className="w-3 h-3" /> {label}
-                </button>
+                { label: 'ROUND 1', can: canR1, action: startRound1, color: '#2E86AB', tip: 'Run independent Round 1 assessments for all agents' },
+                { label: 'ROUND 2', can: canR2, action: startRound2, color: '#D68910', tip: 'Run Round 2 rebuttals — agents read each other\'s Round 1 first' },
+              ].map(({ label, can, action, color, tip }) => (
+                <Tooltip key={label}>
+                  <TooltipTrigger asChild>
+                    <button onClick={action} disabled={!can}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: can ? `${color}18` : 'transparent', border: `1px solid ${can ? color : 'var(--wr-border)'}`, color: can ? color : 'var(--wr-text-muted)' }}>
+                      <Play className="w-3 h-3" /> {label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{tip}</TooltipContent>
+                </Tooltip>
               ))}
               {phase === 'r1done' && (
-                <button onClick={() => resetAllAgents(1)} title="Clear all Round 1 assessments"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
-                  style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
-                  <RotateCcw className="w-3 h-3" /> RESET R1
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => resetAllAgents(1)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                      style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+                      <RotateCcw className="w-3 h-3" /> RESET R1
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Clear all Round 1 assessments and return to pending</TooltipContent>
+                </Tooltip>
               )}
               {phase === 'r2done' && (
-                <button onClick={() => resetAllAgents(2)} title="Clear all Round 2 assessments"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
-                  style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
-                  <RotateCcw className="w-3 h-3" /> RESET R2
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => resetAllAgents(2)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                      style={{ backgroundColor: 'transparent', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+                      <RotateCcw className="w-3 h-3" /> RESET R2
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Clear all Round 2 rebuttals and return to r1done</TooltipContent>
+                </Tooltip>
               )}
             </>
           )}
-          <button disabled={!canSynth} onClick={() => navigate(`/sessions/${id}?autoSynth=1`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ backgroundColor: canSynth ? 'rgba(240,165,0,0.15)' : 'transparent', border: `1px solid ${canSynth ? 'var(--wr-amber)' : 'var(--wr-border)'}`, color: canSynth ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}>
-            <Zap className="w-3 h-3" /> SYNTHESIZE
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button disabled={!canSynth} onClick={() => navigate(`/sessions/${id}?autoSynth=1`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold font-mono transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ backgroundColor: canSynth ? 'rgba(240,165,0,0.15)' : 'transparent', border: `1px solid ${canSynth ? 'var(--wr-amber)' : 'var(--wr-border)'}`, color: canSynth ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}>
+                <Zap className="w-3 h-3" /> SYNTHESIZE
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Generate synthesis from Round 2 assessments in the session workspace</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -711,13 +752,17 @@ export default function LiveDebateRoom() {
                 className="flex-1 px-3 py-2 text-sm rounded outline-none resize-none"
                 style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', minHeight: 36 }}
               />
-              <button
-                onClick={() => interrupt()}
-                title="Raise hand / interrupt  (H)"
-                className="flex items-center justify-center rounded transition-opacity hover:opacity-70"
-                style={{ width: 34, height: 34, border: '1px solid var(--wr-border)', backgroundColor: 'transparent', color: 'var(--wr-text-muted)', cursor: 'pointer', flexShrink: 0 }}>
-                ✋
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => interrupt()}
+                    className="flex items-center justify-center rounded transition-opacity hover:opacity-70"
+                    style={{ width: 34, height: 34, border: '1px solid var(--wr-border)', backgroundColor: 'transparent', color: 'var(--wr-text-muted)', cursor: 'pointer', flexShrink: 0 }}>
+                    ✋
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Interrupt current speaker and take the floor (H)</TooltipContent>
+              </Tooltip>
               <button onClick={handleAsk} disabled={asking || !question.trim()}
                 className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                 style={{ backgroundColor: 'var(--wr-amber)', color: '#0D1B2A' }}>
