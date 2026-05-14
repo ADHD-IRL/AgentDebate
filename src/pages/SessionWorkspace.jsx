@@ -471,62 +471,79 @@ export default function SessionWorkspace() {
       await db.Session.update(id, { facilitator_note: facilitatorNote });
     }
 
-    for (let i = 0; i < sessionAgents.length; i++) {
-      if (cancelRef.current) {
-        cancelRef.current = false;
-        break;
+    let completedCount = 0;
+    let stuckSaId = null;
+
+    try {
+      for (let i = 0; i < sessionAgents.length; i++) {
+        if (cancelRef.current) {
+          cancelRef.current = false;
+          break;
+        }
+        const sa = sessionAgents[i];
+        const agent = getAgent(sa.agent_id);
+        if (!agent) continue;
+
+        setProgress({ current: i + 1, total: sessionAgents.length });
+
+        const statusKey = round === 1 ? 'generating_r1' : 'generating_r2';
+        stuckSaId = sa.id;
+        await db.SessionAgent.update(sa.id, { status: statusKey });
+        setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, status: statusKey } : s));
+
+        const othersText = others
+          .filter(o => o.agent_id !== sa.agent_id)
+          .map(o => {
+            const oAgent = getAgent(o.agent_id);
+            return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
+          }).join('\n\n');
+
+        const fn = round === 1 ? generateRound1 : generateRound2;
+        const res = await fn({
+          agent: { ...agent },
+          scenarioContext: scenario?.context_document || '',
+          phaseFocus: session?.phase_focus || '',
+          othersAssessments: othersText,
+          threatCatalog: threats,
+          chainContext,
+          facilitator_note: facilitatorNote,
+        });
+
+        const updates = round === 1 ? {
+          round1_assessment: res.assessment,
+          round1_severity: res.severity || agent.severity_default,
+          round1_confidence: res.confidence,
+          compound_chain_text: res.compound_chain_text || null,
+          status: 'r1_done',
+        } : {
+          round2_rebuttal: res.assessment,
+          round2_revised_severity: res.severity || sa.round1_severity,
+          round2_confidence: res.confidence,
+          compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
+          status: 'complete',
+        };
+
+        await db.SessionAgent.update(sa.id, updates);
+        setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, ...updates } : s));
+        showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
+        completedCount++;
+        stuckSaId = null;
+
+        if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
       }
-      const sa = sessionAgents[i];
-      const agent = getAgent(sa.agent_id);
-      if (!agent) continue;
-
-      setProgress({ current: i + 1, total: sessionAgents.length });
-
-      const statusKey = round === 1 ? 'generating_r1' : 'generating_r2';
-      await db.SessionAgent.update(sa.id, { status: statusKey });
-      setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, status: statusKey } : s));
-
-      const othersText = others
-        .filter(o => o.agent_id !== sa.agent_id)
-        .map(o => {
-          const oAgent = getAgent(o.agent_id);
-          return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
-        }).join('\n\n');
-
-      const fn = round === 1 ? generateRound1 : generateRound2;
-      const res = await fn({
-        agent: { ...agent },
-        scenarioContext: scenario?.context_document || '',
-        phaseFocus: session?.phase_focus || '',
-        othersAssessments: othersText,
-        threatCatalog: threats,
-        chainContext,
-        facilitator_note: facilitatorNote,
-      });
-
-      const updates = round === 1 ? {
-        round1_assessment: res.assessment,
-        round1_severity: res.severity || agent.severity_default,
-        round1_confidence: res.confidence,
-        compound_chain_text: res.compound_chain_text || null,
-        status: 'r1_done',
-      } : {
-        round2_rebuttal: res.assessment,
-        round2_revised_severity: res.severity || sa.round1_severity,
-        round2_confidence: res.confidence,
-        compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
-        status: 'complete',
-      };
-
-      await db.SessionAgent.update(sa.id, updates);
-      showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
-
-      if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
+    } catch (e) {
+      if (stuckSaId) {
+        const resetStatus = round === 1 ? 'pending' : 'r1_done';
+        await db.SessionAgent.update(stuckSaId, { status: resetStatus }).catch(() => {});
+        setSessionAgents(prev => prev.map(s => s.id === stuckSaId ? { ...s, status: resetStatus } : s));
+      }
+      setGenError(e.message || 'Generation failed');
+      setGeneratingAll(false);
+      setProgress({ current: 0, total: 0 });
+      return;
     }
 
-    const allDone = round === 1
-      ? sessionAgents.every(sa => sa.round1_assessment)
-      : sessionAgents.every(sa => sa.round2_rebuttal);
+    const allDone = completedCount === sessionAgents.length;
     const newStatus = round === 1 ? 'round1' : 'round2';
     await db.Session.update(id, { status: newStatus });
     setGeneratingAll(false);
