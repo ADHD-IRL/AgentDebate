@@ -181,9 +181,7 @@ export default function Sessions() {
               : total > 0 ? Math.round(((r1Done + r2Done) / (total * 2)) * 80 + (hasSynth ? 20 : 0))
               : 0;
 
-            const dest = isLive && !isDraft
-              ? `/sessions/${session.id}/live`
-              : `/sessions/${session.id}`;
+            const dest = `/sessions/${session.id}`;
 
             return (
               <Link
