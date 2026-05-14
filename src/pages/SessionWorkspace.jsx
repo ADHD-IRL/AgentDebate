@@ -258,7 +258,7 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
             <ReactMarkdown
               components={{
                 h1: ({ children }) => <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--wr-text-primary)', marginBottom: 12, marginTop: 24, borderBottom: '1px solid var(--wr-border)', paddingBottom: 8 }}>{children}</h1>,
-                h2: ({ children }) => <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--wr-amber)', marginBottom: 8, marginTop: 24, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{children}</h2>,
+                h2: ({ children }) => <h2 style={{ fontWeight: 700, color: 'var(--wr-amber)', marginBottom: 8, marginTop: 24, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{children}</h2>,
                 h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 6, marginTop: 16 }}>{children}</h3>,
                 p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 12 }}>{children}</p>,
                 ul: ({ children }) => <ul style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ul>,
