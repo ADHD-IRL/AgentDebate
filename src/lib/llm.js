@@ -144,6 +144,38 @@ Return ONLY the JSON object.`;
   return JSON.parse(match ? match[0] : text);
 }
 
+// --- recommendAgents ---
+export async function recommendAgents({ scenarioName, scenarioDescription, domain, existingAgents = [], count = 5 }) {
+  const existingList = existingAgents.length
+    ? `\nExisting agents in the library (avoid duplicates):\n${existingAgents.map(a => `- ${a.name} (${a.discipline})`).join('\n')}`
+    : '';
+  const prompt = `You are helping configure an AgentDebate red team session.
+
+Scenario: ${scenarioName || 'General analysis'}
+${scenarioDescription ? `Description: ${scenarioDescription}` : ''}
+${domain ? `Domain: ${domain}` : ''}
+${existingList}
+
+Recommend ${count} expert agent types that would provide the most valuable, diverse perspectives for analyzing this scenario. Aim for complementary disciplines that cover different risk vectors (technical, human, physical, strategic futures).
+
+Return a JSON array of ${count} objects, each with:
+{
+  "name": "short descriptive label e.g. 'Supply Chain Risk Analyst'",
+  "discipline": "2-4 word discipline",
+  "expert_type": "sentence describing the expert for AI generation",
+  "rationale": "1-2 sentences on why this perspective is valuable for this specific scenario",
+  "key_focus": "what they prioritize in analysis",
+  "cognitive_bias": "what they tend to over- or under-weight",
+  "severity_default": "CRITICAL or HIGH or MEDIUM or LOW"
+}
+
+Return ONLY the JSON array.`;
+
+  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400 });
+  const match = text.match(/\[[\s\S]*\]/);
+  return JSON.parse(match ? match[0] : text);
+}
+
 // --- generateRound0 ---
 export async function generateRound0({ agent, scenarioContext, phaseFocus }) {
   const prompt = `You are ${agent.name}, ${agent.persona_description}
