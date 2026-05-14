@@ -7,7 +7,7 @@ import {
   generateAgentReply, generateAgentReplyWithTools,
   parseSeverityFromText,
 } from '@/lib/llm';
-import { synthesize, hexToHue, DEFAULT_VOICES } from '@/lib/voice';
+import { synthesize, hexToHue, DEFAULT_VOICES, getOpenAiKey } from '@/lib/voice';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
 import AddressChips      from '@/components/debate/AddressChips';
 import PushToTalkButton  from '@/components/debate/PushToTalkButton';
@@ -802,6 +802,11 @@ export default function LiveDebateRoom() {
             <p className="text-xs font-bold font-mono tracking-widest mb-3" style={{ color: 'var(--wr-text-muted)' }}>VOICE · AUDIO</p>
             <div className="space-y-3">
               <Toggle checked={autoPlayTTS} onChange={setAutoPlayTTS} label="Auto-play TTS" desc="Agents speak responses aloud" />
+              {!getOpenAiKey() && (
+                <div className="rounded px-2.5 py-2 text-xs" style={{ backgroundColor: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', color: '#C0392B' }}>
+                  No OpenAI key — TTS is disabled. Add your key in <strong>Settings</strong>.
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <p style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--wr-text-primary)' }}>Playback speed</p>
