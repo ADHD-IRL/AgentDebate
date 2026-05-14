@@ -139,7 +139,7 @@ Return a JSON object with exactly these fields:
 
 Return ONLY the JSON object.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1024 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1024 });
   const match = text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? match[0] : text);
 }
@@ -171,7 +171,7 @@ Return a JSON array of ${count} objects, each with:
 
 Return ONLY the JSON array.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400 });
   const match = text.match(/\[[\s\S]*\]/);
   return JSON.parse(match ? match[0] : text);
 }
@@ -197,7 +197,7 @@ Write a brief pre-session self-briefing (100-150 words) — the mental preparati
 
 Write in first person as the expert. Be direct and specific.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 400 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 400 });
   return { briefing: text.trim() };
 }
 
@@ -265,7 +265,7 @@ COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain
 
 Write in first person as the expert. Be specific and opinionated.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1300 });
+  const fullText = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1300 });
   return parseMarkers(fullText, agent.severity_default);
 }
 
@@ -302,7 +302,7 @@ COMPOUND_CHAIN: [one sentence naming the most important compound threat chain th
 
 Be direct. Name names. Change your position if persuaded.`;
 
-  const fullText = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1000 });
+  const fullText = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1000 });
   return parseMarkers(fullText, agent.severity_default);
 }
 
@@ -319,7 +319,7 @@ You just read this finding from another analyst:
 
 React in 1-2 sentences — in character. Express genuine agreement, concern, or pushback from your disciplinary lens. No headings or preamble.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 120 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 120 });
   return text.trim();
 }
 
@@ -595,7 +595,7 @@ Extract all distinct threats identified or validated by agents. For each return 
 
 Return a JSON array only. No preamble.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1200 });
   const match = text.match(/\[[\s\S]*\]/);
   try { return JSON.parse(match ? match[0] : '[]'); }
   catch { return []; }
@@ -727,7 +727,7 @@ Generate 7 specific, operationally relevant threats. Return a JSON object:
 
 Make threats specific to this scenario, not generic. Include threats across multiple disciplines. Return ONLY the JSON.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
   const match = text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? match[0] : text);
 }
@@ -764,7 +764,7 @@ Generate a compound chain with ${num_steps} steps. Return a JSON object:
 
 Return ONLY the JSON.`;
 
-  const text = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
   const match = text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? match[0] : text);
 }
@@ -785,7 +785,7 @@ ${context}
 
 Return only the improved context document text. No preamble or explanation.`;
 
-  const improved = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  const improved = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
   return { improved };
 }
 
@@ -822,7 +822,7 @@ ${text}
 
 Output a clean scenario context document (3-6 paragraphs). No disclaimers.`;
 
-  const context = await callAnthropic({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+  const context = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
   return { context };
 }
 
@@ -853,7 +853,7 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
     scenarioContext ? `\nScenario Context:\n${scenarioContext}` : '',
   ].join('\n');
 
-  const raw = await callAnthropic({
+  const raw = await callAnthropicStream({
     system: CHAIN_BREAKER_SYSTEM,
     messages: [{ role: 'user', content: userMessage }],
     maxTokens: 4096,
