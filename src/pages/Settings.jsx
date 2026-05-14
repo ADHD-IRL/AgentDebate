@@ -3,6 +3,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { getModelId, setModelPref, setWorkspaceApiKey } from '@/lib/llm';
 import { getOpenAiKey, setOpenAiKey } from '@/lib/voice';
 import { supabase } from '@/lib/supabase';
@@ -170,17 +171,27 @@ export default function Settings() {
                   outline: 'none',
                 }}
               />
-              <button
-                onClick={() => setShowKey(v => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
-                style={{ color: 'var(--wr-text-muted)' }}
-              >
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowKey(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
+                    style={{ color: 'var(--wr-text-muted)' }}
+                  >
+                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left">{showKey ? 'Hide API key' : 'Show API key'}</TooltipContent>
+              </Tooltip>
             </div>
-            <WrButton onClick={handleTestKey} disabled={testing || !apiKey.trim()} variant="secondary">
-              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Test'}
-            </WrButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WrButton onClick={handleTestKey} disabled={testing || !apiKey.trim()} variant="secondary">
+                  {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Test'}
+                </WrButton>
+              </TooltipTrigger>
+              <TooltipContent side="right">Send a test request to verify this key has Messages API access</TooltipContent>
+            </Tooltip>
           </div>
           {testStatus === 'ok' && (
             <p className="text-xs mt-2 flex items-center gap-1" style={{ color: '#27AE60' }}>
@@ -216,11 +227,16 @@ export default function Settings() {
                 className="w-full px-3 py-2 rounded text-sm font-mono pr-10"
                 style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', outline: 'none' }}
               />
-              <button onClick={() => setShowOaiKey(v => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
-                style={{ color: 'var(--wr-text-muted)' }}>
-                {showOaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button onClick={() => setShowOaiKey(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100"
+                    style={{ color: 'var(--wr-text-muted)' }}>
+                    {showOaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left">{showOaiKey ? 'Hide API key' : 'Show API key'}</TooltipContent>
+              </Tooltip>
             </div>
             <WrButton onClick={() => setOpenAiKey(openAiKey)} variant="secondary">Save</WrButton>
           </div>

@@ -5,6 +5,7 @@ import { Swords, Plus, Trash2, Radio, CheckCircle2, Circle, RotateCcw, AlertTria
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const STATUS_CONFIG = {
   pending:  { color: '#546E7A', label: 'DRAFT',    draft: true  },
@@ -309,24 +310,32 @@ export default function Sessions() {
 
                 {/* Action buttons */}
                 <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setResetConfirmId(session.id); }}
-                    style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#D68910', opacity: 0.5 }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                    onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-                    title="Reset all agent assessments"
-                  >
-                    <RotateCcw style={{ width: 14, height: 14 }} />
-                  </button>
-                  <button
-                    onClick={(e) => handleDelete(e, session)}
-                    style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#C0392B', opacity: 0.5 }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                    onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-                    title="Delete session"
-                  >
-                    <Trash2 style={{ width: 14, height: 14 }} />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setResetConfirmId(session.id); }}
+                        style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#D68910', opacity: 0.5 }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                      >
+                        <RotateCcw style={{ width: 14, height: 14 }} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Reset all agent assessments to pending</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => handleDelete(e, session)}
+                        style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#C0392B', opacity: 0.5 }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                      >
+                        <Trash2 style={{ width: 14, height: 14 }} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Delete this session permanently</TooltipContent>
+                  </Tooltip>
                 </div>
 
                 {/* Inline reset confirmation overlay */}

@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertC
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
 
@@ -95,14 +96,24 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
               <WrButton variant="secondary" size="xs" onClick={() => { setEditText(text); setEditing(true); }}>Edit</WrButton>
               <WrButton variant="secondary" size="xs" onClick={onGenerate}><RefreshCw className="w-3 h-3" /> Regen</WrButton>
               {onSpeak && (
-                <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking} title="Speak this assessment">
-                  {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
-                </WrButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking}>
+                      {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
+                    </WrButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Speak this assessment aloud (requires OpenAI key)</TooltipContent>
+                </Tooltip>
               )}
               {onReset && (
-                <WrButton variant="secondary" size="xs" onClick={onReset} title="Clear this assessment">
-                  <Trash2 className="w-3 h-3" />
-                </WrButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <WrButton variant="secondary" size="xs" onClick={onReset}>
+                      <Trash2 className="w-3 h-3" />
+                    </WrButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Clear this agent's assessment</TooltipContent>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -820,47 +831,70 @@ export default function SessionWorkspace() {
           </Link>
           {(tab === 'ROUND 1' || tab === 'ROUND 2') && (
             <>
-              <WrButton
-                variant="secondary"
-                size="sm"
-                onClick={briefAllAgents}
-                disabled={briefingAll}
-                title="Generate pre-session briefings for all agents"
-              >
-                {briefingAll
-                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Briefing...</>
-                  : <><BookOpen className="w-3.5 h-3.5" /> Brief Agents</>}
-              </WrButton>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <WrButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={briefAllAgents}
+                    disabled={briefingAll}
+                  >
+                    {briefingAll
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Briefing...</>
+                      : <><BookOpen className="w-3.5 h-3.5" /> Brief Agents</>}
+                  </WrButton>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Each agent writes a 100-word pre-session reflection before Round 1</TooltipContent>
+              </Tooltip>
               {generatingAll ? (
-                <WrButton size="sm" variant="secondary" onClick={() => { cancelRef.current = true; }} style={{ borderColor: '#C0392B', color: '#C0392B' }}>
-                  <StopCircle className="w-3.5 h-3.5" /> Stop
-                </WrButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <WrButton size="sm" variant="secondary" onClick={() => { cancelRef.current = true; }} style={{ borderColor: '#C0392B', color: '#C0392B' }}>
+                      <StopCircle className="w-3.5 h-3.5" /> Stop
+                    </WrButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Stop generation after the current agent finishes</TooltipContent>
+                </Tooltip>
               ) : (
                 <>
-                  <WrButton
-                    size="sm"
-                    onClick={() => generateRound(round)}
-                    disabled={generatingAll}
-                  >
-                    <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
-                  </WrButton>
-                  <WrButton
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => resetAllAgents(round)}
-                    title={`Clear all ${tab} assessments`}
-                    style={{ color: 'var(--wr-text-muted)' }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Reset All
-                  </WrButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <WrButton
+                        size="sm"
+                        onClick={() => generateRound(round)}
+                        disabled={generatingAll}
+                      >
+                        <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
+                      </WrButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Run {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'} assessments for all agents</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <WrButton
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => resetAllAgents(round)}
+                        style={{ color: 'var(--wr-text-muted)' }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Reset All
+                      </WrButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Clear all {tab} assessments and return agents to pending</TooltipContent>
+                  </Tooltip>
                 </>
               )}
             </>
           )}
           {tab === 'SYNTHESIS' && (
-            <WrButton size="sm" onClick={generateSynthesis} disabled={generatingSynthesis}>
-              <Sparkles className="w-3.5 h-3.5" /> {generatingSynthesis ? 'Generating...' : 'Generate Synthesis'}
-            </WrButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WrButton size="sm" onClick={generateSynthesis} disabled={generatingSynthesis}>
+                  <Sparkles className="w-3.5 h-3.5" /> {generatingSynthesis ? 'Generating...' : 'Generate Synthesis'}
+                </WrButton>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Synthesize all Round 2 assessments into a consensus threat picture</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -987,18 +1021,28 @@ export default function SessionWorkspace() {
             {tab === 'ROUND 1' && sessionAgents.some(sa => sa.round1_assessment) && (
               <div className="mt-6">
                 <div className="flex items-center gap-3 mb-3">
-                  <button
-                    onClick={() => { setShowReactions(!showReactions); if (!showReactions && reactions.length === 0) generateReactions(); }}
-                    className="flex items-center gap-2 text-xs font-mono tracking-wider"
-                    style={{ color: showReactions ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    {showReactions ? 'HIDE REACTIONS' : 'SHOW LIVE REACTIONS'}
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => { setShowReactions(!showReactions); if (!showReactions && reactions.length === 0) generateReactions(); }}
+                        className="flex items-center gap-2 text-xs font-mono tracking-wider"
+                        style={{ color: showReactions ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        {showReactions ? 'HIDE REACTIONS' : 'SHOW LIVE REACTIONS'}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Simulated cross-agent reactions to each other's Round 1 assessments</TooltipContent>
+                  </Tooltip>
                   {showReactions && reactions.length > 0 && (
-                    <button onClick={generateReactions} className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
-                      <RefreshCw className="w-3 h-3 inline mr-1" />refresh
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button onClick={generateReactions} className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                          <RefreshCw className="w-3 h-3 inline mr-1" />refresh
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Regenerate all agent reactions</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
                 {showReactions && (
@@ -1082,12 +1126,17 @@ export default function SessionWorkspace() {
                     Analyze agent assessments to surface new threats and save them to this scenario.
                   </p>
                 </div>
-                <WrButton size="sm" onClick={handleExtractThreats}
-                  disabled={extracting || !sessionAgents.some(sa => sa.round1_assessment)}>
-                  {extracting
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Extracting...</>
-                    : <><ShieldAlert className="w-3.5 h-3.5" /> Extract Threats</>}
-                </WrButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <WrButton size="sm" onClick={handleExtractThreats}
+                      disabled={extracting || !sessionAgents.some(sa => sa.round1_assessment)}>
+                      {extracting
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Extracting...</>
+                        : <><ShieldAlert className="w-3.5 h-3.5" /> Extract Threats</>}
+                    </WrButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">Analyze agent assessments and save new threat vectors to this scenario's catalog</TooltipContent>
+                </Tooltip>
               </div>
 
               {!sessionAgents.some(sa => sa.round1_assessment) && (

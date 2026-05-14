@@ -8,6 +8,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const STATUS_COLOR = { draft: '#546E7A', active: '#27AE60', archived: '#C0392B' };
 
@@ -69,11 +70,16 @@ function ScenarioModal({ scenario, domains, onSave, onClose }) {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium tracking-wide" style={{ color: 'var(--wr-text-secondary)' }}>CONTEXT DOCUMENT</label>
-              <button onClick={aiAssist} disabled={aiLoading} className="flex items-center gap-1 text-xs px-2 py-1 rounded"
-                style={{ color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)', backgroundColor: 'rgba(240,165,0,0.05)' }}>
-                <Sparkles className="w-3 h-3" />
-                {aiLoading ? 'Improving...' : 'AI Assist'}
-              </button>
+              <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={aiAssist} disabled={aiLoading} className="flex items-center gap-1 text-xs px-2 py-1 rounded"
+                  style={{ color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)', backgroundColor: 'rgba(240,165,0,0.05)' }}>
+                  <Sparkles className="w-3 h-3" />
+                  {aiLoading ? 'Improving...' : 'AI Assist'}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Use AI to expand and improve the context document</TooltipContent>
+            </Tooltip>
             </div>
             {/* URL Ingestion */}
             <div className="flex gap-2 mb-2">
@@ -89,14 +95,19 @@ function ScenarioModal({ scenario, domains, onSave, onClose }) {
                   style={{ color: 'var(--wr-text-primary)' }}
                 />
               </div>
-              <button
-                onClick={fetchFromUrl}
-                disabled={urlLoading || !urlInput.trim()}
-                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded transition-colors disabled:opacity-40"
-                style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
-                <Link2 className="w-3 h-3" />
-                {urlLoading ? 'Fetching...' : 'Fetch'}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={fetchFromUrl}
+                    disabled={urlLoading || !urlInput.trim()}
+                    className="flex items-center gap-1 text-xs px-3 py-1.5 rounded transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
+                    <Link2 className="w-3 h-3" />
+                    {urlLoading ? 'Fetching...' : 'Fetch'}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Fetch and extract text from this URL into the context document</TooltipContent>
+              </Tooltip>
             </div>
             {urlError && <p className="text-xs mb-2" style={{ color: '#C0392B' }}>{urlError}</p>}
             <textarea

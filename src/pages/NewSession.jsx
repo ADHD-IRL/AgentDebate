@@ -8,6 +8,7 @@ import SeverityBadge from '@/components/ui/SeverityBadge';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import { recommendAgents, generateAgent as generateAgentLLM } from '@/lib/llm';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const MODES = [
   {
@@ -289,23 +290,28 @@ export default function NewSession() {
               <span className="text-xs" style={{ color: selectedAgents.length >= 3 ? '#27AE60' : 'var(--wr-amber)' }}>
                 {selectedAgents.length} selected {selectedAgents.length < 3 && '(min 3)'}
               </span>
-              <button
-                onClick={handleGetRecommendations}
-                disabled={loadingRecs}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: 'rgba(240,165,0,0.1)',
-                  border: '1px solid rgba(240,165,0,0.3)',
-                  color: 'var(--wr-amber)',
-                  opacity: loadingRecs ? 0.6 : 1,
-                  cursor: loadingRecs ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {loadingRecs
-                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Recommending...</>
-                  : <><Sparkles className="w-3 h-3" /> Get Recommendations</>
-                }
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleGetRecommendations}
+                    disabled={loadingRecs}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all"
+                    style={{
+                      backgroundColor: 'rgba(240,165,0,0.1)',
+                      border: '1px solid rgba(240,165,0,0.3)',
+                      color: 'var(--wr-amber)',
+                      opacity: loadingRecs ? 0.6 : 1,
+                      cursor: loadingRecs ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {loadingRecs
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> Recommending...</>
+                      : <><Sparkles className="w-3 h-3" /> Get Recommendations</>
+                    }
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">AI suggests 5 complementary agent types suited to this scenario</TooltipContent>
+              </Tooltip>
             </div>
           </div>
 
