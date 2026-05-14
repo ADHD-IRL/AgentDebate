@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { parseAnalysisConfigs } from '@/lib/chainBreakStorage';
 import { AlertTriangle, ChevronDown, LogOut } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 import KpiStrip      from '@/components/dashboard/KpiStrip';
 import PriorityQueue from '@/components/dashboard/PriorityQueue';
@@ -437,9 +438,10 @@ export default function Dashboard() {
               )}
             </div>
             {/* Sign out */}
+            <Tooltip>
+            <TooltipTrigger asChild>
             <button
               onClick={handleSignOut}
-              title="Sign out"
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '6px 10px', borderRadius: 6,
@@ -454,6 +456,9 @@ export default function Dashboard() {
               <LogOut style={{ width: 12, height: 12 }} />
               Sign out
             </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Sign out of your workspace</TooltipContent>
+            </Tooltip>
           </div>
         }
       />

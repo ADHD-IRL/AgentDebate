@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
 import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
@@ -226,9 +227,26 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
       </div>
       {resolvedText && (
         <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-          <pre className="text-sm whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--wr-text-secondary)', fontFamily: 'Inter, sans-serif' }}>
-            {resolvedText}
-          </pre>
+          <div className="prose-synthesis">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--wr-text-primary)', marginBottom: 12, marginTop: 24, borderBottom: '1px solid var(--wr-border)', paddingBottom: 8 }}>{children}</h1>,
+                h2: ({ children }) => <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--wr-amber)', marginBottom: 8, marginTop: 24, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{children}</h2>,
+                h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 6, marginTop: 16 }}>{children}</h3>,
+                p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 12 }}>{children}</p>,
+                ul: ({ children }) => <ul style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ul>,
+                ol: ({ children }) => <ol style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ol>,
+                li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 4 }}>{children}</li>,
+                strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
+                em: ({ children }) => <em style={{ color: 'var(--wr-text-muted)', fontStyle: 'italic' }}>{children}</em>,
+                hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--wr-border)', margin: '20px 0' }} />,
+                code: ({ children }) => <code style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', backgroundColor: 'var(--wr-bg-secondary)', padding: '1px 5px', borderRadius: 3, color: 'var(--wr-amber)' }}>{children}</code>,
+                blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid var(--wr-amber)', paddingLeft: 14, margin: '12px 0', opacity: 0.85 }}>{children}</blockquote>,
+              }}
+            >
+              {resolvedText}
+            </ReactMarkdown>
+          </div>
         </div>
       )}
     </div>
