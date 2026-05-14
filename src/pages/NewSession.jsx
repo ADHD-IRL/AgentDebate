@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe, Link2 } from 'lucide-react';
+import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe, Link2, Sparkles, Loader2, AlertCircle, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
+import AgentFormModal from '@/components/agents/AgentFormModal';
+import { recommendAgents, generateAgent as generateAgentLLM } from '@/lib/llm';
 
 const MODES = [
   {
@@ -49,6 +51,12 @@ export default function NewSession() {
   const [saveError, setSaveError] = useState('');
   const [newPinUrl, setNewPinUrl] = useState('');
   const [newPinLabel, setNewPinLabel] = useState('');
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [recError, setRecError] = useState('');
+  const [showRecs, setShowRecs] = useState(false);
+  const [createFromRec, setCreateFromRec] = useState(null); // full agent object ready for modal
+  const [generatingAgent, setGeneratingAgent] = useState(null); // rec being generated (shows spinner)
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 
   const addPin = () => {
@@ -88,8 +96,72 @@ export default function NewSession() {
   };
 
   const selectedScenario = scenarios.find(s => s.id === form.scenario_id);
+  const selectedDomain = domains.find(d => d.id === form.domain_id);
   const domainById = id => domains.find(d => d.id === id);
   const filteredAgents = agents.filter(a => !search || a.name?.toLowerCase().includes(search.toLowerCase()) || a.discipline?.toLowerCase().includes(search.toLowerCase()));
+
+  const handleGetRecommendations = async () => {
+    setLoadingRecs(true);
+    setRecError('');
+    setShowRecs(false);
+    try {
+      const recs = await recommendAgents({
+        scenarioName: selectedScenario?.name || form.name,
+        scenarioDescription: selectedScenario?.description || selectedScenario?.context_document?.slice(0, 400),
+        domain: selectedDomain?.name,
+        existingAgents: agents,
+        count: 5,
+      });
+      setRecommendations(recs);
+      setShowRecs(true);
+    } catch (e) {
+      setRecError(e.message || 'Failed to get recommendations');
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
+  const handleOpenCreateFromRec = async (rec) => {
+    setGeneratingAgent(rec.name);
+    try {
+      const profile = await generateAgentLLM({
+        expert_type: rec.expert_type,
+        prior_background: '',
+        key_focus: rec.key_focus,
+        bias_toward: rec.cognitive_bias,
+        domain_id: form.domain_id || '',
+      });
+      setCreateFromRec({
+        ...profile,
+        name: rec.name || profile.name,
+        discipline: rec.discipline || profile.discipline,
+        domain_id: form.domain_id || '',
+        severity_default: rec.severity_default || profile.severity_default || 'HIGH',
+        is_ai_generated: true,
+      });
+    } catch (e) {
+      setRecError(`Failed to generate agent profile: ${e.message}`);
+    } finally {
+      setGeneratingAgent(null);
+    }
+  };
+
+  const handleSaveNewAgent = async (agentForm) => {
+    try {
+      const saved = await db.Agent.create({ ...agentForm, is_ai_generated: true });
+      setAgents(prev => [...prev, saved]);
+      setSelectedAgents(prev => [...prev, saved]);
+      setCreateFromRec(null);
+    } catch (e) {
+      alert(e.message || 'Failed to create agent');
+    }
+  };
+
+  const matchingAgent = (rec) =>
+    agents.find(a =>
+      a.discipline?.toLowerCase().includes(rec.discipline?.split(' ')[0]?.toLowerCase()) ||
+      a.name?.toLowerCase().includes(rec.name?.split(' ')[0]?.toLowerCase())
+    );
 
   const handleStart = async () => {
     if (!form.name || selectedAgents.length < 1) return;
@@ -213,10 +285,110 @@ export default function NewSession() {
         <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SELECT AGENTS</h2>
-            <span className="text-xs" style={{ color: selectedAgents.length >= 3 ? '#27AE60' : 'var(--wr-amber)' }}>
-              {selectedAgents.length} selected {selectedAgents.length < 3 && '(min 3)'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs" style={{ color: selectedAgents.length >= 3 ? '#27AE60' : 'var(--wr-amber)' }}>
+                {selectedAgents.length} selected {selectedAgents.length < 3 && '(min 3)'}
+              </span>
+              <button
+                onClick={handleGetRecommendations}
+                disabled={loadingRecs}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: 'rgba(240,165,0,0.1)',
+                  border: '1px solid rgba(240,165,0,0.3)',
+                  color: 'var(--wr-amber)',
+                  opacity: loadingRecs ? 0.6 : 1,
+                  cursor: loadingRecs ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loadingRecs
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Recommending...</>
+                  : <><Sparkles className="w-3 h-3" /> Get Recommendations</>
+                }
+              </button>
+            </div>
           </div>
+
+          {recError && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', color: '#C0392B' }}>
+              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+              {recError}
+            </div>
+          )}
+
+          {/* AI Recommendations panel */}
+          {recommendations.length > 0 && (
+            <div className="mb-4 rounded" style={{ border: '1px solid rgba(240,165,0,0.25)', backgroundColor: 'rgba(240,165,0,0.04)' }}>
+              <button
+                onClick={() => setShowRecs(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold font-mono tracking-widest"
+                style={{ color: 'var(--wr-amber)' }}
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI RECOMMENDATIONS ({recommendations.length})
+                </span>
+                {showRecs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {showRecs && (
+                <div className="px-4 pb-4 space-y-2">
+                  <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>
+                    Suggested agents for this scenario. Add an existing match or create a new agent.
+                  </p>
+                  {recommendations.map((rec, i) => {
+                    const existing = matchingAgent(rec);
+                    const alreadySelected = existing && selectedAgents.find(a => a.id === existing.id);
+                    const SEV_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
+                    return (
+                      <div key={i} className="rounded p-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="text-xs font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{rec.name}</span>
+                              <span className="text-xs px-1.5 py-0.5 rounded font-mono"
+                                style={{ backgroundColor: `${SEV_COLOR[rec.severity_default] || '#D68910'}18`, color: SEV_COLOR[rec.severity_default] || '#D68910', border: `1px solid ${SEV_COLOR[rec.severity_default] || '#D68910'}40` }}>
+                                {rec.discipline}
+                              </span>
+                            </div>
+                            <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-muted)' }}>{rec.rationale}</p>
+                          </div>
+                          <div className="flex flex-col gap-1.5 flex-shrink-0">
+                            {existing ? (
+                              <button
+                                onClick={() => !alreadySelected && toggleAgent(existing)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap"
+                                style={{
+                                  backgroundColor: alreadySelected ? 'rgba(39,174,96,0.12)' : 'rgba(39,174,96,0.1)',
+                                  border: `1px solid ${alreadySelected ? '#27AE60' : 'rgba(39,174,96,0.35)'}`,
+                                  color: '#27AE60',
+                                  cursor: alreadySelected ? 'default' : 'pointer',
+                                  opacity: alreadySelected ? 0.7 : 1,
+                                }}
+                              >
+                                {alreadySelected ? '✓ Added' : `+ ${existing.name}`}
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => generatingAgent !== rec.name && handleOpenCreateFromRec(rec)}
+                              disabled={generatingAgent === rec.name}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap"
+                              style={{ backgroundColor: 'rgba(46,134,171,0.1)', border: '1px solid rgba(46,134,171,0.35)', color: '#2E86AB', cursor: generatingAgent === rec.name ? 'not-allowed' : 'pointer', opacity: generatingAgent === rec.name ? 0.6 : 1 }}
+                            >
+                              {generatingAgent === rec.name
+                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Building...</>
+                                : <><UserPlus className="w-3 h-3" /> {existing ? 'Create New' : 'Create Agent'}</>
+                              }
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             {/* Library */}
             <div>
@@ -224,27 +396,41 @@ export default function NewSession() {
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..."
                 className="w-full px-2 py-1.5 text-xs rounded mb-2 outline-none"
                 style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }} />
-              <div className="space-y-1 max-h-72 overflow-y-auto">
-                {filteredAgents.map(agent => {
-                  const dom = domainById(agent.domain_id);
-                  const isSelected = selectedAgents.find(a => a.id === agent.id);
-                  return (
-                    <button key={agent.id} onClick={() => toggleAgent(agent)}
-                      className="w-full text-left p-2 rounded flex items-center gap-2 transition-colors"
-                      style={{
-                        backgroundColor: isSelected ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
-                        border: `1px solid ${isSelected ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
-                      }}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</p>
-                        <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
-                      </div>
-                      {dom && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dom.color }} />}
-                      <SeverityBadge severity={agent.severity_default} size="xs" />
-                    </button>
-                  );
-                })}
-              </div>
+              {agents.length === 0 ? (
+                <div className="p-4 rounded text-center" style={{ border: '1px dashed var(--wr-border)' }}>
+                  <p className="text-xs mb-2" style={{ color: 'var(--wr-text-muted)' }}>No agents in your library yet.</p>
+                  <button
+                    onClick={handleGetRecommendations}
+                    disabled={loadingRecs}
+                    className="flex items-center gap-1 text-xs mx-auto px-2.5 py-1 rounded"
+                    style={{ backgroundColor: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.3)', color: 'var(--wr-amber)', cursor: 'pointer' }}
+                  >
+                    <Sparkles className="w-3 h-3" /> Get suggestions
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-72 overflow-y-auto">
+                  {filteredAgents.map(agent => {
+                    const dom = domainById(agent.domain_id);
+                    const isSelected = selectedAgents.find(a => a.id === agent.id);
+                    return (
+                      <button key={agent.id} onClick={() => toggleAgent(agent)}
+                        className="w-full text-left p-2 rounded flex items-center gap-2 transition-colors"
+                        style={{
+                          backgroundColor: isSelected ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
+                          border: `1px solid ${isSelected ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
+                        }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</p>
+                          <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
+                        </div>
+                        {dom && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dom.color }} />}
+                        <SeverityBadge severity={agent.severity_default} size="xs" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Selected */}
@@ -400,6 +586,16 @@ export default function NewSession() {
           </WrButton>
         </div>
       </div>
+
+      {createFromRec && (
+        <AgentFormModal
+          mode="manual"
+          domains={domains}
+          agent={createFromRec}
+          onClose={() => setCreateFromRec(null)}
+          onSave={handleSaveNewAgent}
+        />
+      )}
     </div>
   );
 }
