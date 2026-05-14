@@ -647,11 +647,12 @@ export default function SessionWorkspace() {
 
     try {
       // Fetch fresh data from DB — state may be stale if called right after round generation
-      const [freshSess, freshAgents, freshAgentDefs, freshScenarios] = await Promise.all([
+      const [freshSess, freshAgents, freshAgentDefs, freshScenarios, freshSynth] = await Promise.all([
         db.Session.filter({ id }),
         db.SessionAgent.filter({ session_id: id }),
         db.Agent.list(),
         db.Scenario.list(),
+        db.SessionSynthesis.filter({ session_id: id }),
       ]);
       const sess = freshSess[0] || session;
       const agentMap = Object.fromEntries(freshAgentDefs.map(a => [a.id, a]));
@@ -669,7 +670,7 @@ export default function SessionWorkspace() {
         onToken: (_tok, full) => setSynthStreamText(full),
       });
 
-      const existing = synthesis;
+      const existing = freshSynth[0] || null;
       const synthData = {
         raw_text: res.synthesis,
         session_id: id,
