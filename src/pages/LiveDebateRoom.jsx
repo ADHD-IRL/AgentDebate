@@ -8,7 +8,7 @@ import {
   generateAgentReply, generateAgentReplyWithTools,
   parseSeverityFromText,
 } from '@/lib/llm';
-import { synthesize, hexToHue, DEFAULT_VOICES, getOpenAiKey } from '@/lib/voice';
+import { synthesize, hexToHue, DEFAULT_VOICES, getOpenAiKey, createSentenceQueue, splitSentences } from '@/lib/voice';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
 import AddressChips      from '@/components/debate/AddressChips';
 import PushToTalkButton  from '@/components/debate/PushToTalkButton';
@@ -241,6 +241,8 @@ export default function LiveDebateRoom() {
   const streamBuf           = useRef({});
   const currentAudioRef     = useRef(null);
   const streamControllerRef = useRef(null);
+  const ttsQueueRef         = useRef(null);
+  const ttsBufRef           = useRef('');
 
   // ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -332,6 +334,39 @@ export default function LiveDebateRoom() {
     }
   }, [autoPlayTTS, mutedAgents, voices]);
 
+  // Streaming TTS helpers — start speaking sentence-by-sentence as tokens arrive
+  const startTTSStream = useCallback((agentId) => {
+    if (!autoPlayTTS || mutedAgents[agentId] || !getOpenAiKey()) return;
+    ttsQueueRef.current?.destroy();
+    ttsBufRef.current = '';
+    ttsQueueRef.current = createSentenceQueue({
+      voiceId: voices[agentId] || 'alloy',
+      onSpeakingChange: (speaking) => {
+        if (speaking) {
+          setCurrentSpeakerId(agentId);
+        } else {
+          setCurrentSpeakerId(prev => prev === agentId ? null : prev);
+        }
+      },
+    });
+  }, [autoPlayTTS, mutedAgents, voices]);
+
+  const feedTTSToken = useCallback((token) => {
+    if (!ttsQueueRef.current) return;
+    ttsBufRef.current += token;
+    const { sentences, remaining } = splitSentences(ttsBufRef.current);
+    ttsBufRef.current = remaining;
+    sentences.forEach(s => ttsQueueRef.current.push(s));
+  }, []);
+
+  const flushTTSBuffer = useCallback(() => {
+    if (ttsQueueRef.current && ttsBufRef.current.trim().length >= 4) {
+      ttsQueueRef.current.push(ttsBufRef.current.trim());
+      ttsBufRef.current = '';
+    }
+    ttsQueueRef.current = null;
+  }, []);
+
   // Interrupt: pause current TTS + abort stream
   const cancelRef = useRef(false);
 
@@ -344,6 +379,9 @@ export default function LiveDebateRoom() {
 
   const stopRound = useCallback(() => {
     cancelRef.current = true;
+    ttsQueueRef.current?.destroy();
+    ttsQueueRef.current = null;
+    ttsBufRef.current = '';
     interrupt();
   }, [interrupt]);
 
@@ -408,6 +446,7 @@ export default function LiveDebateRoom() {
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round1_assessment) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
+      startTTSStream(sa.agent_id);
       const tempId = `r1_${sa.agent_id}`;
       streamBuf.current[tempId] = '';
       push({ id: tempId, role: 'agent', agentId: sa.agent_id, agentName: agent.name, discipline: agent.discipline, content: '', round: 1, isStreaming: true });
@@ -415,8 +454,9 @@ export default function LiveDebateRoom() {
         await generateRound1Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
           threatCatalog: threats,
-          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
+          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
           onDone: async text => {
+            flushTTSBuffer();
             const { assessment, severity } = parseSeverityFromText(text, agent.severity_default || 'HIGH');
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
@@ -425,7 +465,6 @@ export default function LiveDebateRoom() {
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, status: 'r1_done' } : s));
             await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'r1_done' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
-            await attachTTS(tempId, assessment, sa.agent_id);
           },
         });
       } catch (err) {
@@ -465,6 +504,7 @@ export default function LiveDebateRoom() {
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round2_rebuttal) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
+      startTTSStream(sa.agent_id);
       const tempId = `r2_${sa.agent_id}`;
       streamBuf.current[tempId] = '';
       push({ id: tempId, role: 'agent', agentId: sa.agent_id, agentName: agent.name, discipline: agent.discipline, content: '', round: 2, isStreaming: true });
@@ -472,8 +512,9 @@ export default function LiveDebateRoom() {
         await generateRound2Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
           othersAssessments: othersCtx(sa.agent_id), threatCatalog: threats,
-          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
+          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
           onDone: async text => {
+            flushTTSBuffer();
             const { assessment, severity } = parseSeverityFromText(text, sa.round1_severity || 'HIGH');
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
@@ -481,7 +522,6 @@ export default function LiveDebateRoom() {
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' } : s));
             await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' });
             await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
-            await attachTTS(tempId, assessment, sa.agent_id);
           },
         });
       } catch (err) {
@@ -536,14 +576,15 @@ export default function LiveDebateRoom() {
             },
           });
         } else {
+          startTTSStream(sa.agent_id);
           await generateAgentReply({
             agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx,
-            onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
+            onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
             onDone: async text => {
+              flushTTSBuffer();
               finishStream(tempId, text);
               setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
               await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
-              await attachTTS(tempId, text, sa.agent_id);
             },
           });
         }
