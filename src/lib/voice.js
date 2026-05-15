@@ -37,6 +37,80 @@ export async function synthesize(text, voiceId = 'alloy') {
   return { url, duration };
 }
 
+// Splits buffered text at sentence boundaries. Returns sentences ready to speak
+// and the remaining partial sentence still accumulating.
+export function splitSentences(buffer) {
+  const sentences = [];
+  let start = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    const ch = buffer[i];
+    if (ch !== '.' && ch !== '!' && ch !== '?') continue;
+    // Skip ellipsis
+    if (ch === '.' && buffer[i + 1] === '.') continue;
+    const next = buffer[i + 1];
+    if (next === ' ' || next === '\n' || next === undefined) {
+      const sentence = buffer.slice(start, i + 1).trim();
+      if (sentence.length >= 12) {
+        sentences.push(sentence);
+        start = i + 1;
+      }
+    }
+  }
+  return { sentences, remaining: buffer.slice(start) };
+}
+
+// Sequential TTS queue — plays one sentence at a time, starts as soon as
+// the first sentence arrives so agents begin speaking within seconds.
+export function createSentenceQueue({ voiceId = 'alloy', onSpeakingChange } = {}) {
+  const pending = [];
+  let active = false;
+  let destroyed = false;
+
+  async function next() {
+    if (active || pending.length === 0 || destroyed) return;
+    active = true;
+    const text = pending.shift();
+    try {
+      const key = getOpenAiKey();
+      if (!key || destroyed) { active = false; next(); return; }
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'tts-1', voice: voiceId, input: text }),
+      });
+      if (!res.ok || destroyed) { active = false; next(); return; }
+      const blob = await res.blob();
+      if (destroyed) { active = false; return; }
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      onSpeakingChange?.(true);
+      await new Promise(resolve => {
+        audio.onended = resolve;
+        audio.onerror = resolve;
+        audio.play().catch(resolve);
+      });
+      URL.revokeObjectURL(url);
+    } catch { /* skip errored chunk, continue queue */ }
+    active = false;
+    if (pending.length === 0) onSpeakingChange?.(false);
+    next();
+  }
+
+  return {
+    push(sentence) {
+      if (!sentence || sentence.trim().length < 8) return;
+      pending.push(sentence.trim());
+      next();
+    },
+    isEmpty() { return !active && pending.length === 0; },
+    destroy() {
+      destroyed = true;
+      pending.length = 0;
+      onSpeakingChange?.(false);
+    },
+  };
+}
+
 export async function transcribe(blob) {
   const key = getOpenAiKey();
   if (!key) throw new Error('No OpenAI API key — add one in Settings to enable voice input.');
