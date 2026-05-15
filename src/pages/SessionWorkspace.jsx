@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { scoreSourceCredibility, parseCitations, TIER_COLORS, TIER_LABELS, SOURCE_TYPE_LABELS } from '@/lib/sources';
+import { analyzeSourceValidity } from '@/lib/llm';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
 import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
@@ -11,7 +13,7 @@ import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SETTINGS'];
+const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SOURCES','SETTINGS'];
 
 function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking, onReset }) {
   const [expanded, setExpanded] = useState(false);
@@ -280,6 +282,223 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
   );
 }
 
+// ── Sources Panel ─────────────────────────────────────────────────────────────
+function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }) {
+  const [addUrl, setAddUrl] = useState('');
+  const [addTitle, setAddTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validityReport, setValidityReport] = useState(null);
+  const [validityError, setValidityError] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const agentMap = Object.fromEntries((agents || []).map(a => [a.id, a]));
+
+  const TIERS = ['authoritative', 'credible', 'speculative', 'unverified'];
+  const grouped = TIERS.reduce((acc, t) => {
+    acc[t] = sources.filter(s => (s.credibility_tier || 'unverified') === t);
+    return acc;
+  }, {});
+
+  const handleAdd = async () => {
+    if (!addUrl.trim()) return;
+    setAdding(true);
+    try {
+      const { tier, score } = scoreSourceCredibility(addUrl.trim());
+      let domain = addUrl;
+      try { domain = new URL(addUrl.trim()).hostname; } catch { /* keep */ }
+      await db.SessionSource.create({
+        session_id: sessionId, source_type: 'facilitator',
+        url: addUrl.trim(), title: addTitle.trim() || null,
+        domain, credibility_tier: tier, credibility_score: score,
+      });
+      setAddUrl(''); setAddTitle(''); setShowAddForm(false);
+      onSourceAdded?.();
+    } catch { /* ignore */ }
+    setAdding(false);
+  };
+
+  const handleValidate = async () => {
+    setValidating(true);
+    setValidityReport(null);
+    setValidityError(null);
+    try {
+      const report = await analyzeSourceValidity({ sources, scenarioName: session?.name });
+      setValidityReport(report);
+    } catch (e) {
+      setValidityError(e.message);
+    }
+    setValidating(false);
+  };
+
+  if (sources.length === 0) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="rounded p-8 text-center" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+          <p className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>NO SOURCES CAPTURED YET</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--wr-text-muted)' }}>Sources appear automatically when agents use tools or cite publications. You can also add sources manually below.</p>
+          <button onClick={() => setShowAddForm(v => !v)} className="mt-4 text-xs font-mono font-bold px-3 py-1.5 rounded" style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
+            + Add Source
+          </button>
+        </div>
+        {showAddForm && <AddSourceForm url={addUrl} title={addTitle} setUrl={setAddUrl} setTitle={setAddTitle} onAdd={handleAdd} adding={adding} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SESSION SOURCES</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{sources.length} source{sources.length !== 1 ? 's' : ''} captured</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAddForm(v => !v)} className="text-xs font-mono font-bold px-3 py-1.5 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)' }}>
+            + Add
+          </button>
+          <button onClick={handleValidate} disabled={validating} className="text-xs font-mono font-bold px-3 py-1.5 rounded flex items-center gap-1.5" style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)', opacity: validating ? 0.6 : 1 }}>
+            {validating ? '…' : '⚡'} {validating ? 'Analysing…' : 'Run Validity Analysis'}
+          </button>
+        </div>
+      </div>
+
+      {showAddForm && <AddSourceForm url={addUrl} title={addTitle} setUrl={setAddUrl} setTitle={setAddTitle} onAdd={handleAdd} adding={adding} />}
+
+      {/* Validity report */}
+      {validityError && <p className="text-xs p-3 rounded" style={{ backgroundColor: 'rgba(192,57,43,0.1)', color: '#C0392B', border: '1px solid rgba(192,57,43,0.2)' }}>{validityError}</p>}
+      {validityReport && <ValidityReport report={validityReport} />}
+
+      {/* Sources by tier */}
+      {TIERS.map(tier => {
+        const list = grouped[tier];
+        if (!list.length) return null;
+        const c = TIER_COLORS[tier];
+        return (
+          <div key={tier} className="rounded overflow-hidden" style={{ border: `1px solid ${c.border}` }}>
+            <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: c.bg }}>
+              <span className="text-xs font-bold font-mono tracking-widest" style={{ color: c.text }}>{TIER_LABELS[tier].toUpperCase()}</span>
+              <span className="text-xs font-mono" style={{ color: c.text }}>{list.length}</span>
+            </div>
+            <div className="divide-y" style={{ backgroundColor: 'var(--wr-bg-card)', borderColor: 'var(--wr-border)' }}>
+              {list.map(s => <SourceRow key={s.id} source={s} agent={agentMap[s.agent_id]} tierColor={c} />)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AddSourceForm({ url, title, setUrl, setTitle, onAdd, adding }) {
+  return (
+    <div className="rounded p-4 space-y-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+      <p className="text-xs font-bold font-mono tracking-widest" style={{ color: 'var(--wr-text-muted)' }}>ADD FACILITATOR SOURCE</p>
+      <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 rounded text-sm font-mono" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', outline: 'none' }} />
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title or description (optional)" className="w-full px-3 py-2 rounded text-sm" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', outline: 'none' }} />
+      <button onClick={onAdd} disabled={adding || !url.trim()} className="px-4 py-1.5 rounded text-xs font-bold font-mono" style={{ backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)', opacity: adding || !url.trim() ? 0.5 : 1 }}>
+        {adding ? 'Adding…' : 'Add Source'}
+      </button>
+    </div>
+  );
+}
+
+function SourceRow({ source, agent, tierColor }) {
+  const [expanded, setExpanded] = useState(false);
+  const label = source.title || source.domain || source.url || 'Unknown source';
+  const typeLabel = SOURCE_TYPE_LABELS[source.source_type] || source.source_type;
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {source.url ? (
+              <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium truncate hover:underline" style={{ color: 'var(--wr-text-primary)', maxWidth: 380 }}>
+                {label}
+              </a>
+            ) : (
+              <span className="text-sm font-medium" style={{ color: 'var(--wr-text-primary)' }}>{label}</span>
+            )}
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: tierColor.bg, color: tierColor.text, border: `1px solid ${tierColor.border}` }}>{TIER_LABELS[source.credibility_tier || 'unverified']}</span>
+            <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>{typeLabel}</span>
+            {agent && <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>via {agent.name}</span>}
+          </div>
+          {source.cited_claim && (
+            <p className="text-xs mt-1 italic" style={{ color: 'var(--wr-text-muted)' }}>
+              "{source.cited_claim.slice(0, 120)}{source.cited_claim.length > 120 ? '…' : ''}"
+            </p>
+          )}
+          {source.content_snippet && (
+            <button onClick={() => setExpanded(v => !v)} className="text-xs mt-1" style={{ color: 'var(--wr-amber)' }}>
+              {expanded ? 'Hide snippet ▲' : 'Show snippet ▼'}
+            </button>
+          )}
+          {expanded && source.content_snippet && (
+            <pre className="text-xs mt-1 p-2 rounded whitespace-pre-wrap" style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-secondary)', fontFamily: 'inherit' }}>
+              {source.content_snippet}
+            </pre>
+          )}
+        </div>
+        {source.credibility_score != null && (
+          <span className="text-xs font-mono font-bold flex-shrink-0 mt-0.5" style={{ color: tierColor.text }}>{source.credibility_score}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ValidityReport({ report }) {
+  const confColors = { HIGH: '#27AE60', MEDIUM: '#F0A500', LOW: '#C0392B' };
+  const c = confColors[report.overall_confidence] || 'var(--wr-text-muted)';
+  return (
+    <div className="rounded p-4 space-y-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>VALIDITY ANALYSIS</h3>
+        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded" style={{ backgroundColor: `${c}22`, color: c, border: `1px solid ${c}44` }}>
+          {report.overall_confidence} CONFIDENCE
+        </span>
+      </div>
+      {report.summary && <p className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>{report.summary}</p>}
+      {report.contradictions?.length > 0 && (
+        <div>
+          <p className="text-xs font-bold font-mono mb-2" style={{ color: '#C0392B' }}>CONTRADICTIONS ({report.contradictions.length})</p>
+          {report.contradictions.map((c, i) => (
+            <div key={i} className="rounded p-3 mb-2" style={{ backgroundColor: 'rgba(192,57,43,0.08)', border: '1px solid rgba(192,57,43,0.2)' }}>
+              <p className="text-xs font-medium" style={{ color: '#C0392B' }}>{c.source_a} vs {c.source_b}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--wr-text-secondary)' }}>{c.explanation}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {report.unsupported_claims?.length > 0 && (
+        <div>
+          <p className="text-xs font-bold font-mono mb-2" style={{ color: '#E67E22' }}>UNSUPPORTED CLAIMS</p>
+          <ul className="space-y-1">
+            {report.unsupported_claims.map((claim, i) => <li key={i} className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>• {claim}</li>)}
+          </ul>
+        </div>
+      )}
+      {report.key_agreements?.length > 0 && (
+        <div>
+          <p className="text-xs font-bold font-mono mb-2" style={{ color: '#27AE60' }}>CROSS-SOURCE AGREEMENTS</p>
+          <ul className="space-y-1">
+            {report.key_agreements.map((a, i) => <li key={i} className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>✓ {a}</li>)}
+          </ul>
+        </div>
+      )}
+      {report.recommended_sources?.length > 0 && (
+        <div>
+          <p className="text-xs font-bold font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>RECOMMENDED ADDITIONAL SOURCES</p>
+          <ul className="space-y-1">
+            {report.recommended_sources.map((s, i) => <li key={i} className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>→ {s}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionSettingsPanel({ session, sessionAgents, getAgent, onSaved }) {
   const { db } = useWorkspace();
   const navigate = useNavigate();
@@ -353,6 +572,7 @@ export default function SessionWorkspace() {
   const [savingThreats, setSavingThreats] = useState(false);
   const [selectedThreats, setSelectedThreats] = useState(new Set());
   const [pinnedChains, setPinnedChains] = useState([]);
+  const [sessionSources, setSessionSources] = useState([]);
   const [facilitatorNote, setFacilitatorNote] = useState('');
   const [briefingAll, setBriefingAll] = useState(false);
   const [reactions, setReactions] = useState([]);
@@ -365,18 +585,20 @@ export default function SessionWorkspace() {
 
   const load = async () => {
     if (!db) return;
-    const [sess, sa, ag, sc, synth] = await Promise.all([
+    const [sess, sa, ag, sc, synth, srcs] = await Promise.all([
       db.Session.filter({ id }),
       db.SessionAgent.filter({ session_id: id }),
       db.Agent.list(),
       db.Scenario.list(),
       db.SessionSynthesis.filter({ session_id: id }),
+      db.SessionSource.filter({ session_id: id }),
     ]);
     setSession(sess[0] || null);
     setSessionAgents(sa);
     setAgents(ag);
     setScenarios(sc);
     setSynthesis(synth[0] || null);
+    setSessionSources(srcs || []);
 
     const sessionData = sess[0];
     if (sessionData?.facilitator_note) setFacilitatorNote(sessionData.facilitator_note);
@@ -1206,6 +1428,10 @@ export default function SessionWorkspace() {
               )}
             </div>
           </div>
+        )}
+
+        {tab === 'SOURCES' && (
+          <SourcesPanel sources={sessionSources} agents={agents} session={session} db={db} sessionId={id} onSourceAdded={load} />
         )}
 
         {tab === 'SETTINGS' && (

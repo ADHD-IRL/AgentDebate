@@ -10,6 +10,7 @@ const TABLE = {
   SessionAgent:     'session_agents',
   SessionSynthesis: 'session_syntheses',
   SessionMessage:   'session_messages',
+  SessionSource:    'session_sources',
   AppConfig:        'app_configs',
   Workspace:        'workspaces',
   WorkspaceMember:  'workspace_members',
