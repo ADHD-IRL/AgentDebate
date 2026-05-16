@@ -706,7 +706,9 @@ export default function SessionWorkspace() {
     cancelRef.current = false;
     setGeneratingAll(true);
     setGenError(null);
-    setProgress({ current: 0, total: sessionAgents.length });
+    const doneField = round === 1 ? 'round1_assessment' : 'round2_rebuttal';
+    const agentsToRun = sessionAgents.filter(sa => !sa[doneField]);
+    setProgress({ current: 0, total: agentsToRun.length });
     const others = round === 2 ? sessionAgents.filter(sa => sa.round1_assessment) : [];
     const chainContext = buildChainContext();
 
@@ -719,16 +721,16 @@ export default function SessionWorkspace() {
     let stuckSaId = null;
 
     try {
-      for (let i = 0; i < sessionAgents.length; i++) {
+      for (let i = 0; i < agentsToRun.length; i++) {
         if (cancelRef.current) {
           cancelRef.current = false;
           break;
         }
-        const sa = sessionAgents[i];
+        const sa = agentsToRun[i];
         const agent = getAgent(sa.agent_id);
         if (!agent) continue;
 
-        setProgress({ current: i + 1, total: sessionAgents.length });
+        setProgress({ current: i + 1, total: agentsToRun.length });
 
         const statusKey = round === 1 ? 'generating_r1' : 'generating_r2';
         stuckSaId = sa.id;
@@ -773,7 +775,7 @@ export default function SessionWorkspace() {
         completedCount++;
         stuckSaId = null;
 
-        if (i < sessionAgents.length - 1) await new Promise(r => setTimeout(r, 300));
+        if (i < agentsToRun.length - 1) await new Promise(r => setTimeout(r, 300));
       }
     } catch (e) {
       if (stuckSaId) {
@@ -787,7 +789,7 @@ export default function SessionWorkspace() {
       return;
     }
 
-    const allDone = completedCount === sessionAgents.length;
+    const allDone = completedCount === agentsToRun.length;
     const newStatus = round === 1 ? 'round1' : 'round2';
     await db.Session.update(id, { status: newStatus });
     setGeneratingAll(false);
@@ -846,6 +848,18 @@ export default function SessionWorkspace() {
 
       await db.SessionAgent.update(sa.id, updates);
       showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
+      // Check if all agents are now done for this round; if so, advance session status
+      const doneField = round === 1 ? 'round1_assessment' : 'round2_rebuttal';
+      const updatedAgents = sessionAgents.map(s => s.id === sa.id ? { ...s, ...updates } : s);
+      const allRoundDone = updatedAgents.every(s => s[doneField]);
+      if (allRoundDone) {
+        const newStatus = round === 1 ? 'round1' : 'round2';
+        await db.Session.update(id, { status: newStatus });
+        if (round === 2) {
+          setTab('SYNTHESIS');
+          setTimeout(() => generateSynthesis(), 500);
+        }
+      }
     } catch (e) {
       await db.SessionAgent.update(sa.id, { status: 'pending' });
       setGenError(e.message || 'Generation failed');
@@ -1083,7 +1097,7 @@ export default function SessionWorkspace() {
                       <WrButton
                         size="sm"
                         onClick={() => generateRound(round)}
-                        disabled={generatingAll}
+                        disabled={generatingAll || sessionAgents.every(sa => round === 1 ? sa.round1_assessment : sa.round2_rebuttal)}
                       >
                         <><Sparkles className="w-3.5 h-3.5" /> Generate All {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}</>
                       </WrButton>
