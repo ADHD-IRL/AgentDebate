@@ -585,13 +585,14 @@ export default function SessionWorkspace() {
 
   const load = async () => {
     if (!db) return;
+    try {
     const [sess, sa, ag, sc, synth, srcs] = await Promise.all([
       db.Session.filter({ id }),
       db.SessionAgent.filter({ session_id: id }),
       db.Agent.list(),
       db.Scenario.list(),
       db.SessionSynthesis.filter({ session_id: id }),
-      db.SessionSource.filter({ session_id: id }),
+      db.SessionSource.filter({ session_id: id }).catch(() => []),
     ]);
     setSession(sess[0] || null);
     setSessionAgents(sa);
@@ -616,6 +617,9 @@ export default function SessionWorkspace() {
       setPinnedChains(allChains.filter(c => pinnedIds.includes(c.id)));
     } else {
       setPinnedChains([]);
+    }
+    } catch (err) {
+      console.error('SessionWorkspace load failed:', err);
     }
   };
 
