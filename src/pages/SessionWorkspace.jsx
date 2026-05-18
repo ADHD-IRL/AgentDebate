@@ -948,6 +948,28 @@ export default function SessionWorkspace() {
       } else {
         await db.SessionSynthesis.create(synthData);
       }
+
+      // Persist parsed compound chains to the chains table
+      const newChains = res.compound_chains || [];
+      if (newChains.length > 0) {
+        // Remove any chains previously generated for this session so re-runs don't duplicate
+        const existingChains = await db.Chain.filter({ session_id: id }).catch(() => []);
+        for (const c of existingChains.filter(c => c.is_ai_generated)) {
+          await db.Chain.delete(c.id).catch(() => {});
+        }
+        for (const c of newChains) {
+          await db.Chain.create({
+            session_id: id,
+            scenario_id: session?.scenario_id || null,
+            name: c.name,
+            description: c.description || '',
+            steps: c.steps || [],
+            is_ai_generated: true,
+            tags: [],
+          }).catch(() => {});
+        }
+      }
+
       await db.Session.update(id, { status: 'complete' });
       setSynthStreamText('');
       load();
