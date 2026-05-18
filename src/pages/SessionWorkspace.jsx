@@ -131,7 +131,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
   );
 }
 
-function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError, streamText }) {
+function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError, streamText, sessionAgents, agents, session, scenario }) {
   const [resolvedText, setResolvedText] = useState('');
 
   useEffect(() => {
@@ -216,29 +216,302 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
 
   const printReport = () => {
     const win = window.open('', '_blank');
+
+    // ── severity palette ──────────────────────────────────────────────────────
+    const SEV_COLOR  = { CRITICAL:'#C0392B', HIGH:'#E67E22', MEDIUM:'#D4AC0D', LOW:'#27AE60', INFORMATIONAL:'#2980B9' };
+    const SEV_BG     = { CRITICAL:'#FDECEA', HIGH:'#FEF0E6', MEDIUM:'#FEFBE6', LOW:'#E9F7EF', INFORMATIONAL:'#EAF4FB' };
+
+    // ── build per-agent rows ──────────────────────────────────────────────────
+    const agentMap = Object.fromEntries((agents || []).map(a => [a.id, a]));
+    const rows = (sessionAgents || []).map(sa => {
+      const ag = agentMap[sa.agent_id] || {};
+      return {
+        name:     ag.name || 'Unknown',
+        disc:     ag.discipline || '',
+        color:    ag.domain_color || '#888',
+        r1sev:    (sa.round1_severity || '—').toUpperCase(),
+        r2sev:    (sa.round2_revised_severity || '—').toUpperCase(),
+        r1conf:   sa.round1_confidence ?? null,
+        r2conf:   sa.round2_confidence ?? null,
+      };
+    });
+
+    // ── severity distribution ─────────────────────────────────────────────────
+    const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW','INFORMATIONAL'];
+    const sevCounts = Object.fromEntries(SEV_ORDER.map(s => [s, 0]));
+    rows.forEach(r => { const s = r.r2sev !== '—' ? r.r2sev : r.r1sev; if (sevCounts[s] !== undefined) sevCounts[s]++; });
+    const overallRisk = SEV_ORDER.find(s => sevCounts[s] > 0) || 'LOW';
+    const totalAgents = rows.length || 1;
+
+    // ── SVG: severity horizontal stacked bar ──────────────────────────────────
+    const BAR_W = 480;
+    let stackX = 0;
+    const stackedSegments = SEV_ORDER.filter(s => sevCounts[s] > 0).map(s => {
+      const w = Math.round((sevCounts[s] / totalAgents) * BAR_W);
+      const seg = `<rect x="${stackX}" y="0" width="${w}" height="28" fill="${SEV_COLOR[s]}" />
+        <text x="${stackX + w / 2}" y="18" text-anchor="middle" font-size="11" fill="white" font-weight="bold" font-family="Arial">${sevCounts[s] > 0 ? s[0] : ''}</text>`;
+      stackX += w;
+      return seg;
+    }).join('');
+
+    // ── SVG: per-agent severity + confidence chart ────────────────────────────
+    const CHART_W = 340;
+    const agentChartRows = rows.map((r, i) => {
+      const conf = r.r2conf ?? r.r1conf ?? 0;
+      const confW = Math.round((conf / 100) * CHART_W);
+      const confColor = conf >= 75 ? '#27AE60' : conf >= 50 ? '#D4AC0D' : '#E67E22';
+      const sev = r.r2sev !== '—' ? r.r2sev : r.r1sev;
+      const y = i * 44;
+      return `<g transform="translate(0,${y})">
+        <circle cx="7" cy="10" r="6" fill="${r.color}" />
+        <text x="18" y="14" font-size="11" font-family="Arial" fill="#222" font-weight="600">${r.name.substring(0,22)}</text>
+        <text x="18" y="26" font-size="9" font-family="Arial" fill="#888">${r.disc.substring(0,28)}</text>
+        <rect x="200" y="3" width="${CHART_W}" height="16" fill="#eee" rx="3"/>
+        <rect x="200" y="3" width="${confW || 2}" height="16" fill="${confColor}" rx="3"/>
+        <text x="${200 + CHART_W + 8}" y="14" font-size="10" font-family="Arial" fill="#555">${conf}%</text>
+        <rect x="560" y="2" width="70" height="18" rx="3" fill="${SEV_BG[sev] || '#f5f5f5'}"/>
+        <text x="595" y="14" text-anchor="middle" font-size="10" font-family="Arial" fill="${SEV_COLOR[sev] || '#555'}" font-weight="bold">${sev}</text>
+      </g>`;
+    }).join('');
+    const agentChartH = Math.max(rows.length * 44, 20);
+
+    // ── SVG: donut chart for severity distribution ────────────────────────────
+    const DONUT_R = 70; const DONUT_CX = 90; const DONUT_CY = 90;
+    let donutAngle = -Math.PI / 2;
+    const donutSlices = SEV_ORDER.filter(s => sevCounts[s] > 0).map(s => {
+      const frac = sevCounts[s] / totalAgents;
+      const sweep = frac * 2 * Math.PI;
+      const x1 = DONUT_CX + DONUT_R * Math.cos(donutAngle);
+      const y1 = DONUT_CY + DONUT_R * Math.sin(donutAngle);
+      donutAngle += sweep;
+      const x2 = DONUT_CX + DONUT_R * Math.cos(donutAngle);
+      const y2 = DONUT_CY + DONUT_R * Math.sin(donutAngle);
+      const large = sweep > Math.PI ? 1 : 0;
+      return `<path d="M${DONUT_CX},${DONUT_CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${DONUT_R},${DONUT_R} 0 ${large} 1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${SEV_COLOR[s]}" stroke="white" stroke-width="2"/>`;
+    }).join('');
+    const donutLegend = SEV_ORDER.filter(s => sevCounts[s] > 0).map((s, i) =>
+      `<g transform="translate(185,${20 + i * 22})">
+        <rect width="12" height="12" rx="2" fill="${SEV_COLOR[s]}"/>
+        <text x="18" y="10" font-size="11" font-family="Arial" fill="#333">${s} — ${sevCounts[s]} agent${sevCounts[s] !== 1 ? 's' : ''}</text>
+      </g>`
+    ).join('');
+
+    // ── compound chains ───────────────────────────────────────────────────────
+    const chains = synthesis?.compound_chains || [];
+    const chainsHtml = chains.length === 0
+      ? '<p style="color:#888;font-style:italic;font-size:13px">No compound attack chains identified in this session.</p>'
+      : chains.map(c => `
+        <div class="chain-card">
+          <div class="chain-name">${c.name}</div>
+          ${c.description ? `<p class="chain-desc">${c.description.substring(0,280)}${c.description.length > 280 ? '…' : ''}</p>` : ''}
+          <div class="chain-flow">
+            ${(c.steps || []).map((s, i) => `
+              <div class="flow-step">
+                <div class="flow-num">${i + 1}</div>
+                <div class="flow-text">${s.step_text}</div>
+              </div>
+              ${i < (c.steps || []).length - 1 ? '<div class="flow-arrow">▼</div>' : ''}
+            `).join('')}
+          </div>
+        </div>`).join('');
+
+    // ── agent assessment table ────────────────────────────────────────────────
+    const tableRows = rows.map(r => {
+      const conf = r.r2conf ?? r.r1conf;
+      const confBar = conf !== null
+        ? `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:8px;background:#eee;border-radius:4px"><div style="width:${conf}%;height:8px;background:${conf>=75?'#27AE60':conf>=50?'#D4AC0D':'#E67E22'};border-radius:4px"></div></div><span style="font-size:11px;color:#555;min-width:32px">${conf}%</span></div>`
+        : '<span style="color:#bbb">—</span>';
+      return `<tr>
+        <td><span class="agent-dot" style="background:${r.color}"></span>${r.name}</td>
+        <td style="color:#666;font-size:12px">${r.disc}</td>
+        <td class="sev-cell" style="background:${SEV_BG[r.r1sev]||'#f5f5f5'};color:${SEV_COLOR[r.r1sev]||'#333'}">${r.r1sev}</td>
+        <td class="sev-cell" style="background:${SEV_BG[r.r2sev]||'#f5f5f5'};color:${SEV_COLOR[r.r2sev]||'#333'}">${r.r2sev}</td>
+        <td style="min-width:160px">${confBar}</td>
+      </tr>`;
+    }).join('');
+
     const htmlBody = markdownToHtml(resolvedText);
-    win.document.write(`<html><head><title>Synthesis Report</title>
-      <style>
-        body { font-family: Georgia, serif; max-width: 860px; margin: 60px auto; color: #1a1a1a; line-height: 1.8; font-size: 14px; }
-        .report-title { font-size: 26px; border-bottom: 3px solid #F0A500; padding-bottom: 10px; margin-bottom: 32px; }
-        h1.section-title { font-size: 22px; color: #111; margin-top: 36px; border-bottom: 2px solid #F0A500; padding-bottom: 6px; }
-        h2 { font-size: 17px; color: #333; margin-top: 28px; border-bottom: 1px solid #ddd; padding-bottom: 5px; font-family: Georgia, serif; }
-        h3 { font-size: 15px; color: #555; margin-top: 20px; font-style: italic; }
-        h4 { font-size: 13px; color: #666; margin-top: 14px; }
-        p { margin: 8px 0; }
-        ul, ol { margin: 8px 0; padding-left: 24px; }
-        li { margin: 4px 0; }
-        strong { font-weight: bold; }
-        em { font-style: italic; }
-        hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
-        .footer { margin-top: 60px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
-        @media print { body { margin: 30px; } }
-      </style></head><body>
-      <h1 class="report-title">Synthesis Report</h1>
-      ${htmlBody}
-      <div class="footer">Generated by AgentDebate — ${new Date().toLocaleDateString()}</div>
-      <script>window.onload = function() { window.print(); }; window.onafterprint = function() { window.close(); if (window.opener) window.opener.focus(); };<\/script>
-      </body></html>`);
+    const dateStr = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Executive Risk Report — ${session?.name || 'Session'}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; color: #1a1a1a; font-size: 14px; line-height: 1.7; background: #fff; }
+  .page { max-width: 900px; margin: 0 auto; padding: 60px 60px; }
+  @media print {
+    .page { padding: 30px 40px; }
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+  }
+
+  /* Cover */
+  .cover { display:flex; flex-direction:column; justify-content:space-between; min-height:96vh; border-left:6px solid #F0A500; padding-left:32px; }
+  .cover-label { font-family:Arial,sans-serif; font-size:11px; letter-spacing:0.15em; color:#999; text-transform:uppercase; margin-bottom:48px; }
+  .cover-title { font-size:36px; font-weight:700; color:#111; line-height:1.2; margin-bottom:16px; }
+  .cover-subtitle { font-size:18px; color:#555; margin-bottom:40px; }
+  .cover-meta { font-size:13px; color:#777; line-height:2; }
+  .cover-risk { display:inline-block; padding:8px 20px; border-radius:4px; font-family:Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.1em; margin-top:32px; }
+  .cover-footer { font-size:11px; color:#aaa; border-top:1px solid #eee; padding-top:16px; }
+
+  /* Section headers */
+  .section-header { font-family:Arial,sans-serif; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:#F0A500; font-weight:700; margin-bottom:16px; margin-top:36px; padding-bottom:6px; border-bottom:2px solid #F0A500; }
+  .section-title { font-size:20px; color:#111; margin:28px 0 8px; border-bottom:2px solid #F0A500; padding-bottom:6px; font-weight:700; }
+
+  /* Risk badge */
+  .risk-badge { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:6px; font-family:Arial,sans-serif; font-weight:700; font-size:14px; letter-spacing:0.05em; }
+
+  /* Charts */
+  .chart-row { display:flex; gap:32px; align-items:flex-start; margin:20px 0; flex-wrap:wrap; }
+  .chart-box { flex:1; min-width:220px; }
+  .chart-label { font-family:Arial,sans-serif; font-size:10px; color:#999; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px; }
+
+  /* Agent table */
+  table { width:100%; border-collapse:collapse; font-size:13px; margin:16px 0; }
+  th { background:#F8F8F8; text-align:left; padding:9px 12px; font-family:Arial,sans-serif; font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:#888; border-bottom:2px solid #eee; font-weight:600; }
+  td { padding:10px 12px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#FAFAFA; }
+  .sev-cell { font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:0.08em; text-align:center; border-radius:3px; padding:5px 8px; }
+  .agent-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+
+  /* Synthesis body */
+  h1.section-title { font-size:20px; }
+  h2 { font-family:Arial,sans-serif; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; color:#F0A500; font-weight:700; margin:28px 0 8px; padding-bottom:4px; border-bottom:1px solid #F0A50040; }
+  h3 { font-size:15px; color:#333; margin:20px 0 6px; font-weight:600; }
+  h4 { font-size:13px; color:#555; margin:14px 0 4px; font-style:italic; }
+  p { margin:8px 0; color:#333; line-height:1.8; }
+  ul, ol { margin:8px 0 12px; padding-left:24px; }
+  li { margin:5px 0; color:#333; line-height:1.7; }
+  strong { font-weight:700; color:#111; }
+  em { font-style:italic; color:#555; }
+  hr { border:none; border-top:1px solid #eee; margin:24px 0; }
+  blockquote { border-left:3px solid #F0A500; padding-left:16px; color:#555; margin:16px 0; font-style:italic; }
+
+  /* Chain cards */
+  .chain-card { border:1px solid #e8e8e8; border-left:4px solid #F0A500; border-radius:6px; padding:20px 24px; margin:16px 0; background:#FAFAFA; page-break-inside:avoid; }
+  .chain-name { font-size:15px; font-weight:700; color:#111; margin-bottom:8px; }
+  .chain-desc { font-size:12px; color:#666; margin-bottom:14px; font-style:italic; }
+  .chain-flow { display:flex; flex-direction:column; align-items:flex-start; gap:0; }
+  .flow-step { display:flex; align-items:flex-start; gap:12px; }
+  .flow-num { width:24px; height:24px; background:#F0A500; color:white; border-radius:50%; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; font-family:Arial,sans-serif; flex-shrink:0; margin-top:2px; }
+  .flow-text { font-size:13px; color:#333; line-height:1.6; padding:2px 0; }
+  .flow-arrow { color:#F0A500; font-size:14px; margin:4px 0 4px 6px; }
+
+  /* Footer */
+  .report-footer { margin-top:60px; padding-top:16px; border-top:1px solid #eee; font-size:11px; color:#aaa; display:flex; justify-content:space-between; font-family:Arial,sans-serif; }
+</style>
+</head><body>
+
+<!-- ═══════════════════════ COVER PAGE ═══════════════════════ -->
+<div class="page">
+  <div class="cover">
+    <div>
+      <div class="cover-label">Confidential — Executive Risk Report</div>
+      <div class="cover-title">${session?.name || 'Risk Assessment'}</div>
+      <div class="cover-subtitle">${scenario?.name || ''}</div>
+      <div class="cover-meta">
+        ${session?.phase_focus ? `<div><strong>Phase Focus:</strong> ${session.phase_focus}</div>` : ''}
+        <div><strong>Assessment Date:</strong> ${dateStr}</div>
+        <div><strong>Participating Agents:</strong> ${rows.length}</div>
+        <div><strong>Assessment Rounds:</strong> 2</div>
+      </div>
+      <div>
+        <div class="risk-badge" style="background:${SEV_BG[overallRisk]};color:${SEV_COLOR[overallRisk]};margin-top:28px">
+          ⚑ Overall Risk Level: ${overallRisk}
+        </div>
+      </div>
+    </div>
+    <div class="cover-footer">
+      Generated by AgentDebate &nbsp;·&nbsp; ${dateStr} &nbsp;·&nbsp; Confidential
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ EXECUTIVE DASHBOARD ═══════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">Executive Dashboard</div>
+
+  <!-- Risk distribution donut + legend -->
+  <div class="chart-row no-break">
+    <div class="chart-box">
+      <div class="chart-label">Severity Distribution</div>
+      <svg width="380" height="180" xmlns="http://www.w3.org/2000/svg">
+        ${donutSlices}
+        <circle cx="${DONUT_CX}" cy="${DONUT_CY}" r="38" fill="white"/>
+        <text x="${DONUT_CX}" y="${DONUT_CY - 7}" text-anchor="middle" font-size="18" font-weight="bold" fill="${SEV_COLOR[overallRisk]}" font-family="Arial">${overallRisk[0]}</text>
+        <text x="${DONUT_CX}" y="${DONUT_CY + 11}" text-anchor="middle" font-size="9" fill="#888" font-family="Arial">OVERALL</text>
+        ${donutLegend}
+      </svg>
+    </div>
+    <div class="chart-box">
+      <div class="chart-label">Risk Level Breakdown</div>
+      <svg width="500" height="${Math.max(SEV_ORDER.filter(s=>sevCounts[s]>0).length * 36 + 10, 40)}" xmlns="http://www.w3.org/2000/svg">
+        ${SEV_ORDER.filter(s => sevCounts[s] > 0).map((s, i) => {
+          const w = Math.round((sevCounts[s] / totalAgents) * 300);
+          return `<g transform="translate(0,${i * 36})">
+            <text x="0" y="18" font-size="11" fill="#555" font-family="Arial" font-weight="600">${s}</text>
+            <rect x="115" y="4" width="300" height="22" fill="#f0f0f0" rx="3"/>
+            <rect x="115" y="4" width="${w}" height="22" fill="${SEV_COLOR[s]}" rx="3"/>
+            <text x="${115 + w + 8}" y="19" font-size="12" fill="#333" font-weight="bold" font-family="Arial">${sevCounts[s]}</text>
+          </g>`;
+        }).join('')}
+      </svg>
+    </div>
+  </div>
+
+  <!-- Agent risk matrix -->
+  <div class="section-header" style="margin-top:32px">Agent Risk Matrix</div>
+  <div class="no-break">
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Discipline</th>
+          <th>Round 1 Severity</th>
+          <th>Round 2 Severity</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </div>
+
+  <!-- Agent confidence chart -->
+  <div class="section-header" style="margin-top:32px">Agent Confidence Scores</div>
+  <svg width="700" height="${agentChartH}" xmlns="http://www.w3.org/2000/svg">
+    <text x="200" y="-8" font-size="9" fill="#bbb" font-family="Arial">CONFIDENCE</text>
+    <text x="560" y="-8" font-size="9" fill="#bbb" font-family="Arial">R2 SEVERITY</text>
+    ${agentChartRows}
+  </svg>
+</div>
+
+<!-- ═══════════════════════ COMPOUND ATTACK CHAINS ═══════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">Compound Attack Chains</div>
+  <p style="color:#666;font-size:13px;margin-bottom:20px">Multi-step attack sequences identified across agent assessments where individual vulnerabilities compound into higher-severity scenarios.</p>
+  ${chainsHtml}
+</div>
+
+<!-- ═══════════════════════ FULL SYNTHESIS NARRATIVE ═══════════════════════ -->
+<div class="page page-break">
+  <div class="section-header">Synthesis Narrative</div>
+  ${htmlBody}
+</div>
+
+<!-- Footer on every page via fixed positioning is not reliable in print; inline footer instead -->
+<div class="page">
+  <div class="report-footer">
+    <span>AgentDebate — Executive Risk Report</span>
+    <span>${session?.name || ''}</span>
+    <span>${dateStr}</span>
+  </div>
+</div>
+
+<script>
+  window.onload = function() { window.print(); };
+  window.onafterprint = function() { window.close(); if (window.opener) window.opener.focus(); };
+<\/script>
+</body></html>`);
     win.document.close();
   };
 
@@ -1345,6 +1618,10 @@ export default function SessionWorkspace() {
             r2Done={sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal)}
             synthError={synthError}
             streamText={synthStreamText}
+            sessionAgents={sessionAgents}
+            agents={agents}
+            session={session}
+            scenario={scenarios.find(s => s.id === session?.scenario_id) || null}
           />
         )}
 
