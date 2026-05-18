@@ -323,6 +323,13 @@ React in 1-2 sentences — in character. Express genuine agreement, concern, or 
   return text.trim();
 }
 
+// Citation instruction appended to all agent prompts so sources are captured
+const CITATION_INSTRUCTION = `
+When you reference a specific fact, report, standard, or publication, append a citation immediately after the claim:
+[SOURCE: "Title or name" — https://url.example.com]
+If no URL is known: [SOURCE: "NIST SP 800-53 Rev 5"]
+Only cite real, specific sources. Do not fabricate citations.`;
+
 // --- streaming variants ---
 export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
   const threatSection = threatCatalog.length
@@ -355,9 +362,9 @@ ${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
 After your assessment, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
-Write in first person as the expert. Be specific and opinionated.`;
+Write in first person as the expert. Be specific and opinionated.${CITATION_INSTRUCTION}`;
 
-  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1300, onToken, onDone });
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400, onToken, onDone });
 }
 
 export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
@@ -383,9 +390,9 @@ Now write your Round 2 rebuttal (250-400 words) covering:
 After your rebuttal, on the very last line output exactly:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 
-Be direct. Name names. Change your position if persuaded.`;
+Be direct. Name names. Change your position if persuaded.${CITATION_INSTRUCTION}`;
 
-  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1000, onToken, onDone });
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1100, onToken, onDone });
 }
 
 export async function generateAgentReply({ agent, question, priorMessages, scenarioContext, onToken, onDone }) {
@@ -405,9 +412,9 @@ ${contextLines || '(debate just started)'}
 
 The facilitator has asked: "${question}"
 
-Respond in character (100-180 words). Be direct and opinionated. No headings or bullet lists — speak naturally as the expert you are.`;
+Respond in character (100-180 words). Be direct and opinionated. No headings or bullet lists — speak naturally as the expert you are.${CITATION_INSTRUCTION}`;
 
-  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 400, onToken, onDone });
+  return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 500, onToken, onDone });
 }
 
 // --- Tool use for live debate ---
@@ -508,7 +515,7 @@ ${contextLines || '(debate just started)'}`;
 
   const userMsg = `The facilitator has asked: "${question}"
 
-Use tools if you need specific facts, recent incidents, or technical detail — including any pinned source documents above. Then give your in-character expert response (100-180 words). No headings or bullet lists — speak naturally.`;
+Use tools if you need specific facts, recent incidents, or technical detail — including any pinned source documents above. Then give your in-character expert response (100-180 words). No headings or bullet lists — speak naturally.${CITATION_INSTRUCTION}`;
 
   const messages = [{ role: 'user', content: userMsg }];
   const toolCallLog = [];
@@ -549,10 +556,10 @@ Use tools if you need specific facts, recent incidents, or technical detail — 
     const toolResults = [];
     for (const block of data.content) {
       if (block.type !== 'tool_use') continue;
-      const tc = { name: block.name, input: block.input };
+      const result = await executeToolCall(block.name, block.input);
+      const tc = { name: block.name, input: block.input, result: result.slice(0, 400) };
       toolCallLog.push(tc);
       onToolCall?.(tc);
-      const result = await executeToolCall(block.name, block.input);
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
     }
     messages.push({ role: 'user', content: toolResults });
@@ -864,6 +871,46 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
   catch { throw new Error('Model returned non-JSON response. Try again.'); }
   if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
   return result;
+}
+
+// --- analyzeSourceValidity ---
+export async function analyzeSourceValidity({ sources, scenarioName, onToken }) {
+  if (!sources?.length) throw new Error('No sources to analyse.');
+
+  const sourcesText = sources.map((s, i) =>
+    `[S${i + 1}] ${s.title || s.domain || s.url || 'Unknown'} (${s.credibility_tier || 'unverified'})` +
+    (s.cited_claim ? `\n    Claim: "${s.cited_claim}"` : '') +
+    (s.url ? `\n    URL: ${s.url}` : '')
+  ).join('\n\n');
+
+  const prompt = `You are a senior intelligence analyst evaluating the evidentiary basis of a red-team debate session on: "${scenarioName || 'unknown scenario'}".
+
+SOURCES CITED IN THIS SESSION:
+${sourcesText}
+
+Produce a JSON validity report with this exact schema:
+{
+  "overall_confidence": "HIGH" | "MEDIUM" | "LOW",
+  "summary": "2-3 sentence overall assessment of source quality",
+  "contradictions": [
+    { "source_a": "S1", "claim_a": "...", "source_b": "S3", "claim_b": "...", "explanation": "..." }
+  ],
+  "unsupported_claims": ["claim that lacks any cited source"],
+  "key_agreements": ["claim supported by multiple independent sources"],
+  "weak_sources": ["S2 — speculative blog, should be corroborated"],
+  "recommended_sources": ["CISA advisory on X", "NIST SP 800-X"]
+}
+
+Return ONLY valid JSON. No preamble.`;
+
+  const raw = await callAnthropicStream({
+    messages: [{ role: 'user', content: prompt }],
+    maxTokens: 1200,
+    onToken,
+  });
+
+  const match = raw.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : raw);
 }
 
 // --- deleteAgents (no LLM needed) ---

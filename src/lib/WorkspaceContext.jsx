@@ -142,6 +142,7 @@ export const WorkspaceProvider = ({ children }) => {
       Chain:            scopedEntity(e.Chain, workspace.id, user.id),
       SessionSynthesis: scopedEntity(e.SessionSynthesis, workspace.id, user.id, { noCreatedBy: true }),
       SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id, { noCreatedBy: true }),
+      SessionSource:    scopedEntity(e.SessionSource, workspace.id, user.id, { noCreatedBy: true }),
       AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
     };
   }, [workspace, user]);

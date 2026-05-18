@@ -8,6 +8,7 @@ import {
   generateAgentReply, generateAgentReplyWithTools,
   parseSeverityFromText,
 } from '@/lib/llm';
+import { scoreSourceCredibility, parseCitations } from '@/lib/sources';
 import { synthesize, hexToHue, DEFAULT_VOICES, getOpenAiKey, createSentenceQueue, splitSentences } from '@/lib/voice';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
 import AddressChips      from '@/components/debate/AddressChips';
@@ -385,6 +386,35 @@ export default function LiveDebateRoom() {
     interrupt();
   }, [interrupt]);
 
+  // Persist sources found in a completed agent turn (tool URLs + inline citations)
+  const saveTurnSources = useCallback(async (msgId, agentId, text, toolCalls = []) => {
+    if (!db) return;
+    const saves = [];
+    for (const tc of toolCalls) {
+      if (tc.name === 'fetch_url' && tc.input?.url) {
+        const { tier, score } = scoreSourceCredibility(tc.input.url);
+        let domain = tc.input.url;
+        try { domain = new URL(tc.input.url).hostname; } catch { /* keep raw */ }
+        saves.push({ source_type: 'tool_fetch', url: tc.input.url, domain,
+          credibility_tier: tier, credibility_score: score,
+          content_snippet: tc.result?.slice(0, 400) || null,
+          message_id: msgId, agent_id: agentId, session_id: id });
+      }
+    }
+    for (const cite of parseCitations(text)) {
+      const { tier, score } = scoreSourceCredibility(cite.url || '');
+      let domain = null;
+      try { if (cite.url) domain = new URL(cite.url).hostname; } catch { /* ignore */ }
+      saves.push({ source_type: 'agent_citation', url: cite.url, title: cite.title, domain,
+        credibility_tier: tier, credibility_score: score,
+        cited_claim: cite.cited_claim,
+        message_id: msgId, agent_id: agentId, session_id: id });
+    }
+    for (const s of saves) {
+      await db.SessionSource.create(s).catch(() => {});
+    }
+  }, [db, id]);
+
   const resetAgent = useCallback(async (sa, round) => {
     const updates = round === 1
       ? { round1_assessment: null, round1_severity: null, status: 'pending' }
@@ -464,7 +494,8 @@ export default function LiveDebateRoom() {
             // Update local state so Round 2 othersCtx sees the fresh assessment
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, status: 'r1_done' } : s));
             await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'r1_done' });
-            await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            await saveTurnSources(savedMsg?.id || tempId, sa.agent_id, assessment);
           },
         });
       } catch (err) {
@@ -521,7 +552,8 @@ export default function LiveDebateRoom() {
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' } : s));
             await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' });
-            await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            await saveTurnSources(savedMsg?.id || tempId, sa.agent_id, assessment);
           },
         });
       } catch (err) {
@@ -571,7 +603,8 @@ export default function LiveDebateRoom() {
             onDone: async (text, toolCalls) => {
               setMessages(prev => prev.map(m => m.id === tempId ? { ...m, content: text, isStreaming: false, toolCalls } : m));
               setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
-              await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline, toolCalls } });
+              const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline, toolCalls } });
+              await saveTurnSources(savedMsg?.id || tempId, sa.agent_id, text, toolCalls);
               await attachTTS(tempId, text, sa.agent_id);
             },
           });
@@ -584,7 +617,8 @@ export default function LiveDebateRoom() {
               flushTTSBuffer();
               finishStream(tempId, text);
               setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
-              await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
+              const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
+              await saveTurnSources(savedMsg?.id || tempId, sa.agent_id, text);
             },
           });
         }
