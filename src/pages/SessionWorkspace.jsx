@@ -508,8 +508,18 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
 </div>
 
 <script>
-  window.onload = function() { window.print(); };
-  window.onafterprint = function() { window.close(); if (window.opener) window.opener.focus(); };
+  function doClose() {
+    try { if (window.opener) window.opener.focus(); } catch(e) {}
+    window.close();
+  }
+  window.onafterprint = doClose;
+  var mq = window.matchMedia && window.matchMedia('print');
+  if (mq) {
+    var handler = function(e) { if (!e.matches) doClose(); };
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else if (mq.addListener) mq.addListener(handler);
+  }
+  window.onload = function() { setTimeout(window.print.bind(window), 300); };
 <\/script>
 </body></html>`);
     win.document.close();
