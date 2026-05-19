@@ -867,8 +867,12 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
   });
 
   let result;
-  try { result = JSON.parse(raw); }
-  catch { throw new Error('Model returned non-JSON response. Try again.'); }
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    result = JSON.parse(match ? match[0] : raw);
+  } catch {
+    throw new Error('Model returned non-JSON response. Try again.');
+  }
   if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
   return result;
 }
