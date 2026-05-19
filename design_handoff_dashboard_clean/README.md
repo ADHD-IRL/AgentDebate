@@ -10,6 +10,16 @@ A **second** redesign pass of the AgentDebate Dashboard, evolving from the analy
 
 The deliverable is a running React+Babel prototype at `Dashboard Clean.html`, plus supporting `src/*.jsx` shared atoms.
 
+## Screenshots
+
+| # | File | What it shows |
+|---|---|---|
+| 01 | `screenshots/01-overview.png` | Full default view — `ALL` filter, KPI rail + pipeline strip + TODAY group + start of UPCOMING |
+| 02 | `screenshots/02-full-page.png` | Scrolled to end — UPCOMING and RECENT groups in full |
+| 03 | `screenshots/03-filter-in-progress.png` | `IN PROGRESS` filter — RECENT group hidden, count shows "7 in progress" |
+| 04 | `screenshots/04-filter-complete.png` | `COMPLETE` filter — only the RECENT group renders with 4 completed sessions |
+| 05 | `screenshots/05-tweaks-open.png` | Tweaks panel open (prototype-only; **do not port**) showing the design knobs that were explored |
+
 ## About the Design Files
 
 The files in this bundle are **design references created in HTML/React (via Babel standalone)** — a running prototype demonstrating intended layout, typography, colour, density, and interactions. **They are not production code to ship directly.**
@@ -265,6 +275,12 @@ design_handoff_dashboard_clean/
 ├── README.md                  ← this file
 ├── Dashboard Clean.html       ← the running prototype (open in a browser)
 ├── tweaks-panel.jsx           ← prototype tweak panel (do not port)
+├── screenshots/
+│   ├── 01-overview.png
+│   ├── 02-full-page.png
+│   ├── 03-filter-in-progress.png
+│   ├── 04-filter-complete.png
+│   └── 05-tweaks-open.png
 └── src/
     ├── atoms.jsx              ← shared Card, Ico, AvatarStack, SevPill (reference patterns)
     ├── data.jsx               ← mock data shapes (reference structure only)
