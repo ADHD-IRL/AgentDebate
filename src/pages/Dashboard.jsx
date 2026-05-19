@@ -488,16 +488,18 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Priority Queue — full width */}
+        <div style={{ marginBottom: 16 }}>
+          {loading ? <Skeleton h={220} /> : (
+            <PriorityQueue items={priorityItems} kpiFilter={kpiFilter} />
+          )}
+        </div>
+
         {/* Main 2-column layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 16, alignItems: 'start' }}>
 
           {/* Left column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-            {/* Priority Queue */}
-            {loading ? <Skeleton h={220} /> : (
-              <PriorityQueue items={priorityItems} kpiFilter={kpiFilter} />
-            )}
 
             {/* Findings Matrix */}
             {loading ? <Skeleton h={180} /> : (
@@ -517,7 +519,7 @@ export default function Dashboard() {
           {/* Right column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <QuickActions />
-            <CoveragePanel domains={coverageDomains} analysts={[]} />
+            <CoveragePanel domains={coverageDomains} />
           </div>
         </div>
       </div>

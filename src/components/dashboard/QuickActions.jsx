@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Plus, Radio, FileText, Link2 } from 'lucide-react';
-import { Card, CardHeader } from './atoms';
+import { Card } from './atoms';
 
 const ACTIONS = [
   {
     icon: Plus,
     label: 'Start new session',
-    desc:  'Classic red team debate',
+    desc:  'Structured threat assessment',
     href:  '/sessions/new',
     primary: true,
     badge: null,
@@ -14,15 +14,15 @@ const ACTIONS = [
   {
     icon: Radio,
     label: 'Live Debate Room',
-    desc:  'Real-time AI moderation',
-    href:  '/sessions',
+    desc:  'Real-time streaming debate',
+    href:  '/sessions/new?mode=live',
     primary: false,
     badge: 'NEW',
   },
   {
     icon: FileText,
     label: 'Generate brief',
-    desc:  'Executive summary export',
+    desc:  'From completed sessions',
     href:  '/reports',
     primary: false,
     badge: null,
@@ -40,54 +40,52 @@ const ACTIONS = [
 export default function QuickActions() {
   return (
     <Card>
-      <CardHeader title="Quick Actions" />
-      <div style={{ padding: '8px 12px 12px' }}>
+      <div style={{ padding: '8px' }}>
         {ACTIONS.map((action, i) => {
           const Icon = action.icon;
           return (
-            <Link key={i} to={action.href} style={{ textDecoration: 'none', display: 'block', marginTop: i === 0 ? 0 : 6 }}>
+            <Link key={i} to={action.href} style={{ textDecoration: 'none', display: 'block', marginBottom: i < ACTIONS.length - 1 ? 2 : 0 }}>
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '9px 12px', borderRadius: 6, cursor: 'pointer',
-                  backgroundColor: action.primary ? 'rgba(240,165,0,0.1)' : 'transparent',
-                  border: action.primary ? '1px solid rgba(240,165,0,0.3)' : '1px solid var(--wr-border)',
-                  transition: 'all 0.15s',
+                  padding: '10px 12px', borderRadius: 6, cursor: 'pointer',
+                  backgroundColor: action.primary ? 'var(--wr-amber)' : 'transparent',
+                  transition: 'background-color 0.15s',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = action.primary ? 'rgba(240,165,0,0.17)' : 'rgba(138,155,181,0.07)';
+                  if (!action.primary) e.currentTarget.style.backgroundColor = 'rgba(138,155,181,0.06)';
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = action.primary ? 'rgba(240,165,0,0.1)' : 'transparent';
+                  if (!action.primary) e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 <div style={{
-                  width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+                  width: 32, height: 32, borderRadius: 6, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: action.primary ? 'rgba(240,165,0,0.2)' : 'rgba(138,155,181,0.1)',
+                  backgroundColor: action.primary ? 'rgba(13,27,42,0.12)' : 'rgba(240,165,0,0.1)',
+                  color: action.primary ? '#0D1B2A' : 'var(--wr-amber)',
                 }}>
-                  <Icon style={{ width: 14, height: 14, color: action.primary ? 'var(--wr-amber)' : 'var(--wr-text-secondary)' }} />
+                  <Icon style={{ width: 15, height: 15 }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{
-                      fontSize: 12.5, fontWeight: 600,
-                      color: action.primary ? 'var(--wr-amber)' : 'var(--wr-text-primary)',
+                      fontSize: 13, fontWeight: 600,
+                      color: action.primary ? '#0D1B2A' : 'var(--wr-text-primary)',
                     }}>
                       {action.label}
                     </span>
                     {action.badge && (
                       <span style={{
-                        fontSize: 8.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, letterSpacing: '0.08em',
+                        fontSize: 9, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, letterSpacing: '0.08em',
                         padding: '1px 5px', borderRadius: 3,
-                        backgroundColor: 'rgba(39,174,96,0.18)', color: '#27AE60',
-                        border: '1px solid rgba(39,174,96,0.3)',
+                        backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)',
                       }}>
                         {action.badge}
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 10.5, color: 'var(--wr-text-muted)', marginTop: 1 }}>
+                  <div style={{ fontSize: 11, marginTop: 2, color: action.primary ? 'rgba(13,27,42,0.6)' : 'var(--wr-text-muted)' }}>
                     {action.desc}
                   </div>
                 </div>
