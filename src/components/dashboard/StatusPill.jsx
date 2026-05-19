@@ -21,7 +21,7 @@ export default function StatusPill({ status, live = false }) {
     }}>
       {live && (
         <span className="pulse-dot" style={{
-          width: 5, height: 5, borderRadius: '50%',
+          width: 6, height: 6, borderRadius: '50%',
           backgroundColor: '#C0392B', flexShrink: 0,
         }} />
       )}

@@ -75,9 +75,6 @@ function EventRow({ event }) {
           <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--wr-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
             {event.title}
           </span>
-          {event.live && (
-            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#C0392B', flexShrink: 0 }} />
-          )}
         </div>
         {event.scenario && (
           <div style={{ fontSize: 12, color: 'var(--wr-text-muted)', marginTop: 4, paddingLeft: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
