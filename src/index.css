@@ -112,6 +112,11 @@
     animation: pulseDot 1.6s ease-in-out infinite;
   }
 
+  .row-link { transition: background-color 140ms ease; }
+  .row-link:hover { background-color: rgba(138,155,181,0.05); }
+  .row-link:hover .row-chev { color: var(--wr-amber) !important; transform: translateX(2px); }
+  .row-chev { transition: color 140ms ease, transform 140ms ease; }
+
   .stripe {
     background-image: repeating-linear-gradient(
       45deg,
