@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Mic2, Search, Zap } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -62,8 +62,9 @@ Each Agent has:
 - **Red Team Focus** — what specific threats they're hunting for
 - **Vector Weights** — how much they emphasize Human, Technical, Physical, and Futures dimensions (0–100 each)
 - **Severity Default** — their baseline alarm level (CRITICAL / HIGH / MEDIUM / LOW)
+- **Voice** — used in Live Debate mode to give each agent a distinct spoken voice
 
-You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. When importing, the **## heading** in the file becomes the agent's display name — keep it clear and descriptive (e.g., "Counterintelligence / HUMINT Officer" rather than a code like "LIB-IC01").`
+You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. You can also **create a new agent directly inside the session builder** using the "+ New Agent" button — it saves to your agent library and is immediately selected for the session.`
       },
       {
         icon: AlertTriangle,
@@ -81,7 +82,9 @@ Threats live in the library and can be tagged, categorized, and linked to scenar
 
 The analogy: a Chain is like a **kill chain or attack tree**, but written in plain language. "Step 1: An insider with finance access exfiltrates procurement data. Step 2: A competitor uses that data to undercut bids. Step 3: Revenue erosion triggers a workforce reduction. Step 4: Key technical staff leave, creating a capability gap."
 
-Each step can be attributed to an Agent (showing which discipline "owns" that step) or labeled freely. Chains can be built manually or AI-generated from a scenario.`
+Each step can be attributed to an Agent or labeled freely. Chains can be built manually or AI-generated from a scenario.
+
+**Chains are automatically extracted from synthesis.** When you generate a synthesis report, AgentDebate parses out any compound threat chains identified by the AI and saves them directly to your chain library — tagged to that session and scenario. You don't need to do anything manually.`
       },
       {
         icon: Swords,
@@ -95,7 +98,11 @@ Think of a Session like a **formal analytical war game**:
 - You run them through structured rounds of analysis
 - You synthesize what they found
 
-Sessions are the core workflow of AgentDebate. Everything else (domains, agents, threats, chains) exists to support them.`
+Sessions have two modes:
+- **Classic Analysis** — structured two-round written assessment with synthesis
+- **Live Debate** — real-time streaming debate where agents respond to each other with spoken voice, and you can interject with facilitator questions
+
+Sessions track a **status** as they progress: pending → round1 → round2 → complete.`
       },
     ]
   },
@@ -108,24 +115,24 @@ Sessions are the core workflow of AgentDebate. Everything else (domains, agents,
       {
         num: '01',
         title: 'Create a Session',
-        what: 'You name the session, select a Scenario, optionally set a Phase Focus (e.g., "design phase," "deployment week"), and choose which Agents will participate.',
-        system: 'AgentDebate creates a Session record and a SessionAgent record for each selected agent, all initialized to "pending" status. No analysis has been run yet — this is just configuration.',
-        tip: 'Choose agents with diverse vector weights. If all your agents are Technical-heavy, you\'ll miss human and geopolitical risks.'
+        what: 'Name the session, select a Scenario, optionally set a Phase Focus (e.g., "design phase," "deployment week"), and choose which Agents will participate. You can select agents from your library or click "+ New Agent" to create and add one on the spot.',
+        system: 'AgentDebate creates a Session record and a SessionAgent record for each selected agent, all initialized to "pending" status. New agents created here are simultaneously saved to the agent library and added to the session.',
+        tip: 'Choose agents with diverse vector weights. If all your agents are Technical-heavy, you\'ll miss human and geopolitical risks. Use the AI Recommendations feature to get suggestions tuned to your scenario.'
       },
       {
         num: '02',
         title: 'Generate Round 1 — Independent Assessments',
-        what: 'You click "Generate All Round 1" (or generate individual agents one at a time). Each agent independently analyzes the scenario.',
-        system: `For each Agent, AgentDebate:
+        what: 'Click "Generate All Round 1" to run all agents, or click the individual generate button on any agent card to run just that one. Already-completed agents are never re-run — "Generate All" only processes agents that don\'t yet have a Round 1 assessment.',
+        system: `For each agent that needs generation:
 1. Sets the agent's status to "generating_r1"
-2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario's context document, and the session's phase focus
-3. Sends this prompt to Claude (Anthropic's AI model)
-4. The model responds in character as that agent — writing a structured threat assessment with findings, assumptions, and a severity rating
-5. The assessment and severity are saved back to that agent's SessionAgent record
-6. Status updates to "r1_done"
+2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario context document, phase focus, and any pinned chains
+3. Sends this prompt to Claude (Anthropic's AI model) via streaming
+4. The model responds in character — writing a structured threat assessment with findings, assumptions, a severity rating, and inline source citations
+5. The assessment and severity are saved; status updates to "r1_done"
+6. When the last agent completes manually (without using Generate All), the session status auto-advances to "round1"
 
-Agents do NOT see each other's assessments in Round 1. This is deliberate — it ensures independent thinking before cross-pollination.`,
-        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first.'
+Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.`,
+        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first. The "Generate All" button disables automatically once every agent has a completed assessment.'
       },
       {
         num: '03',
@@ -137,19 +144,18 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
       {
         num: '04',
         title: 'Generate Round 2 — Cross-Examination',
-        what: 'You click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 and produces a rebuttal — revising, reinforcing, or challenging.',
-        system: `For each Agent, AgentDebate:
+        what: 'Click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 and produces a rebuttal — revising, reinforcing, or challenging. Same smart skip logic applies: already-completed agents are never re-run.',
+        system: `For each Agent:
 1. Compiles all other agents' Round 1 assessments into a single "others" block
-2. Constructs a new prompt asking the agent to respond: who do they most agree with? Who do they most disagree with, and why? Does their severity rating change?
-3. The model responds with a structured rebuttal that includes a revised severity, strongest ally identification, and a compound chain narrative (how this agent sees multiple threats connecting)
-4. All of this is saved back to the SessionAgent record
-5. Session status updates to "round2"`,
+2. Asks the agent to respond: who do they most agree with? Who do they most disagree with, and why? Does their severity change?
+3. The model responds with a structured rebuttal including a revised severity, strongest ally identification, and a compound chain narrative
+4. All results saved; when the last agent completes, session status auto-advances to "round2" and synthesis is triggered automatically`,
         tip: 'Round 2 is where the most interesting dynamics emerge — when the economist and the cyberspecialist fundamentally disagree on severity, that tension is worth exploring.'
       },
       {
         num: '05',
         title: 'Generate Synthesis',
-        what: 'You click "Generate Synthesis." AgentDebate reads all Round 1 and Round 2 assessments and produces a single consolidated report.',
+        what: 'Click "Generate Synthesis." AgentDebate reads all Round 1 and Round 2 assessments and produces a single consolidated report. This also runs automatically when Round 2 completes.',
         system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
 - Consensus findings (what most agents agree on)
 - Contested findings (where agents significantly disagree)
@@ -158,40 +164,116 @@ Agents do NOT see each other's assessments in Round 1. This is deliberate — it
 - Priority mitigations (what to address first)
 - Sharpest insights (the most incisive individual observations)
 
-The synthesis is saved as a SessionSynthesis record and the session status moves to "complete."`,
-        tip: 'The synthesis is a starting point, not a final verdict. Use it to structure a human debrief.'
+The synthesis is saved as a SessionSynthesis record, the session status moves to "complete," and any compound chains found are automatically saved to the chain library tagged to this session.`,
+        tip: 'The synthesis is a starting point, not a final verdict. Use it to structure a human debrief. You can regenerate it at any time — re-running will update the existing synthesis record.'
       },
     ]
   },
   {
-    id: 'tips',
-    icon: CheckCircle2,
+    id: 'live-debate',
+    icon: Zap,
+    color: '#F0A500',
+    title: 'Live Debate Mode',
+    subsections: [
+      {
+        icon: Zap,
+        color: '#F0A500',
+        title: 'What is Live Debate?',
+        body: `Live Debate is the **real-time alternative to Classic Analysis**. Instead of structured rounds, agents respond to each other in a flowing conversation — more like a panel discussion than a formal assessment.
+
+Choose Live Debate when you want:
+- Dynamic back-and-forth between agents (not just independent assessments)
+- A facilitator-directed conversation where you can interject, redirect, and challenge
+- An observable, streaming experience where you watch agents think in real time
+- Voice output — agents speak their responses aloud as they stream
+
+**How it works:** You start the debate, agents take turns responding, and you can intervene at any point with a facilitator message that redirects the conversation.`
+      },
+      {
+        icon: Mic2,
+        color: '#9B59B6',
+        title: 'Streaming Text-to-Speech',
+        body: `In Live Debate, agents **speak as they write** — you don't wait for the full response to finish before hearing it. Each agent has an assigned voice (configurable in their profile), and sentences are spoken aloud the moment they complete streaming.
+
+**How it works:**
+- As the AI streams tokens, AgentDebate detects sentence boundaries in real time
+- Each complete sentence is immediately sent to the voice engine and queued for playback
+- Sentences play back-to-back with no gaps — the audio is seamless even though it's generated on the fly
+- A speaking indicator shows which agent is currently talking
+- You can mute voice output at any time with the speaker toggle
+
+**Agent voices** are assigned per-agent in the agent settings (Alloy, Echo, Nova, Onyx, Fable, Shimmer). Give each agent a distinct voice to make the debate easier to follow aurally. You need an OpenAI API key configured in your workspace settings to enable TTS.`,
+        usage: `
+1. Set a voice for each agent in their profile (Agent Library → edit agent → Voice field).
+2. When starting a Live Debate session, ensure your OpenAI API key is set in workspace settings.
+3. Start the debate — agents will speak automatically as they respond.
+4. The speaker icon in the agent card lights up to show which agent is currently speaking.
+5. Click the speaker toggle (top-right of the debate room) to mute/unmute all voice output.
+6. If no voice is set for an agent, that agent's responses will be text-only.
+`
+      },
+    ]
+  },
+  {
+    id: 'sources',
+    icon: Search,
     color: '#27AE60',
-    title: 'Best Practices & Tips',
-    tips: [
+    title: 'Session Sources & Evidence Tracking',
+    subsections: [
       {
-        title: 'Build your agent library before your first session',
-        body: 'The richer and more diverse your agent library, the more powerful your sessions. Aim for at least 8–12 agents spanning different disciplines. Use the AI generator or import from markdown to build quickly.'
+        icon: Search,
+        color: '#27AE60',
+        title: 'What are Session Sources?',
+        body: `Every time an agent references a real-world source — a standard, a publication, a URL they fetched with a tool — AgentDebate captures it automatically and attaches it to the session. This creates a **complete evidence trail** for the session's analysis.
+
+Sources are categorized into four credibility tiers:
+- **Authoritative** — government agencies, military, academic institutions, official standards bodies (NIST, CISA, ENISA)
+- **Credible** — established security publications, reputable news outlets, recognized research organizations (Reuters, SANS, MITRE, OWASP)
+- **Speculative** — social media, blogs, opinion platforms (Reddit, Medium, LinkedIn)
+- **Unverified** — domains that don't match known categories
+
+Sources appear in the **SOURCES tab** of any session.`
       },
       {
-        title: 'Write a thorough scenario context document',
-        body: 'This is the single biggest lever on output quality. A thin scenario ("we\'re launching a product") produces thin assessments. A rich one ("we are launching X in market Y during period Z, with constraints A, B, C, and key dependencies D, E") produces sharp, specific findings. Use AI Assist to expand your draft.'
+        icon: Shield,
+        color: '#2E86AB',
+        title: 'How Sources are Captured',
+        body: `Sources are captured in three ways:
+
+**1. Tool-fetched URLs** — When an agent uses the fetch_url tool to retrieve a web page, the URL, domain, and a snippet of the content are automatically saved with the credibility score.
+
+**2. Inline citations** — Agents are instructed to append citations directly in their text using the format:
+\`[SOURCE: "Title or Name" — https://url.example.com]\`
+or for sources without URLs:
+\`[SOURCE: "NIST SP 800-53 Rev 5"]\`
+These are parsed from the response text and saved with the citing sentence as context.
+
+**3. Facilitator entries** — You can manually add a source via the "Add Source" button in the SOURCES tab. Use this to pin reference documents, standards, or external reports relevant to the session.
+
+Each source row shows: the domain with credibility tier badge, the agent that cited it, and the exact sentence that referenced it.`
       },
       {
-        title: 'Use Phase Focus to narrow scope',
-        body: 'The "Phase Focus" field in a session lets you direct agents to a specific window of the scenario — "the first 90 days post-launch," "the procurement phase," "during board transition." This prevents generic analysis and forces agents to be precise.'
-      },
-      {
-        title: 'Interpret severity disagreements as signals',
-        body: 'When one agent rates a threat CRITICAL and another rates it LOW, that isn\'t noise — it\'s signal. It means the threat\'s impact is highly dependent on which domain lens you apply. Explore those gaps, not just the consensus.'
-      },
-      {
-        title: 'Don\'t just run one session',
-        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change.'
-      },
-      {
-        title: 'Use chains to communicate risk narratives',
-        body: 'A chain is often more persuasive to stakeholders than a list of threats. It shows *how* one small failure cascades into a major one. Build chains from your sessions\' compound chain narratives.'
+        icon: Brain,
+        color: '#7B2D8B',
+        title: 'AI Validity Analysis',
+        body: `The **Run Validity Analysis** button in the SOURCES tab sends all captured sources and their citing claims to Claude for a cross-source analysis.
+
+The AI evaluates:
+- **Contradictions** — claims from different agents that are directly at odds with each other, along with an explanation of the conflict
+- **Unsupported claims** — significant assertions made without any cited source
+- **Key agreements** — claims that multiple sources independently corroborate
+- **Overall confidence** — a HIGH / MEDIUM / LOW confidence rating for the session's evidence base
+
+This analysis is particularly useful for auditing a session before presenting findings to leadership — it flags gaps and conflicts that need human judgment before the report is finalized.`,
+        usage: `
+1. Complete at least one debate round so agents have generated responses with citations.
+2. Navigate to the **SOURCES tab** in the session workspace.
+3. Review the automatically captured sources, grouped by credibility tier.
+4. Add any missing reference documents using the **Add Source** button.
+5. Click **Run Validity Analysis** — this sends all sources to AI for cross-analysis.
+6. Review the Contradictions, Unsupported Claims, and Key Agreements sections.
+7. Use findings to decide whether to regenerate specific agents with stronger sourcing instructions.
+`
       },
     ]
   },
@@ -199,23 +281,53 @@ The synthesis is saved as a SessionSynthesis record and the session status moves
     id: 'reports',
     icon: FileText,
     color: '#546E7A',
-    title: 'Exporting & Reports',
-    content: `
-A full report can include:
-- **Cover** — session name, date, scenario, phase focus
-- **Scenario Brief** — the full context document
-- **Agent Roster** — who participated and their profiles
-- **Round 1 Assessments** — all independent findings with severity
-- **Round 2 Rebuttals** — cross-examination findings and revised severities
-- **Synthesis** — the consolidated analytical report
+    title: 'Executive Report',
+    subsections: [
+      {
+        icon: FileText,
+        color: '#546E7A',
+        title: 'Professional Report Format',
+        body: `The **Print Report** button in the Synthesis tab generates a fully formatted multi-page executive report — suitable for leadership briefings, governance documentation, and audit trails.
 
-**Use cases:**
-- Briefing a leadership team after a war game
-- Documenting pre-decision risk analysis for audit or governance purposes
-- Archiving a structured record of what was considered before a major project
+The report is structured as four sections:
 
-Tip: Export to Markdown first — it's easy to paste into Confluence, Notion, Word, or any documentation system.
-    `
+**1. Cover Page**
+Session name, scenario name, phase focus, assessment date, number of participating agents, and a prominent overall risk badge (color-coded to the highest severity finding).
+
+**2. Executive Dashboard**
+- **Severity Distribution** — a donut chart showing how agent assessments distribute across CRITICAL / HIGH / MEDIUM / LOW
+- **Risk Level Breakdown** — a horizontal bar chart showing agent counts per severity tier
+- **Agent Risk Matrix** — a table with every agent's Round 1 severity, Round 2 severity, and confidence score, with color-coded cells
+- **Agent Confidence Chart** — per-agent confidence bars with inline severity labels
+
+**3. Compound Attack Chains**
+Each chain identified in the synthesis is displayed as a numbered flowchart — step-by-step attack sequences with amber visual connectors.
+
+**4. Synthesis Narrative**
+The full AI-generated synthesis report with formatted headings, bullet points, and proper typography.
+
+The report is fully print-ready — charts are inline SVG (no external dependencies) and render correctly in PDF export.`
+      },
+      {
+        icon: CheckCircle2,
+        color: '#27AE60',
+        title: 'Use Cases',
+        body: `**Leadership briefing** — the cover page and Executive Dashboard give decision-makers a one-page summary without requiring them to read the full analysis.
+
+**Governance & audit** — the full report documents that structured pre-decision risk analysis was conducted, which agents participated, what they found, and what the consensus was.
+
+**Project archive** — attach the PDF to a project record so future teams can see what risks were considered (and which were dismissed) at each phase.
+
+**Stakeholder communication** — the Compound Attack Chains section is often the most persuasive part for non-technical audiences: it shows *how* a failure cascades, not just that a risk exists.`,
+        usage: `
+1. Complete a session through synthesis (session status must be "complete").
+2. Navigate to the **SYNTHESIS tab** in the session workspace.
+3. Click **🖨 Print Report** — a new window opens, auto-triggers the print dialog, then closes and returns focus to the app.
+4. Choose **Save as PDF** in the print dialog to generate a PDF file.
+5. The report opens with charts pre-rendered — no waiting for external assets.
+`
+      },
+    ]
   },
   {
     id: 'threat-map',
@@ -257,7 +369,7 @@ Tip: Export to Markdown first — it's easy to paste into Confluence, Notion, Wo
         title: 'Discipline Radar Chart',
         body: `The **Discipline Radar** visualizes how heavily agents from different **professional disciplines** are weighting five key threat dimensions: **Human, Technical, Physical, Futures, and Economic factors**.
 
-Each discipline (e.g., "Cybersecurity," "Supply Chain," "Geopolitics") has its own radar profile—a star-shaped polygon showing where that discipline's attention concentrates.
+Each discipline (e.g., "Cybersecurity," "Supply Chain," "Geopolitics") has its own radar profile — a star-shaped polygon showing where that discipline's attention concentrates.
 
 **What it reveals:**
 - **Spiky profiles** (uneven coverage) show disciplinary blind spots. A purely cybersecurity-focused team will be weak on geopolitical or supply chain angles.
@@ -275,7 +387,7 @@ Each discipline (e.g., "Cybersecurity," "Supply Chain," "Geopolitics") has its o
 4. **Larger/longer rays** indicate higher emphasis by that discipline on that dimension.
 5. **Compare radars visually** — overlapping areas show shared concern; gaps show disciplinary blind spots.
 6. Hover over lines to see the exact percentages and disciplines.
-7. Use this as input for **future session design**: if your radar is weak on "Futures," consider adding a futurist or strategic foresight specialist to your agent panel.
+7. Use this as input for **future session design**: if your radar is weak on "Futures," consider adding a futurist or strategic foresight specialist.
 `
       },
       {
@@ -292,12 +404,7 @@ It's a stacked bar chart where each bar represents one discipline, and the color
 - **Even distributions** suggest balanced, nuanced threat modeling
 
 **Why it matters:**
-When you see one discipline producing 70% CRITICAL ratings and another producing 70% MEDIUM ratings for the same threat, you've found a genuine analytical disagreement. That gap is often where the richest insights hide.
-
-**Strategic use:**
-- Calibrate your session design: if you suspect you'll miss optimistic reframings, bring in more "green disciplines"
-- Benchmark between sessions: does your severity distribution shift when you change agent composition?
-- Communicate trade-offs to leadership: show that risk severity is lens-dependent, not objective fact`,
+When you see one discipline producing 70% CRITICAL ratings and another producing 70% MEDIUM ratings for the same threat, you've found a genuine analytical disagreement. That gap is often where the richest insights hide.`,
         usage: `
 1. From the Threat Map page, locate the **Severity Breakdown by Discipline** bar chart.
 2. Each bar represents one discipline with agents in the session.
@@ -306,11 +413,50 @@ When you see one discipline producing 70% CRITICAL ratings and another producing
 5. Hover over a segment to see the exact count and percentage.
 6. **Compare bars across disciplines** to spot which ones are pessimistic vs. optimistic.
 7. Use the **domain filter** at the top to drill down or widen your view.
-8. This chart is a starting point for a conversation: "Why does Supply Chain see this as CRITICAL while HR sees it as MEDIUM?" — that question often yields the best analysis.
 `
       }
     ]
-  }
+  },
+  {
+    id: 'tips',
+    icon: CheckCircle2,
+    color: '#27AE60',
+    title: 'Best Practices & Tips',
+    tips: [
+      {
+        title: 'Build your agent library before your first session',
+        body: 'The richer and more diverse your agent library, the more powerful your sessions. Aim for at least 8–12 agents spanning different disciplines. Use the AI generator or import from markdown to build quickly. You can also create agents on the fly inside the session builder with the "+ New Agent" button.'
+      },
+      {
+        title: 'Write a thorough scenario context document',
+        body: 'This is the single biggest lever on output quality. A thin scenario ("we\'re launching a product") produces thin assessments. A rich one ("we are launching X in market Y during period Z, with constraints A, B, C, and key dependencies D, E") produces sharp, specific findings. Use AI Assist to expand your draft.'
+      },
+      {
+        title: 'Use Phase Focus to narrow scope',
+        body: 'The "Phase Focus" field in a session lets you direct agents to a specific window of the scenario — "the first 90 days post-launch," "the procurement phase," "during board transition." This prevents generic analysis and forces agents to be precise.'
+      },
+      {
+        title: 'Interpret severity disagreements as signals',
+        body: 'When one agent rates a threat CRITICAL and another rates it LOW, that isn\'t noise — it\'s signal. It means the threat\'s impact is highly dependent on which domain lens you apply. Explore those gaps, not just the consensus.'
+      },
+      {
+        title: 'Review sources before presenting findings',
+        body: 'Open the SOURCES tab after a session and run Validity Analysis. It surfaces unsupported claims and inter-agent contradictions before you present. A finding with zero credible sources deserves more scrutiny than one backed by three authoritative citations.'
+      },
+      {
+        title: 'Let synthesis auto-generate your chains',
+        body: 'You don\'t need to manually build chains from session findings. Generate the synthesis report and AgentDebate automatically extracts and saves compound attack chains to your library. Review and edit them afterward if needed.'
+      },
+      {
+        title: 'Use Live Debate for stakeholder engagement',
+        body: 'Classic Analysis is best for rigorous documented assessment. Live Debate is better when you want to demonstrate the process to stakeholders — the streaming voice output makes the AI reasoning visible and engaging in a way that a written report cannot replicate.'
+      },
+      {
+        title: 'Don\'t just run one session',
+        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change. Use the Threat Heatmap across sessions to spot trends.'
+      },
+    ]
+  },
 ];
 
 function SubsectionWithUsage({ sub }) {
