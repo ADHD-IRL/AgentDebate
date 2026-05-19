@@ -194,10 +194,9 @@ export default function Dashboard() {
       return t >= prevStart && t < rangeStart && sa.round1_assessment && (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL';
     });
 
-    const openCount  = data.sessionAgents.filter(sa => {
-      const s = enrichedSessions.find(x => x.id === sa.session_id);
-      return s && ['round1', 'round2'].includes(s.status) && sa.round1_assessment;
-    }).length;
+    const openCount  = enrichedSessions.filter(s =>
+      ['round1', 'round2'].includes(s.status)
+    ).length;
 
     const completedConfs = enrichedSessions.filter(s => inRange(s.created_at) && s.confidence != null).map(s => s.confidence);
     const avgConf = completedConfs.length ? completedConfs.reduce((a, b) => a + b, 0) / completedConfs.length : null;
