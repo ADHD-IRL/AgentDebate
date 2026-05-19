@@ -18,7 +18,9 @@ export default function PriorityQueue({ items = [], kpiFilter }) {
 
   const filtered = items.filter(p => {
     const tabOk = tab === 'ALL' || p.severity === tab;
-    const kpiOk = !kpiFilter || (kpiFilter === 'critical' && p.severity === 'CRITICAL');
+    const kpiOk = !kpiFilter
+      || (kpiFilter === 'critical' && p.severity === 'CRITICAL')
+      || (kpiFilter === 'open');  // open findings shows all attention items
     return tabOk && kpiOk;
   });
 

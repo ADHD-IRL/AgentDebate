@@ -72,7 +72,9 @@ export default function SessionFeed({ sessions = [], kpiFilter }) {
     const isActive = s.status === 'round1' || s.status === 'round2';
     const tabOk    = tab === 'ALL' || (tab === 'ACTIVE' && isActive) || (tab === 'COMPLETE' && s.status === 'complete');
     const searchOk = !search || (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.scenario || '').toLowerCase().includes(search.toLowerCase());
-    const kpiOk    = !kpiFilter || kpiFilter !== 'critical' || (s.criticalCount || 0) > 0;
+    const kpiOk    = !kpiFilter
+      || (kpiFilter === 'critical' && (s.criticalCount || 0) > 0)
+      || (kpiFilter === 'open'    && isActive);
     return tabOk && searchOk && kpiOk;
   });
 
