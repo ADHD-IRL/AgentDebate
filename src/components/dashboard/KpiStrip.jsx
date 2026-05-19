@@ -3,7 +3,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 
 const TILES = [
   { key: 'critical', label: 'Critical findings', format: 'count', good: 'down', severe: true,  tip: 'Filter sessions by critical-severity findings' },
-  { key: 'open',     label: 'Open findings',     format: 'count', good: 'down', severe: false, tip: 'Filter to sessions with findings still in review' },
+  { key: 'open',     label: 'Open sessions',     format: 'count', good: 'down', severe: false, tip: 'Filter to sessions still in progress (Round 1 or Round 2)' },
   { key: 'sessions', label: 'Sessions / period', format: 'count', good: 'up',   severe: false, tip: 'Filter to sessions in the selected date range' },
   { key: 'conf',     label: 'Avg. confidence',   format: 'pct',   good: 'up',   severe: false, tip: 'Average agent completion rate across sessions' },
   { key: 'drift',    label: 'Median R1→R2 drift', format: 'signed', good: 'down', severe: false, tip: 'Median severity change from Round 1 to Round 2 (positive = escalated)' },
