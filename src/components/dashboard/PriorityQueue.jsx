@@ -47,20 +47,24 @@ export default function PriorityQueue({ items = [], kpiFilter }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--wr-border)', padding: '0 16px' }}>
+      <div style={{ display: 'flex', gap: 6, padding: '10px 16px 9px', borderBottom: '1px solid var(--wr-border)' }}>
         {TABS.map(t => {
-          const active = tab === t;
-          const color  = t === 'ALL' ? 'var(--wr-amber)' : SEV_COLOR[t];
+          const active   = tab === t;
+          const sevColor = t === 'ALL' ? null : SEV_COLOR[t];
+          const activeBg = active ? (sevColor ? `${sevColor}18` : 'rgba(138,155,181,0.08)') : 'transparent';
+          const activeBorder = active ? (sevColor ? `${sevColor}50` : 'var(--wr-border)') : 'transparent';
+          const activeColor  = active ? (sevColor || 'var(--wr-text-primary)') : 'var(--wr-text-muted)';
           return (
             <button key={t} onClick={() => setTab(t)} style={{
-              padding: '8px 12px', fontSize: 10.5, fontFamily: 'JetBrains Mono, monospace',
-              fontWeight: 700, letterSpacing: '0.06em',
-              color: active ? color : 'var(--wr-text-muted)',
-              backgroundColor: active ? (t === 'ALL' ? 'rgba(240,165,0,0.1)' : `${SEV_BG[t]}`) : 'transparent',
-              border: 'none', borderBottom: active ? `2px solid ${color}` : '2px solid transparent',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, marginBottom: -1,
+              padding: '4px 10px', fontSize: 10.5, fontFamily: 'JetBrains Mono, monospace',
+              fontWeight: 700, letterSpacing: '0.07em', borderRadius: 4,
+              color: activeColor,
+              backgroundColor: activeBg,
+              border: `1px solid ${activeBorder}`,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              transition: 'all 0.12s',
             }}>
-              {t} <span style={{ opacity: 0.7 }}>· {counts[t]}</span>
+              {t} <span style={{ opacity: 0.65 }}>· {counts[t]}</span>
             </button>
           );
         })}
