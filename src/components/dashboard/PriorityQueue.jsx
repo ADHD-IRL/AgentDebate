@@ -121,16 +121,16 @@ export default function PriorityQueue({ items = [], kpiFilter }) {
                   {/* Right: avatars + action */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                     {p.agents?.length > 0 && <AvatarStack names={p.agents} max={3} size={18} />}
-                    <button style={{
+                    <span style={{
                       display: 'flex', alignItems: 'center', gap: 4,
                       fontSize: 11, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
                       padding: '4px 10px', borderRadius: 4,
                       color: 'var(--wr-amber)', backgroundColor: 'transparent',
-                      border: '1px solid rgba(240,165,0,0.4)', cursor: 'pointer',
+                      border: '1px solid rgba(240,165,0,0.4)',
                       whiteSpace: 'nowrap',
                     }}>
                       {p.action} <ArrowRight style={{ width: 10, height: 10 }} />
-                    </button>
+                    </span>
                   </div>
                 </div>
               </Link>
