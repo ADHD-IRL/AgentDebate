@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Swords, Plus, Trash2, Radio, CheckCircle2, Circle, RotateCcw, AlertTriangle, X } from 'lucide-react';
+import { Swords, Plus, Trash2, Radio, CheckCircle2, Circle, RotateCcw, AlertTriangle, X, Pencil } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
@@ -45,6 +45,9 @@ export default function Sessions() {
   const [loading,       setLoading]       = useState(true);
   const [resetConfirmId, setResetConfirmId] = useState(null);
   const [resetting,      setResetting]      = useState(false);
+  const [editSessionId,  setEditSessionId]  = useState(null);
+  const [editForm,       setEditForm]       = useState({ name: '', scenario_id: '' });
+  const [editSaving,     setEditSaving]     = useState(false);
 
   useEffect(() => {
     if (!db) return;
@@ -123,6 +126,34 @@ export default function Sessions() {
     } finally {
       setResetting(false);
       setResetConfirmId(null);
+    }
+  };
+
+  const openEdit = (e, session) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditForm({ name: session.name || '', scenario_id: session.scenario_id || '' });
+    setEditSessionId(session.id);
+  };
+
+  const handleEditSave = async (e, session) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!editForm.name.trim()) return;
+    setEditSaving(true);
+    try {
+      await db.Session.update(session.id, {
+        name:        editForm.name.trim(),
+        scenario_id: editForm.scenario_id || null,
+      });
+      setSessions(prev => prev.map(s =>
+        s.id === session.id
+          ? { ...s, name: editForm.name.trim(), scenario_id: editForm.scenario_id || null }
+          : s
+      ));
+      setEditSessionId(null);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -311,6 +342,19 @@ export default function Sessions() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
+                        onClick={(e) => openEdit(e, session)}
+                        style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--wr-amber)', opacity: 0.5 }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                      >
+                        <Pencil style={{ width: 14, height: 14 }} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Edit session name and scenario</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setResetConfirmId(session.id); }}
                         style={{ padding: 6, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: '#D68910', opacity: 0.5 }}
                         onMouseEnter={e => e.currentTarget.style.opacity = 1}
@@ -335,6 +379,104 @@ export default function Sessions() {
                     <TooltipContent side="top">Delete this session permanently</TooltipContent>
                   </Tooltip>
                 </div>
+
+                {/* Inline edit overlay */}
+                {editSessionId === session.id && (
+                  <div
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    style={{
+                      position: 'absolute', inset: 0, borderRadius: 'inherit', zIndex: 10,
+                      backgroundColor: 'rgba(13,27,42,0.96)',
+                      display: 'flex', flexDirection: 'column', gap: 14,
+                      padding: '20px 24px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: 'var(--wr-amber)', letterSpacing: '0.1em' }}>
+                        EDIT SESSION
+                      </span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditSessionId(null); }}
+                        style={{ padding: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--wr-text-muted)' }}
+                      >
+                        <X style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+
+                    {/* Name field */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <label style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--wr-text-muted)' }}>
+                        SESSION NAME
+                      </label>
+                      <input
+                        autoFocus
+                        value={editForm.name}
+                        onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleEditSave(e, session); if (e.key === 'Escape') { e.stopPropagation(); setEditSessionId(null); } }}
+                        style={{
+                          width: '100%', padding: '7px 10px', borderRadius: 5,
+                          backgroundColor: 'var(--wr-bg-hover)', border: '1px solid var(--wr-border)',
+                          color: 'var(--wr-text-primary)', fontSize: 13, fontWeight: 600,
+                          outline: 'none', boxSizing: 'border-box',
+                        }}
+                        onFocus={e => e.target.style.borderColor = 'var(--wr-amber)'}
+                        onBlur={e => e.target.style.borderColor = 'var(--wr-border)'}
+                      />
+                    </div>
+
+                    {/* Scenario field */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <label style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--wr-text-muted)' }}>
+                        SCENARIO
+                      </label>
+                      <select
+                        value={editForm.scenario_id}
+                        onChange={e => setEditForm(f => ({ ...f, scenario_id: e.target.value }))}
+                        style={{
+                          width: '100%', padding: '7px 10px', borderRadius: 5,
+                          backgroundColor: 'var(--wr-bg-hover)', border: '1px solid var(--wr-border)',
+                          color: editForm.scenario_id ? 'var(--wr-text-primary)' : 'var(--wr-text-muted)',
+                          fontSize: 12, outline: 'none', boxSizing: 'border-box', cursor: 'pointer',
+                        }}
+                        onFocus={e => e.target.style.borderColor = 'var(--wr-amber)'}
+                        onBlur={e => e.target.style.borderColor = 'var(--wr-border)'}
+                      >
+                        <option value="">— No scenario —</option>
+                        {scenarios.map(sc => (
+                          <option key={sc.id} value={sc.id}>{sc.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={(e) => handleEditSave(e, session)}
+                        disabled={editSaving || !editForm.name.trim()}
+                        style={{
+                          padding: '7px 18px', borderRadius: 5,
+                          backgroundColor: 'var(--wr-amber)', color: '#0D1B2A',
+                          fontSize: 11.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                          border: 'none', cursor: editSaving || !editForm.name.trim() ? 'not-allowed' : 'pointer',
+                          letterSpacing: '0.06em', opacity: editSaving || !editForm.name.trim() ? 0.6 : 1,
+                        }}
+                      >
+                        {editSaving ? 'SAVING…' : 'SAVE'}
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditSessionId(null); }}
+                        style={{
+                          padding: '7px 18px', borderRadius: 5, border: '1px solid var(--wr-border)',
+                          backgroundColor: 'transparent', color: 'var(--wr-text-muted)',
+                          fontSize: 11.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                          cursor: 'pointer', letterSpacing: '0.06em',
+                        }}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Inline reset confirmation overlay */}
                 {resetConfirmId === session.id && (

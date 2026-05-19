@@ -59,11 +59,11 @@ function EventRow({ event }) {
       {/* DTG */}
       {(() => { const dtg = fmtDTG(event.date); return (
       <div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: 'var(--wr-text-primary)', letterSpacing: '0.02em' }}>
-          {dtg.time}
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 600, color: 'var(--wr-text-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+          {dtg.date} / {dtg.time}
         </div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--wr-text-muted)', marginTop: 2, letterSpacing: '0.06em' }}>
-          {dtg.date} · UTC
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, color: 'var(--wr-text-muted)', marginTop: 2, letterSpacing: '0.08em' }}>
+          UTC
         </div>
       </div>
       ); })()}
