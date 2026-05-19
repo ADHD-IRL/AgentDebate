@@ -58,6 +58,7 @@ export default function NewSession() {
   const [showRecs, setShowRecs] = useState(false);
   const [createFromRec, setCreateFromRec] = useState(null); // full agent object ready for modal
   const [generatingAgent, setGeneratingAgent] = useState(null); // rec being generated (shows spinner)
+  const [showNewAgentModal, setShowNewAgentModal] = useState(false);
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 
   const addPin = () => {
@@ -149,10 +150,21 @@ export default function NewSession() {
 
   const handleSaveNewAgent = async (agentForm) => {
     try {
-      const saved = await db.Agent.create({ ...agentForm, is_ai_generated: true });
+      const saved = await db.Agent.create({ ...agentForm });
       setAgents(prev => [...prev, saved]);
       setSelectedAgents(prev => [...prev, saved]);
       setCreateFromRec(null);
+    } catch (e) {
+      alert(e.message || 'Failed to create agent');
+    }
+  };
+
+  const handleSaveBlankAgent = async (agentForm) => {
+    try {
+      const saved = await db.Agent.create({ ...agentForm, is_ai_generated: agentForm.is_ai_generated || false });
+      setAgents(prev => [...prev, saved]);
+      setSelectedAgents(prev => [...prev, saved]);
+      setShowNewAgentModal(false);
     } catch (e) {
       alert(e.message || 'Failed to create agent');
     }
@@ -398,7 +410,16 @@ export default function NewSession() {
           <div className="grid grid-cols-2 gap-4">
             {/* Library */}
             <div>
-              <p className="text-xs font-medium mb-2" style={{ color: 'var(--wr-text-muted)' }}>AGENT LIBRARY</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium" style={{ color: 'var(--wr-text-muted)' }}>AGENT LIBRARY</p>
+                <button
+                  onClick={() => setShowNewAgentModal(true)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded"
+                  style={{ backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', color: 'var(--wr-amber)', cursor: 'pointer' }}
+                >
+                  <Plus className="w-3 h-3" /> New Agent
+                </button>
+              </div>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search agents..."
                 className="w-full px-2 py-1.5 text-xs rounded mb-2 outline-none"
                 style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }} />
@@ -600,6 +621,14 @@ export default function NewSession() {
           agent={createFromRec}
           onClose={() => setCreateFromRec(null)}
           onSave={handleSaveNewAgent}
+        />
+      )}
+
+      {showNewAgentModal && (
+        <AgentFormModal
+          domains={domains}
+          onClose={() => setShowNewAgentModal(false)}
+          onSave={handleSaveBlankAgent}
         />
       )}
     </div>
