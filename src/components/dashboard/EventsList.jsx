@@ -8,14 +8,16 @@ const SEV_COLOR = {
   LOW:      '#27AE60',
 };
 
-const ROW_GRID = '80px 1fr 130px 110px 130px 18px';
+const ROW_GRID = '96px 1fr 130px 110px 130px 18px';
 
-function fmtTime(iso) {
-  if (!iso) return '—';
+function fmtDTG(iso) {
+  if (!iso) return { date: '—', time: '——:——' };
   const d = new Date(iso);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  const hh  = String(d.getUTCHours()).padStart(2, '0');
+  const mm  = String(d.getUTCMinutes()).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const mon = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
+  return { date: `${day} ${mon}`, time: `${hh}:${mm}` };
 }
 
 function startOfDay(d) {
@@ -54,21 +56,23 @@ function EventRow({ event }) {
         cursor: 'pointer',
       }}
     >
-      {/* TIME */}
+      {/* DTG */}
+      {(() => { const dtg = fmtDTG(event.date); return (
       <div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 600, color: 'var(--wr-text-primary)' }}>
-          {fmtTime(event.date)}
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: 'var(--wr-text-primary)', letterSpacing: '0.02em' }}>
+          {dtg.time}
         </div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', color: 'var(--wr-text-muted)', marginTop: 2 }}>
-          UTC
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--wr-text-muted)', marginTop: 2, letterSpacing: '0.06em' }}>
+          {dtg.date} · UTC
         </div>
       </div>
+      ); })()}
 
       {/* EVENT */}
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: sevColor, flexShrink: 0 }} />
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--wr-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--wr-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
             {event.title}
           </span>
           {event.live && (
@@ -188,7 +192,7 @@ export default function EventsList({ events = [], filterLabel = 'total' }) {
         borderBottom: '1px solid var(--wr-border)',
         backgroundColor: 'rgba(138,155,181,0.03)',
       }}>
-        {['TIME', 'EVENT', 'STATUS', 'FINDINGS', 'OWNER', ''].map((h, i) => (
+        {['DTG', 'EVENT', 'STATUS', 'FINDINGS', 'OWNER', ''].map((h, i) => (
           <span key={i} style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
             letterSpacing: '0.14em', color: 'var(--wr-text-muted)', textAlign: 'center',
