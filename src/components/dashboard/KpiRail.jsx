@@ -1,5 +1,5 @@
 const TILES = [
-  { label: 'OPEN CRITICAL',    color: 'var(--wr-critical)', key: 'critical' },
+  { label: 'CRITICAL RISKS IDENTIFIED', color: 'var(--wr-critical)', key: 'critical' },
   { label: 'AVG CONFIDENCE',   color: 'var(--wr-low)',      key: 'conf'     },
   { label: 'EVENTS THIS WEEK', color: 'var(--wr-amber)',    key: 'week'     },
 ];
