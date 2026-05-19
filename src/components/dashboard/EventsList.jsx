@@ -69,14 +69,14 @@ function EventRow({ event }) {
       ); })()}
 
       {/* EVENT */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--wr-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+      <div style={{ minWidth: 0, paddingLeft: 16, textAlign: 'center' }}>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--wr-text-primary)', letterSpacing: '-0.01em' }}>
             {event.title}
           </span>
         </div>
         {event.scenario && (
-          <div style={{ fontSize: 12, color: 'var(--wr-text-muted)', marginTop: 4, paddingLeft: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: 'var(--wr-text-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {event.scenario}
           </div>
         )}
