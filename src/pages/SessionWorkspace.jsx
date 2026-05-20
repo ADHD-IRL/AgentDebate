@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { scoreSourceCredibility, parseCitations, TIER_COLORS, TIER_LABELS, SOURCE_TYPE_LABELS } from '@/lib/sources';
+import { scoreSourceCredibility, parseCitations, saveTurnSources, TIER_COLORS, TIER_LABELS, SOURCE_TYPE_LABELS } from '@/lib/sources';
 import { analyzeSourceValidity } from '@/lib/llm';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
@@ -1059,6 +1059,7 @@ export default function SessionWorkspace() {
         await db.SessionAgent.update(sa.id, updates);
         setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, ...updates } : s));
         showCriticalToast(agent.name, updates.round1_severity || updates.round2_revised_severity);
+        await saveTurnSources(db, id, null, sa.agent_id, res.assessment);
         completedCount++;
         stuckSaId = null;
 
@@ -1231,6 +1232,8 @@ export default function SessionWorkspace() {
       } else {
         await db.SessionSynthesis.create(synthData);
       }
+
+      await saveTurnSources(db, id, null, null, res.synthesis);
 
       // Persist parsed compound chains to the chains table
       const newChains = res.compound_chains || [];

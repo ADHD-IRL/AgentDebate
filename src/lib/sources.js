@@ -84,6 +84,47 @@ export const TIER_LABELS = {
 
 export const SOURCE_TYPE_LABELS = {
   tool_fetch:       'Tool fetch',
+  tool_search:      'Knowledge search',
   agent_citation:   'Agent citation',
   facilitator:      'Facilitator',
 };
+
+// ── Shared source persistence ─────────────────────────────────────────────────
+
+export async function saveTurnSources(db, sessionId, msgId, agentId, text, toolCalls = []) {
+  if (!db) return;
+  const saves = [];
+
+  for (const tc of toolCalls) {
+    if (tc.name === 'fetch_url' && tc.input?.url) {
+      const { tier, score } = scoreSourceCredibility(tc.input.url);
+      let domain = tc.input.url;
+      try { domain = new URL(tc.input.url).hostname; } catch { /* keep raw */ }
+      saves.push({ source_type: 'tool_fetch', url: tc.input.url, domain,
+        credibility_tier: tier, credibility_score: score,
+        content_snippet: tc.result?.slice(0, 400) || null,
+        message_id: msgId, agent_id: agentId, session_id: sessionId });
+
+    } else if (tc.name === 'search_knowledge' && tc.input?.query) {
+      const q = tc.input.query;
+      const wikiUrl = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(q)}`;
+      saves.push({ source_type: 'tool_search', url: wikiUrl, title: q,
+        domain: 'en.wikipedia.org', credibility_tier: 'credible', credibility_score: 70,
+        content_snippet: tc.result?.slice(0, 400) || null,
+        message_id: msgId, agent_id: agentId, session_id: sessionId });
+    }
+  }
+
+  for (const cite of parseCitations(text)) {
+    const { tier, score } = scoreSourceCredibility(cite.url || '');
+    let domain = null;
+    try { if (cite.url) domain = new URL(cite.url).hostname; } catch { /* ignore */ }
+    saves.push({ source_type: 'agent_citation', url: cite.url, title: cite.title, domain,
+      credibility_tier: tier, credibility_score: score, cited_claim: cite.cited_claim,
+      message_id: msgId, agent_id: agentId, session_id: sessionId });
+  }
+
+  for (const s of saves) {
+    await db.SessionSource.create(s).catch(() => {});
+  }
+}
