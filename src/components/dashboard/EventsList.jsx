@@ -8,16 +8,14 @@ const SEV_COLOR = {
   LOW:      '#27AE60',
 };
 
-const ROW_GRID = '96px 1fr 130px 110px 130px 18px';
-
 function fmtDTG(iso) {
-  if (!iso) return { date: '—', time: '——:——' };
+  if (!iso) return '—';
   const d = new Date(iso);
   const hh  = String(d.getUTCHours()).padStart(2, '0');
   const mm  = String(d.getUTCMinutes()).padStart(2, '0');
   const day = String(d.getUTCDate()).padStart(2, '0');
   const mon = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
-  return { date: `${day} ${mon}`, time: `${hh}:${mm}` };
+  return `${day} ${mon} / ${hh}:${mm}`;
 }
 
 function startOfDay(d) {
@@ -32,91 +30,72 @@ function dayDelta(date) {
 }
 
 function todayLabel() {
-  const now = new Date();
-  return now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).toUpperCase().replace(',', ' ·');
+  return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).toUpperCase().replace(',', ' ·');
 }
 
 function EventRow({ event }) {
-  const isPast = event.status === 'complete';
-  const sevColor = SEV_COLOR[event.severity] || 'var(--wr-text-muted)';
+  const isPast     = event.status === 'complete';
+  const sevColor   = SEV_COLOR[event.severity] || 'var(--wr-text-muted)';
 
   return (
     <Link
       to={`/sessions/${event.id}`}
-      className="row-link"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: ROW_GRID,
-        gap: 16,
-        alignItems: 'center',
-        padding: '16px 24px',
-        borderBottom: '1px solid var(--wr-border)',
-        textDecoration: 'none',
-        opacity: isPast ? 0.78 : 1,
-        cursor: 'pointer',
-      }}
+      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(138,155,181,0.06)] border-b last:border-b-0"
+      style={{ borderColor: 'var(--wr-border)', opacity: isPast ? 0.78 : 1, textDecoration: 'none' }}
     >
-      {/* DTG */}
-      {(() => { const dtg = fmtDTG(event.date); return (
-      <div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 600, color: 'var(--wr-text-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-          {dtg.date} / {dtg.time}
-        </div>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, color: 'var(--wr-text-muted)', marginTop: 2, letterSpacing: '0.08em' }}>
-          UTC
-        </div>
-      </div>
-      ); })()}
+      {/* Left severity bar */}
+      <div
+        className="w-1 h-9 rounded-full flex-shrink-0"
+        style={{ backgroundColor: sevColor }}
+      />
 
-      {/* EVENT */}
-      <div style={{ minWidth: 0, paddingLeft: 16, textAlign: 'center' }}>
-        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--wr-text-primary)', letterSpacing: '-0.01em' }}>
+      {/* Main content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-sm font-semibold truncate"
+            style={{ color: 'var(--wr-text-primary)' }}
+          >
             {event.title}
           </span>
+          {event.critical > 0 && (
+            <span
+              className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: `${SEV_COLOR.CRITICAL}18`, color: SEV_COLOR.CRITICAL, border: `1px solid ${SEV_COLOR.CRITICAL}40` }}
+            >
+              {event.critical}C
+            </span>
+          )}
         </div>
-        {event.scenario && (
-          <div style={{ fontSize: 12, color: 'var(--wr-text-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {event.scenario}
-          </div>
-        )}
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[11px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+            {fmtDTG(event.date)}
+          </span>
+          {event.scenario && (
+            <>
+              <span style={{ color: 'var(--wr-border-strong)' }}>·</span>
+              <span className="text-[11px] truncate" style={{ color: 'var(--wr-text-muted)' }}>{event.scenario}</span>
+            </>
+          )}
+          {event.owner && (
+            <>
+              <span style={{ color: 'var(--wr-border-strong)' }}>·</span>
+              <span className="text-[11px] font-mono truncate" style={{ color: 'var(--wr-text-muted)' }}>{event.owner}</span>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* STATUS */}
-      <div style={{ textAlign: 'center' }}>
+      {/* Right: findings count + status badge */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {event.findings > 0 && (
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-bold font-mono tabular-nums" style={{ color: 'var(--wr-text-primary)' }}>{event.findings}</span>
+            <span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>findings</span>
+          </div>
+        )}
         <StatusPill status={event.status} live={event.live} />
       </div>
-
-      {/* FINDINGS */}
-      <div style={{ textAlign: 'center' }}>
-        {event.findings > 0 ? (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'center' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: 'var(--wr-text-primary)' }}>
-              {event.findings}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--wr-text-muted)' }}>findings</span>
-            {event.critical > 0 && (
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700, color: '#C0392B', marginLeft: 2 }}>
-                {event.critical}C
-              </span>
-            )}
-          </div>
-        ) : (
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--wr-text-muted)' }}>—</span>
-        )}
-      </div>
-
-      {/* OWNER */}
-      <div style={{ textAlign: 'center' }}>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--wr-text-secondary)' }}>
-          {event.owner || '—'}
-        </span>
-      </div>
-
-      {/* CHEVRON */}
-      <span className="row-chev" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: 'var(--wr-text-muted)', textAlign: 'right' }}>
-        →
-      </span>
     </Link>
   );
 }
@@ -124,28 +103,31 @@ function EventRow({ event }) {
 function DayGroup({ label, sub, events }) {
   if (!events.length) return null;
   return (
-    <div>
-      <div style={{
-        padding: '12px 24px',
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--wr-border)',
-        backgroundColor: 'rgba(138,155,181,0.025)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--wr-text-secondary)' }}>
+    <div
+      className="rounded-2xl overflow-hidden mb-3"
+      style={{ border: '1px solid var(--wr-border)' }}
+    >
+      {/* Group header */}
+      <div
+        className="flex items-baseline justify-between px-4 py-2.5"
+        style={{ backgroundColor: 'rgba(138,155,181,0.04)', borderBottom: '1px solid var(--wr-border)' }}
+      >
+        <div className="flex items-baseline gap-2.5">
+          <span className="text-[11px] font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-secondary)' }}>
             {label}
           </span>
           {sub && (
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--wr-text-muted)' }}>
-              {sub}
-            </span>
+            <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>{sub}</span>
           )}
         </div>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.1em', color: 'var(--wr-text-muted)' }}>
+        <span className="text-[10px] font-mono tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>
           {events.length} EVENT{events.length !== 1 ? 'S' : ''}
         </span>
       </div>
-      {events.map(e => <EventRow key={e.id} event={e} />)}
+
+      <div style={{ backgroundColor: 'var(--wr-bg-card)' }}>
+        {events.map(e => <EventRow key={e.id} event={e} />)}
+      </div>
     </div>
   );
 }
@@ -158,50 +140,32 @@ export default function EventsList({ events = [], filterLabel = 'total' }) {
   const isEmpty = !today.length && !upcoming.length && !recent.length;
 
   return (
-    <div style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', borderRadius: 6 }}>
-
+    <div>
       {/* Header */}
-      <div style={{
-        padding: '16px 24px',
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--wr-border)',
-      }}>
+      <div className="flex items-baseline justify-between mb-3">
         <div>
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--wr-amber)' }}>
-            EVENTS
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4, color: 'var(--wr-text-primary)' }}>
-            {events.length} {filterLabel} · sorted by date
-          </div>
+          <span className="text-[10px] font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>EVENTS</span>
+          <span className="text-sm font-semibold ml-2" style={{ color: 'var(--wr-text-primary)' }}>
+            {events.length} {filterLabel}
+          </span>
         </div>
-        <Link to="/sessions" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--wr-amber)', textDecoration: 'none' }}>
+        <Link
+          to="/sessions"
+          className="text-[10px] font-bold tracking-widest font-mono"
+          style={{ color: 'var(--wr-amber)', textDecoration: 'none' }}
+        >
           ALL SESSIONS →
         </Link>
       </div>
 
-      {/* Column headers */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: ROW_GRID,
-        gap: 16,
-        padding: '8px 24px',
-        borderBottom: '1px solid var(--wr-border)',
-        backgroundColor: 'rgba(138,155,181,0.03)',
-      }}>
-        {['DTG', 'EVENT', 'STATUS', 'FINDINGS', 'OWNER', ''].map((h, i) => (
-          <span key={i} style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
-            letterSpacing: '0.14em', color: 'var(--wr-text-muted)', textAlign: 'center',
-          }}>
-            {h}
-          </span>
-        ))}
-      </div>
-
-      {/* Groups */}
       {isEmpty ? (
-        <div style={{ padding: '64px 24px', textAlign: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.14em', color: 'var(--wr-text-muted)' }}>
-          NO EVENTS MATCH THIS FILTER
+        <div
+          className="rounded-2xl py-16 text-center"
+          style={{ border: '1px solid var(--wr-border)', backgroundColor: 'var(--wr-bg-card)' }}
+        >
+          <span className="text-[11px] font-mono tracking-widest" style={{ color: 'var(--wr-text-muted)' }}>
+            NO EVENTS MATCH THIS FILTER
+          </span>
         </div>
       ) : (
         <>

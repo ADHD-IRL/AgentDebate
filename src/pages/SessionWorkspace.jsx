@@ -26,28 +26,47 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
   const confidence = round === 1 ? sa.round1_confidence : sa.round2_confidence;
   const color = agent?.domain_color || '#F0A500';
 
+  const SEV_COLORS = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
+  const sevColor = SEV_COLORS[severity] || 'var(--wr-text-muted)';
+
   return (
-    <div className="rounded overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-      <div className="h-1" style={{ backgroundColor: color }} />
-      <div className="p-4">
+    <div
+      className="rounded-2xl overflow-hidden flex"
+      style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}
+    >
+      {/* Left colour bar */}
+      <div className="w-1.5 flex-shrink-0 rounded-l-2xl" style={{ backgroundColor: color }} />
+
+      <div className="flex-1 p-4">
+        {/* Header row */}
         <div className="flex items-start justify-between mb-2">
           <div>
-            <p className="text-xs font-mono" style={{ color }}>Agent {agent?.name}</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{agent?.name}</p>
             <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{agent?.discipline}</p>
           </div>
           <div className="flex items-center gap-2">
             {confidence != null && (
-              <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)' }}>
+              <span
+                className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.2)' }}
+              >
                 {confidence}%
               </span>
             )}
-            {severity && <SeverityBadge severity={severity} />}
+            {severity && (
+              <span
+                className="text-[11px] font-bold font-mono px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: `${sevColor}18`, color: sevColor, border: `1px solid ${sevColor}40` }}
+              >
+                {severity}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Round 0 pre-brief collapsible */}
         {sa.round0_briefing && (
-          <div className="mb-3 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+          <div className="mb-3 rounded-xl" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
             <button
               onClick={() => setBriefExpanded(!briefExpanded)}
               className="w-full flex items-center justify-between px-3 py-2 text-xs"
@@ -78,7 +97,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
             {editing ? (
               <div>
                 <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={8}
-                  className="w-full text-xs px-2 py-2 rounded outline-none resize-none"
+                  className="w-full text-xs px-2 py-2 rounded-xl outline-none resize-none"
                   style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)' }} />
                 <div className="flex gap-2 mt-2">
                   <WrButton size="xs" onClick={() => { onUpdate(editText); setEditing(false); }}>Save</WrButton>
@@ -90,7 +109,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
                 <div className={expanded ? '' : 'line-clamp-4'}>
                   <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)' }}>{text}</p>
                 </div>
-                <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-xs mt-2" style={{ color: 'var(--wr-amber)' }}>
+                <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-xs mt-2 transition-colors hover:opacity-80" style={{ color: 'var(--wr-amber)' }}>
                   {expanded ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> Show more</>}
                 </button>
               </div>
@@ -525,8 +544,102 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
     win.document.close();
   };
 
+  const SECTION_ICONS = {
+    'Consensus Findings':    { color: '#27AE60', icon: '✓' },
+    'Contested Findings':    { color: '#D68910', icon: '⚡' },
+    'Compound Threat Chains':{ color: '#C0392B', icon: '⛓' },
+    'Blind Spots':           { color: 'var(--wr-text-muted)', icon: '◎' },
+    'Priority Mitigations':  { color: '#2E86AB', icon: '🛡' },
+    'Sharpest Insights':     { color: 'var(--wr-amber)', icon: '▲' },
+  };
+
+  function SectionCard({ title, children }) {
+    const meta = SECTION_ICONS[title] || { color: 'var(--wr-text-muted)', icon: '•' };
+    return (
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+        <div
+          className="flex items-center gap-2.5 px-5 py-3"
+          style={{ borderBottom: '1px solid var(--wr-border)', backgroundColor: 'rgba(138,155,181,0.04)' }}
+        >
+          <span style={{ color: meta.color, fontSize: 13 }}>{meta.icon}</span>
+          <h3 className="text-xs font-bold uppercase tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>{title}</h3>
+        </div>
+        <div className="p-5" style={{ backgroundColor: 'var(--wr-bg-card)' }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  function MarkdownContent({ text }) {
+    if (!text) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>Not available</p>;
+    return (
+      <ReactMarkdown
+        components={{
+          h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 4, marginTop: 12 }}>{children}</h3>,
+          p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 10 }}>{children}</p>,
+          ul: ({ children }) => <ul style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ul>,
+          ol: ({ children }) => <ol style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ol>,
+          li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 3 }}>{children}</li>,
+          strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    );
+  }
+
+  function CompoundChains({ chains = [] }) {
+    if (!chains.length) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>No compound chains identified</p>;
+    return (
+      <div className="space-y-6">
+        {chains.map((chain, ci) => (
+          <div key={ci}>
+            <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--wr-text-primary)' }}>{chain.name}</h4>
+            <div className="space-y-2">
+              {(chain.steps || []).map((step, si) => {
+                const isLast = si === chain.steps.length - 1;
+                return (
+                  <div key={si} className="flex items-start gap-3">
+                    <div className="flex flex-col items-center flex-shrink-0">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{ backgroundColor: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.25)', color: 'var(--wr-amber)' }}
+                      >
+                        {step.step_number || si + 1}
+                      </div>
+                      {!isLast && <div className="w-px h-4 mt-1" style={{ backgroundColor: 'var(--wr-border)' }} />}
+                    </div>
+                    <div className="flex-1 pb-2" style={{ borderBottom: !isLast ? '1px solid rgba(138,155,181,0.1)' : 'none' }}>
+                      <p className="text-sm leading-relaxed pt-1" style={{ color: 'var(--wr-text-secondary)' }}>{step.step_text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const extractSection = (text, heading) => {
+    const pattern = new RegExp(`(?:^|\\n)#{1,3}\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,3}\\s|$)`, 'i');
+    const m = text.match(pattern);
+    return m ? m[1].trim() : null;
+  };
+
+  const synth = synthesis;
+  const compoundChains = synth?.compound_chains || [];
+
+  const consensusText   = synth?.consensus_findings  || (resolvedText ? extractSection(resolvedText, 'Consensus') : null);
+  const contestedText   = synth?.contested_findings  || (resolvedText ? extractSection(resolvedText, 'Contest') : null);
+  const blindText       = synth?.blind_spots         || (resolvedText ? extractSection(resolvedText, 'Blind') : null);
+  const mitigationText  = synth?.priority_mitigations|| (resolvedText ? extractSection(resolvedText, 'Mitig') : null);
+  const insightsText    = synth?.sharpest_insights   || (resolvedText ? extractSection(resolvedText, 'Insight') : null);
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-4">
       <div className="flex items-center gap-3">
         <WrButton variant="secondary" size="sm" onClick={() => window.history.back()}>
           ← Back
@@ -537,29 +650,58 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
           </WrButton>
         )}
       </div>
+
       {resolvedText && (
-        <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-          <div className="prose-synthesis">
-            <ReactMarkdown
-              components={{
-                h1: ({ children }) => <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--wr-text-primary)', marginBottom: 12, marginTop: 24, borderBottom: '1px solid var(--wr-border)', paddingBottom: 8 }}>{children}</h1>,
-                h2: ({ children }) => <h2 style={{ fontWeight: 700, color: 'var(--wr-amber)', marginBottom: 8, marginTop: 24, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{children}</h2>,
-                h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 6, marginTop: 16 }}>{children}</h3>,
-                p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 12 }}>{children}</p>,
-                ul: ({ children }) => <ul style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ul>,
-                ol: ({ children }) => <ol style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ol>,
-                li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 4 }}>{children}</li>,
-                strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
-                em: ({ children }) => <em style={{ color: 'var(--wr-text-muted)', fontStyle: 'italic' }}>{children}</em>,
-                hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--wr-border)', margin: '20px 0' }} />,
-                code: ({ children }) => <code style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', backgroundColor: 'var(--wr-bg-secondary)', padding: '1px 5px', borderRadius: 3, color: 'var(--wr-amber)' }}>{children}</code>,
-                blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid var(--wr-amber)', paddingLeft: 14, margin: '12px 0', opacity: 0.85 }}>{children}</blockquote>,
-              }}
-            >
-              {resolvedText}
-            </ReactMarkdown>
-          </div>
-        </div>
+        <>
+          {consensusText && (
+            <SectionCard title="Consensus Findings">
+              <MarkdownContent text={consensusText} />
+            </SectionCard>
+          )}
+          {contestedText && (
+            <SectionCard title="Contested Findings">
+              <MarkdownContent text={contestedText} />
+            </SectionCard>
+          )}
+          {compoundChains.length > 0 && (
+            <SectionCard title="Compound Threat Chains">
+              <CompoundChains chains={compoundChains} />
+            </SectionCard>
+          )}
+          {blindText && (
+            <SectionCard title="Blind Spots">
+              <div style={{ borderLeft: '3px solid rgba(240,165,0,0.3)', paddingLeft: 14 }}>
+                <MarkdownContent text={blindText} />
+              </div>
+            </SectionCard>
+          )}
+          {mitigationText && (
+            <SectionCard title="Priority Mitigations">
+              <MarkdownContent text={mitigationText} />
+            </SectionCard>
+          )}
+          {insightsText && (
+            <SectionCard title="Sharpest Insights">
+              <MarkdownContent text={insightsText} />
+            </SectionCard>
+          )}
+          {!consensusText && !contestedText && !blindText && !mitigationText && !insightsText && (
+            <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+              <ReactMarkdown
+                components={{
+                  h2: ({ children }) => <h2 style={{ fontWeight: 700, color: 'var(--wr-amber)', marginBottom: 8, marginTop: 24, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{children}</h2>,
+                  h3: ({ children }) => <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 6, marginTop: 16 }}>{children}</h3>,
+                  p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 12 }}>{children}</p>,
+                  ul: ({ children }) => <ul style={{ paddingLeft: 20, marginBottom: 12 }}>{children}</ul>,
+                  li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 4 }}>{children}</li>,
+                  strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
+                }}
+              >
+                {resolvedText}
+              </ReactMarkdown>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

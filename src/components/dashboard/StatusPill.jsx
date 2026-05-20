@@ -13,7 +13,7 @@ export default function StatusPill({ status, live = false }) {
       display: 'inline-flex', alignItems: 'center', gap: 6,
       fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
       fontWeight: 700, letterSpacing: '0.12em',
-      padding: '2px 8px', borderRadius: 4,
+      padding: '2px 8px', borderRadius: 999,
       backgroundColor: `${m.color}14`,
       color: m.color,
       border: `1px solid ${m.color}40`,

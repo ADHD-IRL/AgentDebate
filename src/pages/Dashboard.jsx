@@ -5,9 +5,8 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useAuth } from '@/lib/AuthContext';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-import KpiRail    from '@/components/dashboard/KpiRail';
-import Pipeline   from '@/components/dashboard/Pipeline';
-import EventsList from '@/components/dashboard/EventsList';
+import PostureRail from '@/components/dashboard/PostureRail';
+import EventsList  from '@/components/dashboard/EventsList';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -189,17 +188,6 @@ export default function Dashboard() {
       },
     };
   }, [data.sessions, data.sessionAgents, data.syntheses]);
-
-  // ── Pipeline counts ────────────────────────────────────────────────────────
-
-  const pipelineCounts = useMemo(() => {
-    const counts = { pending: 0, round1: 0, round2: 0, review: 0, complete: 0 };
-    for (const s of data.sessions) {
-      const k = s.status || 'pending';
-      if (k in counts) counts[k]++;
-    }
-    return counts;
-  }, [data.sessions]);
 
   // ── Filter & search ────────────────────────────────────────────────────────
 
@@ -384,11 +372,16 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* KPI rail + Pipeline row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: 20 }}>
-          {loading ? <Skeleton h={130} /> : <KpiRail kpis={kpis} />}
-          {loading ? <Skeleton h={130} /> : <Pipeline counts={pipelineCounts} total={data.sessions.length} />}
-        </div>
+        {/* Posture rail */}
+        {loading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+            <Skeleton h={160} />
+            <Skeleton h={160} />
+            <Skeleton h={160} />
+          </div>
+        ) : (
+          <PostureRail sessions={data.sessions} kpis={kpis} />
+        )}
 
         {/* Events list */}
         {loading ? <Skeleton h={400} /> : (
