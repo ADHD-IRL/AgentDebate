@@ -150,6 +150,94 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
   );
 }
 
+// ── Synthesis helper components (must be module-level for React reconciliation) ─
+
+const SYNTHESIS_SECTION_ICONS = {
+  'Consensus Findings':    { color: '#27AE60', icon: '✓' },
+  'Contested Findings':    { color: '#D68910', icon: '⚡' },
+  'Compound Threat Chains':{ color: '#C0392B', icon: '⛓' },
+  'Blind Spots':           { color: 'hsl(215 10% 48%)', icon: '◎' },
+  'Priority Mitigations':  { color: '#2E86AB', icon: '🛡' },
+  'Sharpest Insights':     { color: '#F0A500', icon: '▲' },
+};
+
+function SynthSectionCard({ title, children }) {
+  const meta = SYNTHESIS_SECTION_ICONS[title] || { color: 'hsl(215 10% 48%)', icon: '•' };
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+      <div
+        className="flex items-center gap-2.5 px-5 py-3"
+        style={{ borderBottom: '1px solid var(--wr-border)', backgroundColor: 'rgba(138,155,181,0.04)' }}
+      >
+        <span style={{ color: meta.color, fontSize: 13 }}>{meta.icon}</span>
+        <h3 className="text-xs font-bold uppercase tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>{title}</h3>
+      </div>
+      <div className="p-5" style={{ backgroundColor: 'var(--wr-bg-card)' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SynthMarkdown({ text }) {
+  if (!text) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>Not available</p>;
+  return (
+    <ReactMarkdown
+      components={{
+        h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 4, marginTop: 12 }}>{children}</h3>,
+        p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 10 }}>{children}</p>,
+        ul: ({ children }) => <ul style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ul>,
+        ol: ({ children }) => <ol style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ol>,
+        li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 3 }}>{children}</li>,
+        strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+function SynthChains({ chains = [] }) {
+  if (!chains.length) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>No compound chains identified</p>;
+  return (
+    <div className="space-y-6">
+      {chains.map((chain, ci) => (
+        <div key={ci}>
+          <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--wr-text-primary)' }}>{chain.name}</h4>
+          <div className="space-y-2">
+            {(chain.steps || []).map((step, si) => {
+              const isLast = si === chain.steps.length - 1;
+              return (
+                <div key={si} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{ backgroundColor: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.25)', color: 'var(--wr-amber)' }}
+                    >
+                      {step.step_number || si + 1}
+                    </div>
+                    {!isLast && <div className="w-px h-4 mt-1" style={{ backgroundColor: 'var(--wr-border)' }} />}
+                  </div>
+                  <div className="flex-1 pb-2" style={{ borderBottom: !isLast ? '1px solid rgba(138,155,181,0.1)' : 'none' }}>
+                    <p className="text-sm leading-relaxed pt-1" style={{ color: 'var(--wr-text-secondary)' }}>{step.step_text}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function extractSynthSection(text, heading) {
+  const pattern = new RegExp(`(?:^|\\n)#{1,3}\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,3}\\s|$)`, 'i');
+  const m = text.match(pattern);
+  return m ? m[1].trim() : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError, streamText, sessionAgents, agents, session, scenario }) {
   const [resolvedText, setResolvedText] = useState('');
 
@@ -544,99 +632,14 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
     win.document.close();
   };
 
-  const SECTION_ICONS = {
-    'Consensus Findings':    { color: '#27AE60', icon: '✓' },
-    'Contested Findings':    { color: '#D68910', icon: '⚡' },
-    'Compound Threat Chains':{ color: '#C0392B', icon: '⛓' },
-    'Blind Spots':           { color: 'var(--wr-text-muted)', icon: '◎' },
-    'Priority Mitigations':  { color: '#2E86AB', icon: '🛡' },
-    'Sharpest Insights':     { color: 'var(--wr-amber)', icon: '▲' },
-  };
-
-  function SectionCard({ title, children }) {
-    const meta = SECTION_ICONS[title] || { color: 'var(--wr-text-muted)', icon: '•' };
-    return (
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
-        <div
-          className="flex items-center gap-2.5 px-5 py-3"
-          style={{ borderBottom: '1px solid var(--wr-border)', backgroundColor: 'rgba(138,155,181,0.04)' }}
-        >
-          <span style={{ color: meta.color, fontSize: 13 }}>{meta.icon}</span>
-          <h3 className="text-xs font-bold uppercase tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>{title}</h3>
-        </div>
-        <div className="p-5" style={{ backgroundColor: 'var(--wr-bg-card)' }}>
-          {children}
-        </div>
-      </div>
-    );
-  }
-
-  function MarkdownContent({ text }) {
-    if (!text) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>Not available</p>;
-    return (
-      <ReactMarkdown
-        components={{
-          h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--wr-text-primary)', marginBottom: 4, marginTop: 12 }}>{children}</h3>,
-          p: ({ children }) => <p style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.75, marginBottom: 10 }}>{children}</p>,
-          ul: ({ children }) => <ul style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ul>,
-          ol: ({ children }) => <ol style={{ paddingLeft: 18, marginBottom: 10 }}>{children}</ol>,
-          li: ({ children }) => <li style={{ fontSize: 13.5, color: 'var(--wr-text-secondary)', lineHeight: 1.7, marginBottom: 3 }}>{children}</li>,
-          strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'var(--wr-text-primary)' }}>{children}</strong>,
-        }}
-      >
-        {text}
-      </ReactMarkdown>
-    );
-  }
-
-  function CompoundChains({ chains = [] }) {
-    if (!chains.length) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>No compound chains identified</p>;
-    return (
-      <div className="space-y-6">
-        {chains.map((chain, ci) => (
-          <div key={ci}>
-            <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--wr-text-primary)' }}>{chain.name}</h4>
-            <div className="space-y-2">
-              {(chain.steps || []).map((step, si) => {
-                const isLast = si === chain.steps.length - 1;
-                return (
-                  <div key={si} className="flex items-start gap-3">
-                    <div className="flex flex-col items-center flex-shrink-0">
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{ backgroundColor: 'rgba(240,165,0,0.1)', border: '1px solid rgba(240,165,0,0.25)', color: 'var(--wr-amber)' }}
-                      >
-                        {step.step_number || si + 1}
-                      </div>
-                      {!isLast && <div className="w-px h-4 mt-1" style={{ backgroundColor: 'var(--wr-border)' }} />}
-                    </div>
-                    <div className="flex-1 pb-2" style={{ borderBottom: !isLast ? '1px solid rgba(138,155,181,0.1)' : 'none' }}>
-                      <p className="text-sm leading-relaxed pt-1" style={{ color: 'var(--wr-text-secondary)' }}>{step.step_text}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const extractSection = (text, heading) => {
-    const pattern = new RegExp(`(?:^|\\n)#{1,3}\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,3}\\s|$)`, 'i');
-    const m = text.match(pattern);
-    return m ? m[1].trim() : null;
-  };
-
   const synth = synthesis;
   const compoundChains = synth?.compound_chains || [];
 
-  const consensusText   = synth?.consensus_findings  || (resolvedText ? extractSection(resolvedText, 'Consensus') : null);
-  const contestedText   = synth?.contested_findings  || (resolvedText ? extractSection(resolvedText, 'Contest') : null);
-  const blindText       = synth?.blind_spots         || (resolvedText ? extractSection(resolvedText, 'Blind') : null);
-  const mitigationText  = synth?.priority_mitigations|| (resolvedText ? extractSection(resolvedText, 'Mitig') : null);
-  const insightsText    = synth?.sharpest_insights   || (resolvedText ? extractSection(resolvedText, 'Insight') : null);
+  const consensusText   = synth?.consensus_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Consensus') : null);
+  const contestedText   = synth?.contested_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Contest') : null);
+  const blindText       = synth?.blind_spots         || (resolvedText ? extractSynthSection(resolvedText, 'Blind') : null);
+  const mitigationText  = synth?.priority_mitigations|| (resolvedText ? extractSynthSection(resolvedText, 'Mitig') : null);
+  const insightsText    = synth?.sharpest_insights   || (resolvedText ? extractSynthSection(resolvedText, 'Insight') : null);
 
   return (
     <div className="p-6 space-y-4">
@@ -654,36 +657,36 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
       {resolvedText && (
         <>
           {consensusText && (
-            <SectionCard title="Consensus Findings">
-              <MarkdownContent text={consensusText} />
-            </SectionCard>
+            <SynthSectionCard title="Consensus Findings">
+              <SynthMarkdown text={consensusText} />
+            </SynthSectionCard>
           )}
           {contestedText && (
-            <SectionCard title="Contested Findings">
-              <MarkdownContent text={contestedText} />
-            </SectionCard>
+            <SynthSectionCard title="Contested Findings">
+              <SynthMarkdown text={contestedText} />
+            </SynthSectionCard>
           )}
           {compoundChains.length > 0 && (
-            <SectionCard title="Compound Threat Chains">
-              <CompoundChains chains={compoundChains} />
-            </SectionCard>
+            <SynthSectionCard title="Compound Threat Chains">
+              <SynthChains chains={compoundChains} />
+            </SynthSectionCard>
           )}
           {blindText && (
-            <SectionCard title="Blind Spots">
+            <SynthSectionCard title="Blind Spots">
               <div style={{ borderLeft: '3px solid rgba(240,165,0,0.3)', paddingLeft: 14 }}>
-                <MarkdownContent text={blindText} />
+                <SynthMarkdown text={blindText} />
               </div>
-            </SectionCard>
+            </SynthSectionCard>
           )}
           {mitigationText && (
-            <SectionCard title="Priority Mitigations">
-              <MarkdownContent text={mitigationText} />
-            </SectionCard>
+            <SynthSectionCard title="Priority Mitigations">
+              <SynthMarkdown text={mitigationText} />
+            </SynthSectionCard>
           )}
           {insightsText && (
-            <SectionCard title="Sharpest Insights">
-              <MarkdownContent text={insightsText} />
-            </SectionCard>
+            <SynthSectionCard title="Sharpest Insights">
+              <SynthMarkdown text={insightsText} />
+            </SynthSectionCard>
           )}
           {!consensusText && !contestedText && !blindText && !mitigationText && !insightsText && (
             <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
