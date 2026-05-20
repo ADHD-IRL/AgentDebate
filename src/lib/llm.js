@@ -624,15 +624,18 @@ function parseCompoundChains(chainsText) {
   if (!chainsText) return [];
   if (/unable to generate|no compound|no.*chain|no meaningful/i.test(chainsText)) return [];
   const chains = [];
-  const blocks = chainsText.split(/\n(?=#{1,4}\s|(?:\d+\.|\*{1,2})[^\n]+)/).filter(b => b.trim());
+  // Split only on heading lines — numbered/bulleted steps must stay inside their block
+  const blocks = chainsText.split(/\n(?=#{1,4}\s)/).filter(b => b.trim());
   for (const block of blocks) {
     const lines = block.trim().split('\n').filter(l => l.trim());
     if (!lines.length) continue;
-    const rawTitle = lines[0].replace(/^(#{1,4}|\d+\.|\*{1,2})\s*/, '').replace(/\*{1,2}/g, '').replace(/[:]\s*$/, '').trim();
+    // Skip intro text that appears before the first chain heading
+    if (!/^#{1,4}\s/.test(lines[0])) continue;
+    const rawTitle = lines[0].replace(/^#{1,4}\s*/, '').replace(/\*{1,2}/g, '').replace(/[:\s]+$/, '').trim();
     if (!rawTitle || rawTitle.length < 4) continue;
     const bodyText = lines.slice(1).join('\n').trim();
     if (!bodyText) continue;
-    // Match step lines; fall back to any non-empty body line if no explicit steps found
+    // Match step lines; fall back to any substantial body line
     let stepLines = bodyText.split('\n').filter(l => /^(step\s*\d+|→|\d+\.|[-•*])/i.test(l.trim()));
     if (stepLines.length === 0) {
       stepLines = bodyText.split('\n').filter(l => l.trim().length > 10);
@@ -643,6 +646,7 @@ function parseCompoundChains(chainsText) {
       agent_label: '',
       step_text: line.replace(/^(step\s*\d+[:\-]?|→|\d+\.|[-•*])\s*/i, '').trim(),
     })).filter(s => s.step_text.length > 0);
+    if (!steps.length) continue;
     chains.push({ name: rawTitle, description: bodyText.substring(0, 300), steps });
   }
   return chains;
