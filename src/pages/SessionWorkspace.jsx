@@ -1252,7 +1252,7 @@ export default function SessionWorkspace() {
             steps: c.steps || [],
             is_ai_generated: true,
             tags: [],
-          }).catch(() => {});
+          });
         }
       }
 
