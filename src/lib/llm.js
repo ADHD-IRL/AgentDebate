@@ -112,6 +112,45 @@ async function callAnthropic({ messages, maxTokens = 2000, system }) {
   return data.content[0].text.trim();
 }
 
+// --- regenerateAgentField ---
+const FIELD_DESCRIPTIONS = {
+  persona_description:      '3-4 sentences describing who this expert is, how they think, what experiences shaped them, and what drives their analysis',
+  cognitive_bias:           '1-2 sentences on what this expert systematically underweights, misses, or is blind to',
+  red_team_focus:           '2-3 sentences on what specific threat patterns, attack vectors, or failure modes this agent actively hunts for',
+  professional_background:  '2-3 sentences of career history and past roles that shaped this expert\'s analytical lens',
+  epistemic_style:          '1-2 sentences on evidence threshold requirements, preferred evidence types, and ambiguity tolerance',
+  institutional_background: '1-2 sentences on former agency, service, or sector background and resulting organizational culture imprint',
+  conflict_triggers:        '1 sentence on what arguments, sources, or analytical styles this expert distrusts or dismisses in debate',
+  decision_style:           '1 sentence on escalation threshold, speed-vs-accuracy orientation, and crisis response posture',
+  adversary_model:          '1 sentence on assumed adversary sophistication, motivations, and the primary threat lens applied',
+  institutional_incentives: '1 sentence on career, organizational, and political incentives that shape how this expert frames assessments',
+};
+
+export async function regenerateAgentField({ field, agent }) {
+  const desc = FIELD_DESCRIPTIONS[field] || '1-2 sentences relevant to this field';
+  const lines = [
+    `Name: ${agent.name || 'Unknown'}`,
+    `Discipline: ${agent.discipline || 'Unknown'}`,
+    agent.persona_description     && `Persona: ${agent.persona_description}`,
+    agent.professional_background && `Background: ${agent.professional_background}`,
+    agent.expertise_level         && `Expertise: ${agent.expertise_level}`,
+    agent.reasoning_style         && `Reasoning style: ${agent.reasoning_style}`,
+    agent.institutional_background && `Institution: ${agent.institutional_background}`,
+  ].filter(Boolean).join('\n');
+
+  const prompt = `You are generating one field for an expert agent profile in AgentDebate, a structured multi-agent risk analysis platform.
+
+Agent context:
+${lines}
+
+Generate ONLY the "${field}" field — ${desc}.
+
+Return ONLY the raw field text. No JSON, no labels, no explanation. Keep it concise and operationally specific.`;
+
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 350 });
+  return text.trim();
+}
+
 // --- generateAgent ---
 export async function generateAgent({ domain_id, expert_type, prior_background, key_focus, bias_toward, institutional_hint, adversary_hint }) {
   const prompt = `You are building an expert agent profile for the AgentDebate strategic analysis system.
