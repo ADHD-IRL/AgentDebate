@@ -89,6 +89,11 @@ export default function NewSession() {
     }
   };
 
+  // Only show chains tied to the selected scenario; fall back to all if none selected
+  const visibleChains = form.scenario_id
+    ? chains.filter(c => c.scenario_id === form.scenario_id)
+    : chains;
+
   const toggleAgent = (agent) => {
     if (selectedAgents.find(a => a.id === agent.id)) {
       setSelectedAgents(selectedAgents.filter(a => a.id !== agent.id));
@@ -272,7 +277,7 @@ export default function NewSession() {
               <option value="">Select domain...</option>
               {domains.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </WrSelect>
-            <WrSelect label="SCENARIO" value={form.scenario_id} onChange={v => set('scenario_id',v)}>
+            <WrSelect label="SCENARIO" value={form.scenario_id} onChange={v => { set('scenario_id', v); set('pinned_chain_ids', []); }}>
               <option value="">Select scenario...</option>
               {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </WrSelect>
@@ -515,13 +520,15 @@ export default function NewSession() {
             Chains are generated during synthesis or created in the{' '}
             <a href="/chains" className="underline" style={{ color: 'var(--wr-amber)' }}>Chain Library</a>.
           </p>
-          {chains.length === 0 ? (
+          {visibleChains.length === 0 ? (
             <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>
-              No chains in your library yet. Run a synthesis on a completed session to auto-generate chains, or build one manually in the Chain Library.
+              {form.scenario_id
+                ? 'No chains for this scenario yet. Run a synthesis on a completed session to generate them.'
+                : 'No chains in your library yet. Run a synthesis on a completed session to auto-generate chains, or build one manually in the Chain Library.'}
             </p>
           ) : (
             <div className="space-y-1.5 max-h-56 overflow-y-auto">
-              {chains.map(chain => {
+              {visibleChains.map(chain => {
                 const isSelected = form.pinned_chain_ids.includes(chain.id);
                 const isDisabled = !isSelected && form.pinned_chain_ids.length >= 3;
                 return (
