@@ -14,6 +14,8 @@ import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import DebateTranscript from '@/components/session/DebateTranscript';
 import RiskRegistry from '@/components/session/RiskRegistry';
+import SessionProgressBar from '@/components/session/SessionProgressBar';
+import SynthesisSummary from '@/components/session/SynthesisSummary';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SOURCES','SETTINGS'];
 
@@ -1595,17 +1597,60 @@ export default function SessionWorkspace() {
 
       {/* Tabs */}
       <div className="flex border-b" style={{ borderColor: 'var(--wr-border)' }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className="px-6 py-3 text-xs font-bold tracking-widest font-mono transition-colors"
-            style={{
-              color: tab === t ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
-              borderBottom: tab === t ? '2px solid var(--wr-amber)' : '2px solid transparent',
-            }}>
-            {t}
-          </button>
-        ))}
+        {TABS.map(t => {
+          let badge = null;
+          if (t === 'ROUND 1') {
+            const done = sessionAgents.filter(sa => sa.round1_assessment).length;
+            const total = sessionAgents.length;
+            if (total > 0) badge = done === total ? '✓' : `${done}/${total}`;
+          } else if (t === 'ROUND 2') {
+            const done = sessionAgents.filter(sa => sa.round2_rebuttal).length;
+            const total = sessionAgents.length;
+            if (total > 0) badge = done === total ? '✓' : `${done}/${total}`;
+          } else if (t === 'SYNTHESIS') {
+            badge = synthesis?.raw_text ? '✓' : null;
+          } else if (t === 'THREATS') {
+            badge = threats.length > 0 ? String(threats.length) : null;
+          } else if (t === 'SOURCES') {
+            badge = sessionSources.length > 0 ? String(sessionSources.length) : null;
+          }
+          return (
+            <button key={t} onClick={() => setTab(t)}
+              className="px-5 py-3 text-xs font-bold tracking-widest font-mono transition-colors flex items-center gap-1.5"
+              style={{
+                color: tab === t ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
+                borderBottom: tab === t ? '2px solid var(--wr-amber)' : '2px solid transparent',
+              }}>
+              {t}
+              {badge && (
+                <span
+                  className="text-xs font-mono font-bold px-1 py-0 rounded-sm"
+                  style={{
+                    backgroundColor: badge === '✓' ? 'rgba(39,174,96,0.15)' : 'rgba(240,165,0,0.12)',
+                    color: badge === '✓' ? '#27AE60' : 'var(--wr-amber)',
+                    fontSize: '9px',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Session progress strip */}
+      <SessionProgressBar
+        sessionAgents={sessionAgents}
+        agents={agents}
+        synthesis={synthesis}
+        threats={threats}
+        sessionSources={sessionSources}
+        generatingAll={generatingAll}
+        generatingSynthesis={generatingSynthesis}
+        onTabChange={setTab}
+      />
 
       {/* Content */}
       <div className="p-6">
@@ -1764,20 +1809,30 @@ export default function SessionWorkspace() {
         )}
 
         {tab === 'SYNTHESIS' && (
-          <SynthesisPanel
-            synthesis={synthesis}
-            sessionId={id}
-            onGenerate={generateSynthesis}
-            generating={generatingSynthesis}
-            synthStatus={synthStatus}
-            r2Done={sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal)}
-            synthError={synthError}
-            streamText={synthStreamText}
-            sessionAgents={sessionAgents}
-            agents={agents}
-            session={session}
-            scenario={scenarios.find(s => s.id === session?.scenario_id) || null}
-          />
+          <>
+            <SynthesisSummary
+              synthesis={synthesis}
+              sessionAgents={sessionAgents}
+              agents={agents}
+              threats={threats}
+              sessionSources={sessionSources}
+              onGoToThreats={() => setTab('THREATS')}
+            />
+            <SynthesisPanel
+              synthesis={synthesis}
+              sessionId={id}
+              onGenerate={generateSynthesis}
+              generating={generatingSynthesis}
+              synthStatus={synthStatus}
+              r2Done={sessionAgents.length > 0 && sessionAgents.every(sa => sa.round2_rebuttal)}
+              synthError={synthError}
+              streamText={synthStreamText}
+              sessionAgents={sessionAgents}
+              agents={agents}
+              session={session}
+              scenario={scenarios.find(s => s.id === session?.scenario_id) || null}
+            />
+          </>
         )}
 
         {tab === 'THREATS' && (
