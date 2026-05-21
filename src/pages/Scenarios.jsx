@@ -156,10 +156,15 @@ export default function Scenarios() {
   useEffect(() => { load(); }, [db]);
 
   const handleSave = async (form) => {
-    if (form.id) {
+    const originalScenario = modal === 'new' ? null : modal;
+    if (form.id && form.name === originalScenario?.name) {
+      // Name unchanged — update in place
       await db.Scenario.update(form.id, form);
-      // Mark this scenario as edited now so Run Session unlocks
       setScenarioEditedAt(prev => ({ ...prev, [form.id]: Date.now() }));
+    } else if (form.id) {
+      // Name changed — create a new scenario, leave the original intact
+      const { id: _dropped, ...rest } = form;
+      await db.Scenario.create(rest);
     } else {
       await db.Scenario.create(form);
     }
