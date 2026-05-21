@@ -201,7 +201,10 @@ function SynthMarkdown({ text }) {
   );
 }
 
-function SynthChains({ chains = [] }) {
+function SynthChains({ chains: rawChains = [] }) {
+  const chains = Array.isArray(rawChains) ? rawChains
+    : typeof rawChains === 'string' ? (() => { try { return JSON.parse(rawChains); } catch { return []; } })()
+    : [];
   if (!chains.length) return <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>No compound chains identified</p>;
   return (
     <div className="space-y-6">
@@ -637,7 +640,10 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
   };
 
   const synth = synthesis;
-  const compoundChains = synth?.compound_chains || [];
+  const rawCompoundChains = synth?.compound_chains;
+  const compoundChains = Array.isArray(rawCompoundChains) ? rawCompoundChains
+    : typeof rawCompoundChains === 'string' ? (() => { try { return JSON.parse(rawCompoundChains); } catch { return []; } })()
+    : [];
 
   const consensusText   = synth?.consensus_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Consensus') : null);
   const contestedText   = synth?.contested_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Contest') : null);
