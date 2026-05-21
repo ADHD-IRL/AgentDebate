@@ -45,6 +45,42 @@ export default function AgentDetailPanel({ agent, domain, onEdit, onClone, onDel
           </Section>
         )}
 
+        {agent.epistemic_style && (
+          <Section title="EPISTEMIC STYLE">
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{agent.epistemic_style}</p>
+          </Section>
+        )}
+
+        {agent.conflict_triggers && (
+          <Section title="CONFLICT TRIGGERS">
+            <p className="text-xs leading-relaxed italic" style={{ color: 'var(--wr-text-secondary)' }}>{agent.conflict_triggers}</p>
+          </Section>
+        )}
+
+        {agent.adversary_model && (
+          <Section title="ADVERSARY MODEL">
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{agent.adversary_model}</p>
+          </Section>
+        )}
+
+        {agent.institutional_background && (
+          <Section title="INSTITUTIONAL BACKGROUND">
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{agent.institutional_background}</p>
+          </Section>
+        )}
+
+        {agent.decision_style && (
+          <Section title="DECISION STYLE">
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{agent.decision_style}</p>
+          </Section>
+        )}
+
+        {agent.institutional_incentives && (
+          <Section title="INCENTIVE STRUCTURE">
+            <p className="text-xs leading-relaxed italic" style={{ color: 'var(--wr-text-secondary)' }}>{agent.institutional_incentives}</p>
+          </Section>
+        )}
+
         <Section title="VECTOR WEIGHTS">
           <VectorBars agent={agent} />
         </Section>

@@ -25,6 +25,18 @@ const FORMAT_EXAMPLE = `## Counterintelligence / HUMINT Officer
 
 **Domain Tags:** DoD, National Security
 
+**Epistemic Style:** Requires corroboration across two collection domains before high-confidence attribution.
+
+**Institutional Background:** Former DIA officer; shaped by interagency rivalry and classification barriers.
+
+**Conflict Triggers:** Distrusts private-sector cyber analysts who lack HUMINT exposure.
+
+**Decision Style:** Delays attribution until evidentiary chain is operationally defensible.
+
+**Adversary Model:** Assumes state-actor primacy for any persistent intrusion campaign.
+
+**Incentives:** Career shaped by avoiding false positives; institutional reputation depends on accuracy over speed.
+
 ---
 
 ## All-Source Intelligence Analyst
@@ -85,6 +97,8 @@ function parseAgentBlock(blockLines) {
     red_team_focus: '', severity_default: 'HIGH',
     vector_human: 50, vector_technical: 50, vector_physical: 30, vector_futures: 40,
     tags: [], is_ai_generated: false, domain_tags: [],
+    epistemic_style: '', institutional_background: '', conflict_triggers: '',
+    decision_style: '', adversary_model: '', institutional_incentives: '',
   };
 
   // Name from ## heading: "## LIB-IC01 — Some Name" → "Some Name"
@@ -155,6 +169,25 @@ function parseAgentBlock(blockLines) {
       agent.domain_tags = domainTagsLine.split(/[,;]/).map(t => t.trim()).filter(Boolean);
     }
   }
+
+  // Extended persona fields (all optional, backwards compatible)
+  const epistemic = findAndGet('Epistemic Style') || findAndGet('Epistemic');
+  if (epistemic) agent.epistemic_style = epistemic;
+
+  const instBg = findAndGet('Institutional Background') || findAndGet('Institutional') || findAndGet('Former Background');
+  if (instBg) agent.institutional_background = instBg;
+
+  const triggers = findAndGet('Conflict Triggers') || findAndGet('Distrust Triggers');
+  if (triggers) agent.conflict_triggers = triggers;
+
+  const decision = findAndGet('Decision Style') || findAndGet('Operational Tempo');
+  if (decision) agent.decision_style = decision;
+
+  const adversary = findAndGet('Adversary Model') || findAndGet('Adversary Lens') || findAndGet('Threat Model');
+  if (adversary) agent.adversary_model = adversary;
+
+  const incentives = findAndGet('Incentives') || findAndGet('Institutional Incentives') || findAndGet('Career Incentives');
+  if (incentives) agent.institutional_incentives = incentives;
 
   return agent;
 }
