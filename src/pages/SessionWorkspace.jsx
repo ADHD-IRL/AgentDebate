@@ -681,11 +681,14 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
     : typeof rawCompoundChains === 'string' ? (() => { try { return JSON.parse(rawCompoundChains); } catch { return []; } })()
     : [];
 
-  const consensusText   = synth?.consensus_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Consensus') : null);
-  const contestedText   = synth?.contested_findings  || (resolvedText ? extractSynthSection(resolvedText, 'Contest') : null);
-  const blindText       = synth?.blind_spots         || (resolvedText ? extractSynthSection(resolvedText, 'Blind') : null);
-  const mitigationText  = synth?.priority_mitigations|| (resolvedText ? extractSynthSection(resolvedText, 'Mitig') : null);
-  const insightsText    = synth?.sharpest_insights   || (resolvedText ? extractSynthSection(resolvedText, 'Insight') : null);
+  // These JSONB fields default to [] in the DB (truthy!) so we can't use || directly.
+  // The save code only populates raw_text; always extract sections from resolvedText.
+  const asStr = (v) => (v && typeof v === 'string') ? v : null;
+  const consensusText   = asStr(synth?.consensus_findings)  || (resolvedText ? extractSynthSection(resolvedText, 'Consensus') : null);
+  const contestedText   = asStr(synth?.contested_findings)  || (resolvedText ? extractSynthSection(resolvedText, 'Contest') : null);
+  const blindText       = asStr(synth?.blind_spots)         || (resolvedText ? extractSynthSection(resolvedText, 'Blind') : null);
+  const mitigationText  = asStr(synth?.priority_mitigations)|| (resolvedText ? extractSynthSection(resolvedText, 'Mitig') : null);
+  const insightsText    = asStr(synth?.sharpest_insights)   || (resolvedText ? extractSynthSection(resolvedText, 'Insight') : null);
 
   return (
     <div className="space-y-4">
