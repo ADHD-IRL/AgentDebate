@@ -113,7 +113,7 @@ async function callAnthropic({ messages, maxTokens = 2000, system }) {
 }
 
 // --- generateAgent ---
-export async function generateAgent({ domain_id, expert_type, prior_background, key_focus, bias_toward }) {
+export async function generateAgent({ domain_id, expert_type, prior_background, key_focus, bias_toward, institutional_hint, adversary_hint }) {
   const prompt = `You are building an expert agent profile for the AgentDebate strategic analysis system.
 Generate a detailed agent profile for the following expert type:
 
@@ -121,6 +121,8 @@ Expert type: ${expert_type}
 Prior background hints: ${prior_background || 'none'}
 Key focus area: ${key_focus || 'none'}
 Known bias toward: ${bias_toward || 'none'}
+Institutional background hint: ${institutional_hint || 'none'}
+Adversary lens hint: ${adversary_hint || 'none'}
 
 Return a JSON object with exactly these fields:
 {
@@ -134,12 +136,18 @@ Return a JSON object with exactly these fields:
   "vector_technical": 50,
   "vector_physical": 30,
   "vector_futures": 40,
-  "tags": ["array", "of", "3-5", "relevant", "tags"]
+  "tags": ["array", "of", "3-5", "relevant", "tags"],
+  "epistemic_style": "1-2 sentences: evidence threshold, preferred collection types, tolerance for ambiguity",
+  "institutional_background": "1-2 sentences: former agency or sector and organizational culture imprint",
+  "conflict_triggers": "1 sentence: what arguments or sources this expert distrusts or dismisses",
+  "decision_style": "1 sentence: escalation threshold and response posture under uncertainty",
+  "adversary_model": "1 sentence: assumed adversary sophistication and primary threat lens",
+  "institutional_incentives": "1 sentence: career or organizational incentives shaping this expert's assessments"
 }
 
 Return ONLY the JSON object.`;
 
-  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1024 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1800 });
   const match = text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? match[0] : text);
 }

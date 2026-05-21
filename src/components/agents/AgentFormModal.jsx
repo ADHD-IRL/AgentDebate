@@ -25,9 +25,11 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
     reasoning_style:'Analytical', severity_default:'HIGH', vector_human:50,
     vector_technical:50, vector_physical:30, vector_futures:40, is_ai_generated:false, tags:[],
     voice_id: '',
+    epistemic_style: '', institutional_background: '', conflict_triggers: '',
+    decision_style: '', adversary_model: '', institutional_incentives: '',
     ...agent
   });
-  const [aiForm, setAiForm] = useState({ domain_id: '', expert_type:'', prior_background:'', key_focus:'', bias_toward:'' });
+  const [aiForm, setAiForm] = useState({ domain_id: '', expert_type:'', prior_background:'', key_focus:'', bias_toward:'', institutional_hint:'', adversary_hint:'' });
   const [generating, setGenerating] = useState(false);
   const [tagInput, setTagInput] = useState('');
 
@@ -85,6 +87,8 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
               <WrInput label="PRIOR BACKGROUND (optional)" value={aiForm.prior_background} onChange={v => setAi('prior_background',v)} placeholder="Career background hints..." />
               <WrInput label="KEY FOCUS AREA (optional)" value={aiForm.key_focus} onChange={v => setAi('key_focus',v)} placeholder="What do they prioritize..." />
               <WrInput label="KNOWN BIAS TOWARD (optional)" value={aiForm.bias_toward} onChange={v => setAi('bias_toward',v)} placeholder="What they tend to over or underweight..." />
+              <WrInput label="INSTITUTIONAL BACKGROUND (optional)" value={aiForm.institutional_hint} onChange={v => setAi('institutional_hint',v)} placeholder="Former agency, sector, or org culture hint..." />
+              <WrInput label="ADVERSARY LENS (optional)" value={aiForm.adversary_hint} onChange={v => setAi('adversary_hint',v)} placeholder="Assumed adversary sophistication or threat lens..." />
               <WrButton onClick={generateAgent} disabled={!aiForm.expert_type || generating} className="w-full justify-center" size="lg">
                 {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Agent...</> : <><Sparkles className="w-4 h-4" /> Generate Agent</>}
               </WrButton>
@@ -129,6 +133,34 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
                     placeholder="What this expert systematically underweights or misses..." />
                   <WrInput label="RED-TEAM FOCUS" value={form.red_team_focus} onChange={v => set('red_team_focus',v)} rows={2}
                     placeholder="What this agent hunts for in any scenario..." />
+                </div>
+              </div>
+
+              {/* Analytical Style */}
+              <div>
+                <p className="text-xs font-bold tracking-widest mb-3 font-mono" style={{ color: 'var(--wr-text-muted)' }}>ANALYTICAL STYLE</p>
+                <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>How this expert evaluates evidence and engages in analytical debate.</p>
+                <div className="space-y-3">
+                  <WrInput label="EPISTEMIC STYLE (optional)" value={form.epistemic_style} onChange={v => set('epistemic_style',v)} rows={2}
+                    placeholder="Evidence threshold, preferred collection types, tolerance for ambiguity. e.g. Requires corroboration across two collection domains before high-confidence attribution." />
+                  <WrInput label="CONFLICT TRIGGERS (optional)" value={form.conflict_triggers} onChange={v => set('conflict_triggers',v)} rows={2}
+                    placeholder="What arguments or sources this expert distrusts or dismisses. e.g. Distrusts assessments unsupported by operational incident data." />
+                  <WrInput label="ADVERSARY MODEL (optional)" value={form.adversary_model} onChange={v => set('adversary_model',v)} rows={2}
+                    placeholder="Assumed adversary sophistication and primary threat lens. e.g. Views advanced persistent threats through state-actor primacy; discounts criminal-economic motives." />
+                </div>
+              </div>
+
+              {/* Institutional Profile */}
+              <div>
+                <p className="text-xs font-bold tracking-widest mb-3 font-mono" style={{ color: 'var(--wr-text-muted)' }}>INSTITUTIONAL PROFILE</p>
+                <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>Organizational history and incentive structures that shape how this expert behaves under pressure.</p>
+                <div className="space-y-3">
+                  <WrInput label="INSTITUTIONAL BACKGROUND (optional)" value={form.institutional_background} onChange={v => set('institutional_background',v)} rows={2}
+                    placeholder="Former agency, service, or sector; organizational culture imprint. e.g. Former DARPA PM; shaped by rapid-iteration culture and contractor incentives." />
+                  <WrInput label="DECISION STYLE (optional)" value={form.decision_style} onChange={v => set('decision_style',v)} rows={2}
+                    placeholder="Operational tempo, escalation threshold, response posture. e.g. Escalates immediately under uncertainty; prioritizes continuity over transparency." />
+                  <WrInput label="INSTITUTIONAL INCENTIVES (optional)" value={form.institutional_incentives} onChange={v => set('institutional_incentives',v)} rows={2}
+                    placeholder="Career, organizational, and political incentives shaping assessments. e.g. Motivated by regulatory compliance optics; avoids attribution that creates legal exposure." />
                 </div>
               </div>
 
