@@ -218,7 +218,7 @@ export default function NewSession() {
         {/* Mode picker */}
         <div className="mb-5">
           <p className="text-xs font-bold tracking-widest font-mono mb-3" style={{ color: 'var(--wr-text-muted)' }}>SESSION MODE</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             {MODES.map(mode => {
               const Icon = mode.icon;
               const isSelected = form.mode === mode.id;
@@ -226,26 +226,33 @@ export default function NewSession() {
                 <button
                   key={mode.id}
                   onClick={() => set('mode', mode.id)}
-                  className="text-left p-4 rounded transition-all"
+                  className="text-left p-4 rounded-2xl transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${mode.color}12` : 'var(--wr-bg-card)',
-                    border: `2px solid ${isSelected ? mode.color : 'var(--wr-border)'}`,
+                    backgroundColor: isSelected ? `${mode.color}0d` : 'var(--wr-bg-card)',
+                    border: `1.5px solid ${isSelected ? mode.color : 'var(--wr-border)'}`,
                   }}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 rounded flex items-center justify-center"
-                      style={{ backgroundColor: `${mode.color}20` }}>
-                      <Icon className="w-4 h-4" style={{ color: mode.color }} />
+                  {/* Radio indicator + icon row */}
+                  <div className="flex items-center gap-2.5 mb-3">
+                    {/* Circular radio dot */}
+                    <div
+                      className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center transition-all"
+                      style={{
+                        border: `1.5px solid ${isSelected ? mode.color : 'var(--wr-border)'}`,
+                        backgroundColor: isSelected ? `${mode.color}18` : 'transparent',
+                      }}
+                    >
+                      {isSelected && (
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: mode.color }} />
+                      )}
                     </div>
-                    <span className="text-sm font-bold font-mono" style={{ color: isSelected ? mode.color : 'var(--wr-text-primary)' }}>
+                    <div className="w-7 h-7 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: `${mode.color}18` }}>
+                      <Icon className="w-3.5 h-3.5" style={{ color: mode.color }} />
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: isSelected ? mode.color : 'var(--wr-text-primary)' }}>
                       {mode.label}
                     </span>
-                    {isSelected && (
-                      <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded"
-                        style={{ backgroundColor: `${mode.color}20`, color: mode.color }}>
-                        SELECTED
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-muted)' }}>
                     {mode.description}

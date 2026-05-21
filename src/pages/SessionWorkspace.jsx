@@ -12,6 +12,8 @@ import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import DebateTranscript from '@/components/session/DebateTranscript';
+import RiskRegistry from '@/components/session/RiskRegistry';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SOURCES','SETTINGS'];
 
@@ -1693,21 +1695,16 @@ export default function SessionWorkspace() {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
-              {sessionAgents.map(sa => (
-                <AgentAssessmentCard
-                  key={sa.id}
-                  sa={sa}
-                  agent={getAgent(sa.agent_id)}
-                  round={round}
-                  onGenerate={() => generateSingleAgent(sa, round)}
-                  onUpdate={(text) => updateAgentText(sa, round, text)}
-                  onSpeak={getOpenAiKey() ? speakAssessment : null}
-                  speaking={speakingAgentId === getAgent(sa.agent_id)?.id}
-                  onReset={!generatingAll ? () => resetAgent(sa, round) : null}
-                />
-              ))}
-            </div>
+            <DebateTranscript
+              sessionAgents={sessionAgents}
+              agents={agents}
+              round={round}
+              onGenerate={generateSingleAgent}
+              onUpdate={updateAgentText}
+              onReset={!generatingAll ? resetAgent : null}
+              onSpeak={getOpenAiKey() ? speakAssessment : null}
+              speakingAgentId={speakingAgentId}
+            />
 
             {/* Live reactions feed */}
             {tab === 'ROUND 1' && sessionAgents.some(sa => sa.round1_assessment) && (
@@ -1786,30 +1783,14 @@ export default function SessionWorkspace() {
         {tab === 'THREATS' && (
           <div className="space-y-6 max-w-4xl">
             <div>
-              <h3 className="text-xs font-bold tracking-widest font-mono mb-3" style={{ color: 'var(--wr-text-muted)' }}>
-                SCENARIO THREATS ({threats.length})
-              </h3>
               {threats.length === 0 ? (
-                <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
                   <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
                     No threats assigned to this scenario. Extract threats from session assessments below.
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3">
-                  {threats.map(t => (
-                    <div key={t.id} className="rounded p-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <p className="text-xs font-semibold leading-tight" style={{ color: 'var(--wr-text-primary)' }}>{t.name}</p>
-                        <SeverityBadge severity={t.severity} />
-                      </div>
-                      {t.category && (
-                        <p className="text-xs font-mono mb-1.5" style={{ color: 'var(--wr-amber)' }}>{t.category}</p>
-                      )}
-                      <p className="text-xs leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>{t.description}</p>
-                    </div>
-                  ))}
-                </div>
+                <RiskRegistry threats={threats} />
               )}
             </div>
 
