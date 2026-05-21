@@ -94,7 +94,10 @@ export default function SessionProgressBar({
     _agent: agents.find(a => a.id === sa.agent_id),
   }));
 
-  const chainCount = (synthesis?.compound_chains || []).length;
+  const rawChains = synthesis?.compound_chains;
+  const chainCount = Array.isArray(rawChains) ? rawChains.length
+    : typeof rawChains === 'string' ? (() => { try { const p = JSON.parse(rawChains); return Array.isArray(p) ? p.length : 0; } catch { return 0; } })()
+    : 0;
   const r1Done = enriched.filter(sa => sa.round1_assessment).length;
   const r2Done = enriched.filter(sa => sa.round2_rebuttal).length;
   const synthDone = !!synthesis?.raw_text;

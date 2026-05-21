@@ -26,10 +26,16 @@ function TileCard({ icon: Icon, iconColor, label, children }) {
   );
 }
 
+function toArray(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') { try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; } }
+  return [];
+}
+
 export default function SynthesisSummary({ synthesis, sessionAgents, agents, threats, sessionSources, onGoToThreats }) {
   if (!synthesis?.raw_text) return null;
 
-  const chains = synthesis.compound_chains || [];
+  const chains = toArray(synthesis.compound_chains);
 
   // Count agents who have r2 assessments (contributed to synthesis)
   const contributors = sessionAgents
