@@ -500,21 +500,27 @@ export default function NewSession() {
         </div>
 
         {/* Pinned Chains — inject chain context into agent prompts */}
-        {chains.length > 0 && (
-          <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Link2 className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />
-                <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>PIN THREAT CHAINS</h2>
-              </div>
-              <span className="text-xs" style={{ color: form.pinned_chain_ids.length >= 3 ? '#C0392B' : 'var(--wr-text-muted)' }}>
-                {form.pinned_chain_ids.length}/3 selected
-              </span>
+        <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Link2 className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />
+              <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>PIN THREAT CHAINS</h2>
             </div>
-            <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>
-              Select up to 3 chains to inject as context into agent prompts — agents will reason about compound threats.
+            <span className="text-xs font-mono" style={{ color: form.pinned_chain_ids.length >= 3 ? '#C0392B' : 'var(--wr-text-muted)' }}>
+              {form.pinned_chain_ids.length}/3 selected
+            </span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--wr-text-muted)' }}>
+            Select up to 3 chains to inject as context into agent prompts — agents will reason about compound threats.
+            Chains are generated during synthesis or created in the{' '}
+            <a href="/chains" className="underline" style={{ color: 'var(--wr-amber)' }}>Chain Library</a>.
+          </p>
+          {chains.length === 0 ? (
+            <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>
+              No chains in your library yet. Run a synthesis on a completed session to auto-generate chains, or build one manually in the Chain Library.
             </p>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
+          ) : (
+            <div className="space-y-1.5 max-h-56 overflow-y-auto">
               {chains.map(chain => {
                 const isSelected = form.pinned_chain_ids.includes(chain.id);
                 const isDisabled = !isSelected && form.pinned_chain_ids.length >= 3;
@@ -523,30 +529,38 @@ export default function NewSession() {
                     key={chain.id}
                     onClick={() => !isDisabled && togglePinnedChain(chain.id)}
                     disabled={isDisabled}
-                    className="w-full text-left p-2 rounded flex items-center gap-2 transition-colors"
+                    className="w-full text-left p-2.5 rounded-xl flex items-center gap-3 transition-all"
                     style={{
                       backgroundColor: isSelected ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
-                      border: `1px solid ${isSelected ? 'rgba(240,165,0,0.3)' : 'var(--wr-border)'}`,
+                      border: `1.5px solid ${isSelected ? 'rgba(240,165,0,0.4)' : 'rgba(138,155,181,0.25)'}`,
                       opacity: isDisabled ? 0.4 : 1,
                       cursor: isDisabled ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    <div className="flex-shrink-0 w-3.5 h-3.5 rounded border flex items-center justify-center"
-                      style={{ borderColor: isSelected ? 'var(--wr-amber)' : 'var(--wr-border)', backgroundColor: isSelected ? 'var(--wr-amber)' : 'transparent' }}>
-                      {isSelected && <span style={{ color: '#0D1B2A', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    {/* Visible checkbox */}
+                    <div
+                      className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all"
+                      style={{
+                        border: `2px solid ${isSelected ? 'var(--wr-amber)' : 'rgba(138,155,181,0.5)'}`,
+                        backgroundColor: isSelected ? 'var(--wr-amber)' : 'transparent',
+                      }}
+                    >
+                      {isSelected && <span style={{ color: '#0D1B2A', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>✓</span>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: 'var(--wr-text-primary)' }}>{chain.name}</p>
-                      <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>
-                        {chain.steps?.length || 0} steps{chain.description ? ` · ${chain.description.slice(0, 60)}` : ''}
+                      <p className="text-xs font-semibold truncate" style={{ color: isSelected ? 'var(--wr-amber)' : 'var(--wr-text-primary)' }}>{chain.name}</p>
+                      <p className="text-xs truncate mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>
+                        {chain.steps?.length || 0} steps
+                        {chain.is_ai_generated && <span className="ml-1.5 font-mono" style={{ color: '#9B59B6' }}>AI</span>}
+                        {chain.description ? ` · ${chain.description.slice(0, 70)}` : ''}
                       </p>
                     </div>
                   </button>
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Source Documents — shown for Live Debate mode */}
         {form.mode === 'live' && (
