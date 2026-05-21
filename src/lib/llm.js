@@ -305,6 +305,10 @@ Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
 ${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
 
+When citing specific reports, publications, frameworks, or data sources, include inline citation tags in this exact format:
+[SOURCE: "Publication or Report Name" — https://url-if-known.com]
+Include 1-3 citations where relevant. Omit if no specific sources apply.
+
 After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
 CONFIDENCE: [0-100 integer representing your confidence this assessment is correct]
@@ -341,6 +345,10 @@ Now write your Round 2 rebuttal (250-400 words) covering:
 1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
 2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
 3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
+
+When citing specific reports, publications, or data sources that inform your rebuttal, include:
+[SOURCE: "Publication or Report Name" — https://url-if-known.com]
+Include 1-2 citations where relevant. Omit if no specific sources apply.
 
 After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
