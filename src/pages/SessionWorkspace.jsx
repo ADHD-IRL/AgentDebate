@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Component } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { scoreSourceCredibility, parseCitations, saveTurnSources, TIER_COLORS, TIER_LABELS, SOURCE_TYPE_LABELS } from '@/lib/sources';
 import { analyzeSourceValidity } from '@/lib/llm';
@@ -18,6 +18,32 @@ import SessionProgressBar from '@/components/session/SessionProgressBar';
 import SynthesisSummary from '@/components/session/SynthesisSummary';
 
 const TABS = ['ROUND 1','ROUND 2','SYNTHESIS','THREATS','SOURCES','SETTINGS'];
+
+class SynthesisErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('[SynthesisTab]', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="rounded-2xl p-5 mt-4" style={{ backgroundColor: 'rgba(192,57,43,0.08)', border: '1px solid rgba(192,57,43,0.3)' }}>
+          <p className="text-xs font-bold font-mono mb-2" style={{ color: '#C0392B' }}>SYNTHESIS RENDER ERROR</p>
+          <p className="text-xs font-mono" style={{ color: '#C0392B', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {this.state.error?.message || String(this.state.error)}
+          </p>
+          <button
+            className="mt-3 text-xs underline"
+            style={{ color: '#C0392B' }}
+            onClick={() => this.setState({ error: null })}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking, onReset }) {
   const [expanded, setExpanded] = useState(false);
@@ -1825,7 +1851,7 @@ export default function SessionWorkspace() {
         )}
 
         {tab === 'SYNTHESIS' && (
-          <>
+          <SynthesisErrorBoundary key={synthesis?.id || 'synth'}>
             <SynthesisSummary
               synthesis={synthesis}
               sessionAgents={sessionAgents}
@@ -1848,7 +1874,7 @@ export default function SessionWorkspace() {
               session={session}
               scenario={scenarios.find(s => s.id === session?.scenario_id) || null}
             />
-          </>
+          </SynthesisErrorBoundary>
         )}
 
         {tab === 'THREATS' && (
