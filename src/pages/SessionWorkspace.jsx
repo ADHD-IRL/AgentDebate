@@ -258,6 +258,16 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
     }
   }, [synthesis?.raw_text]);
 
+  // Synthesis exists but resolvedText not yet hydrated (useEffect pending after state update)
+  if (synthesis?.raw_text && !resolvedText && !generating) {
+    return (
+      <div className="flex items-center gap-2 py-10">
+        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--wr-amber)' }} />
+        <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>Loading synthesis...</span>
+      </div>
+    );
+  }
+
   if (!synthesis && !generating) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -652,17 +662,14 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
   const insightsText    = synth?.sharpest_insights   || (resolvedText ? extractSynthSection(resolvedText, 'Insight') : null);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <WrButton variant="secondary" size="sm" onClick={() => window.history.back()}>
-          ← Back
-        </WrButton>
-        {resolvedText && (
+    <div className="space-y-4">
+      {resolvedText && (
+        <div className="flex items-center gap-3">
           <WrButton variant="outline" size="sm" onClick={printReport}>
             🖨 Print Report
           </WrButton>
-        )}
-      </div>
+        </div>
+      )}
 
       {resolvedText && (
         <>
@@ -1412,6 +1419,9 @@ export default function SessionWorkspace() {
       }
 
       await db.Session.update(id, { status: 'complete' });
+      // Update synthesis state immediately so the UI doesn't flash the empty state
+      // while load() is still in-flight (finally fires before load completes).
+      setSynthesis(prev => prev ? { ...prev, ...synthData } : synthData);
       setSynthStreamText('');
       load();
     } catch (e) {
