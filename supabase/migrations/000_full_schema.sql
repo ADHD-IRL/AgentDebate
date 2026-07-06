@@ -41,8 +41,11 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+drop policy if exists "profiles_read_all" on public.profiles;
 create policy "profiles_read_all"   on public.profiles for select using (true);
+drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles for update using (auth.uid() = id);
 
 -- ── Workspaces ────────────────────────────────────────────────────────────────
@@ -56,10 +59,14 @@ create table if not exists public.workspaces (
 );
 
 alter table public.workspaces enable row level security;
+drop policy if exists "workspaces_read" on public.workspaces;
 create policy "workspaces_read"   on public.workspaces for select using (is_member(id));
+drop policy if exists "workspaces_insert" on public.workspaces;
 create policy "workspaces_insert" on public.workspaces for insert with check (auth.uid() is not null);
 -- Owner OR admin can update (007: allows owner to save API key even if not admin-role member)
+drop policy if exists "workspaces_update" on public.workspaces;
 create policy "workspaces_update" on public.workspaces for update using (is_admin(id) or auth.uid() = owner_id);
+drop policy if exists "workspaces_delete" on public.workspaces;
 create policy "workspaces_delete" on public.workspaces for delete using (auth.uid() = owner_id);
 
 -- ── Workspace members ─────────────────────────────────────────────────────────
@@ -75,7 +82,9 @@ create table if not exists public.workspace_members (
 );
 
 alter table public.workspace_members enable row level security;
+drop policy if exists "members_read" on public.workspace_members;
 create policy "members_read"   on public.workspace_members for select using (is_member(workspace_id));
+drop policy if exists "members_insert" on public.workspace_members;
 create policy "members_insert" on public.workspace_members for insert with check (
   is_admin(workspace_id)
   or (
@@ -85,7 +94,9 @@ create policy "members_insert" on public.workspace_members for insert with check
     )
   )
 );
+drop policy if exists "members_update" on public.workspace_members;
 create policy "members_update" on public.workspace_members for update using (is_admin(workspace_id));
+drop policy if exists "members_delete" on public.workspace_members;
 create policy "members_delete" on public.workspace_members for delete using (is_admin(workspace_id));
 
 -- ── Domains ───────────────────────────────────────────────────────────────────
@@ -101,9 +112,13 @@ create table if not exists public.domains (
 );
 
 alter table public.domains enable row level security;
+drop policy if exists "domains_read" on public.domains;
 create policy "domains_read"   on public.domains for select using (is_member(workspace_id));
+drop policy if exists "domains_insert" on public.domains;
 create policy "domains_insert" on public.domains for insert with check (can_write(workspace_id));
+drop policy if exists "domains_update" on public.domains;
 create policy "domains_update" on public.domains for update using (can_write(workspace_id));
+drop policy if exists "domains_delete" on public.domains;
 create policy "domains_delete" on public.domains for delete using (is_admin(workspace_id));
 
 -- ── Agents ────────────────────────────────────────────────────────────────────
@@ -154,10 +169,15 @@ create table if not exists public.agents (
 );
 
 alter table public.agents enable row level security;
+drop policy if exists "agents_read" on public.agents;
 create policy "agents_read"         on public.agents for select using (is_member(workspace_id));
+drop policy if exists "agents_read_library" on public.agents;
 create policy "agents_read_library" on public.agents for select using (is_library_sme = true);
+drop policy if exists "agents_insert" on public.agents;
 create policy "agents_insert"       on public.agents for insert with check (can_write(workspace_id));
+drop policy if exists "agents_update" on public.agents;
 create policy "agents_update"       on public.agents for update using (can_write(workspace_id));
+drop policy if exists "agents_delete" on public.agents;
 create policy "agents_delete"       on public.agents for delete using (is_admin(workspace_id));
 
 -- GIN indexes for SME library discovery (010)
@@ -189,9 +209,13 @@ create table if not exists public.scenarios (
 );
 
 alter table public.scenarios enable row level security;
+drop policy if exists "scenarios_read" on public.scenarios;
 create policy "scenarios_read"   on public.scenarios for select using (is_member(workspace_id));
+drop policy if exists "scenarios_insert" on public.scenarios;
 create policy "scenarios_insert" on public.scenarios for insert with check (can_write(workspace_id));
+drop policy if exists "scenarios_update" on public.scenarios;
 create policy "scenarios_update" on public.scenarios for update using (can_write(workspace_id));
+drop policy if exists "scenarios_delete" on public.scenarios;
 create policy "scenarios_delete" on public.scenarios for delete using (is_admin(workspace_id));
 
 -- ── Threats ───────────────────────────────────────────────────────────────────
@@ -210,9 +234,13 @@ create table if not exists public.threats (
 );
 
 alter table public.threats enable row level security;
+drop policy if exists "threats_read" on public.threats;
 create policy "threats_read"   on public.threats for select using (is_member(workspace_id));
+drop policy if exists "threats_insert" on public.threats;
 create policy "threats_insert" on public.threats for insert with check (can_write(workspace_id));
+drop policy if exists "threats_update" on public.threats;
 create policy "threats_update" on public.threats for update using (can_write(workspace_id));
+drop policy if exists "threats_delete" on public.threats;
 create policy "threats_delete" on public.threats for delete using (is_admin(workspace_id));
 
 -- ── Chains ────────────────────────────────────────────────────────────────────
@@ -234,9 +262,13 @@ create table if not exists public.chains (
 );
 
 alter table public.chains enable row level security;
+drop policy if exists "chains_read" on public.chains;
 create policy "chains_read"   on public.chains for select using (is_member(workspace_id));
+drop policy if exists "chains_insert" on public.chains;
 create policy "chains_insert" on public.chains for insert with check (can_write(workspace_id));
+drop policy if exists "chains_update" on public.chains;
 create policy "chains_update" on public.chains for update using (can_write(workspace_id));
+drop policy if exists "chains_delete" on public.chains;
 create policy "chains_delete" on public.chains for delete using (is_admin(workspace_id));
 
 -- ── Sessions ──────────────────────────────────────────────────────────────────
@@ -262,9 +294,13 @@ create table if not exists public.sessions (
 );
 
 alter table public.sessions enable row level security;
+drop policy if exists "sessions_read" on public.sessions;
 create policy "sessions_read"   on public.sessions for select using (is_member(workspace_id));
+drop policy if exists "sessions_insert" on public.sessions;
 create policy "sessions_insert" on public.sessions for insert with check (can_write(workspace_id));
+drop policy if exists "sessions_update" on public.sessions;
 create policy "sessions_update" on public.sessions for update using (can_write(workspace_id));
+drop policy if exists "sessions_delete" on public.sessions;
 create policy "sessions_delete" on public.sessions for delete using (is_admin(workspace_id));
 
 -- ── Session agents ────────────────────────────────────────────────────────────
@@ -290,9 +326,13 @@ create table if not exists public.session_agents (
 );
 
 alter table public.session_agents enable row level security;
+drop policy if exists "session_agents_read" on public.session_agents;
 create policy "session_agents_read"   on public.session_agents for select using (is_member(workspace_id));
+drop policy if exists "session_agents_insert" on public.session_agents;
 create policy "session_agents_insert" on public.session_agents for insert with check (can_write(workspace_id));
+drop policy if exists "session_agents_update" on public.session_agents;
 create policy "session_agents_update" on public.session_agents for update using (can_write(workspace_id));
+drop policy if exists "session_agents_delete" on public.session_agents;
 create policy "session_agents_delete" on public.session_agents for delete using (is_admin(workspace_id));
 
 -- ── Session syntheses ─────────────────────────────────────────────────────────
@@ -311,9 +351,13 @@ create table if not exists public.session_syntheses (
 );
 
 alter table public.session_syntheses enable row level security;
+drop policy if exists "syntheses_read" on public.session_syntheses;
 create policy "syntheses_read"   on public.session_syntheses for select using (is_member(workspace_id));
+drop policy if exists "syntheses_insert" on public.session_syntheses;
 create policy "syntheses_insert" on public.session_syntheses for insert with check (can_write(workspace_id));
+drop policy if exists "syntheses_update" on public.session_syntheses;
 create policy "syntheses_update" on public.session_syntheses for update using (can_write(workspace_id));
+drop policy if exists "syntheses_delete" on public.session_syntheses;
 create policy "syntheses_delete" on public.session_syntheses for delete using (is_admin(workspace_id));
 
 -- ── Session messages (Live Debate) ────────────────────────────────────────────
@@ -330,8 +374,11 @@ create table if not exists public.session_messages (
 );
 
 alter table public.session_messages enable row level security;
+drop policy if exists "messages_read" on public.session_messages;
 create policy "messages_read"   on public.session_messages for select using (is_member(workspace_id));
+drop policy if exists "messages_insert" on public.session_messages;
 create policy "messages_insert" on public.session_messages for insert with check (can_write(workspace_id));
+drop policy if exists "messages_delete" on public.session_messages;
 create policy "messages_delete" on public.session_messages for delete using (is_admin(workspace_id));
 
 -- ── Session sources ───────────────────────────────────────────────────────────
@@ -353,9 +400,13 @@ create table if not exists public.session_sources (
 );
 
 alter table public.session_sources enable row level security;
+drop policy if exists "sources_read" on public.session_sources;
 create policy "sources_read"   on public.session_sources for select using (is_member(workspace_id));
+drop policy if exists "sources_insert" on public.session_sources;
 create policy "sources_insert" on public.session_sources for insert with check (can_write(workspace_id));
+drop policy if exists "sources_update" on public.session_sources;
 create policy "sources_update" on public.session_sources for update using (can_write(workspace_id));
+drop policy if exists "sources_delete" on public.session_sources;
 create policy "sources_delete" on public.session_sources for delete using (can_write(workspace_id));
 
 -- ── App configs ───────────────────────────────────────────────────────────────
@@ -370,9 +421,13 @@ create table if not exists public.app_configs (
 );
 
 alter table public.app_configs enable row level security;
+drop policy if exists "app_configs_read" on public.app_configs;
 create policy "app_configs_read"   on public.app_configs for select using (is_member(workspace_id));
+drop policy if exists "app_configs_insert" on public.app_configs;
 create policy "app_configs_insert" on public.app_configs for insert with check (can_write(workspace_id));
+drop policy if exists "app_configs_update" on public.app_configs;
 create policy "app_configs_update" on public.app_configs for update using (can_write(workspace_id));
+drop policy if exists "app_configs_delete" on public.app_configs;
 create policy "app_configs_delete" on public.app_configs for delete using (is_admin(workspace_id));
 
 -- ── SME API tokens ────────────────────────────────────────────────────────────
@@ -389,8 +444,11 @@ create table if not exists public.sme_tokens (
 );
 
 alter table public.sme_tokens enable row level security;
+drop policy if exists "sme_tokens_read" on public.sme_tokens;
 create policy "sme_tokens_read"   on public.sme_tokens for select using (is_admin(workspace_id));
+drop policy if exists "sme_tokens_insert" on public.sme_tokens;
 create policy "sme_tokens_insert" on public.sme_tokens for insert with check (is_admin(workspace_id));
+drop policy if exists "sme_tokens_delete" on public.sme_tokens;
 create policy "sme_tokens_delete" on public.sme_tokens for delete using (is_admin(workspace_id));
 
 -- ── Auto-create profile on signup ─────────────────────────────────────────────
@@ -414,10 +472,21 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- ── Realtime ──────────────────────────────────────────────────────────────────
-alter publication supabase_realtime add table public.sessions;
-alter publication supabase_realtime add table public.session_agents;
-alter publication supabase_realtime add table public.session_syntheses;
-alter publication supabase_realtime add table public.session_messages;
+do $$
+declare
+  tables text[] := array['sessions','session_agents','session_syntheses','session_messages'];
+  t text;
+begin
+  foreach t in array tables loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end;
+$$;
 
 -- ── SME Global Library workspace ──────────────────────────────────────────────
 -- After running this, find the row with invite_code='sme-library-internal' and
