@@ -4,10 +4,9 @@ import { scoreSourceCredibility, parseCitations, saveTurnSources, TIER_COLORS, T
 import { analyzeSourceValidity } from '@/lib/llm';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { generateRound1, generateRound2, generateRound0, generateReaction, generateSynthesis as generateSynthesisLLM, extractSessionThreats } from '@/lib/llm';
-import { synthesize, getOpenAiKey, DEFAULT_VOICES } from '@/lib/voice';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, Volume2, StopCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, StopCircle, Trash2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
@@ -45,7 +44,7 @@ class SynthesisErrorBoundary extends Component {
   }
 }
 
-function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, speaking, onReset }) {
+function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -147,17 +146,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onSpeak, 
             <div className="flex gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--wr-border)' }}>
               <WrButton variant="secondary" size="xs" onClick={() => { setEditText(text); setEditing(true); }}>Edit</WrButton>
               <WrButton variant="secondary" size="xs" onClick={onGenerate}><RefreshCw className="w-3 h-3" /> Regen</WrButton>
-              {onSpeak && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking}>
-                      {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
-                    </WrButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Speak this assessment aloud (requires OpenAI key)</TooltipContent>
-                </Tooltip>
-              )}
-              {onReset && (
+{onReset && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <WrButton variant="secondary" size="xs" onClick={onReset}>
@@ -1054,7 +1043,6 @@ export default function SessionWorkspace() {
   const [loadingReactions, setLoadingReactions] = useState(false);
   const [criticalToast, setCriticalToast] = useState(null);
   const toastTimer = useRef(null);
-  const [speakingAgentId, setSpeakingAgentId] = useState(null);
   const cancelRef = useRef(false);
 
   const load = async () => {
@@ -1130,24 +1118,7 @@ export default function SessionWorkspace() {
     toastTimer.current = setTimeout(() => setCriticalToast(null), 7000);
   };
 
-  const speakAssessment = async (text, agent) => {
-    if (!getOpenAiKey() || !text) return;
-    const agentIdx = sessionAgents.findIndex(sa => sa.agent_id === agent?.id);
-    const voiceId = DEFAULT_VOICES[agentIdx % DEFAULT_VOICES.length];
-    setSpeakingAgentId(agent?.id);
-    try {
-      const { url } = await synthesize(text.substring(0, 500), voiceId);
-      const audio = new Audio(url);
-      audio.onended = () => setSpeakingAgentId(null);
-      audio.onerror = () => setSpeakingAgentId(null);
-      await audio.play();
-    } catch (e) {
-      console.warn('TTS failed:', e.message);
-      setSpeakingAgentId(null);
-    }
-  };
-
-  const briefAllAgents = async () => {
+const briefAllAgents = async () => {
     setBriefingAll(true);
     const scenarioCtx = scenario?.context_document || '';
     for (const sa of sessionAgents) {
@@ -1792,8 +1763,6 @@ export default function SessionWorkspace() {
               onGenerate={generateSingleAgent}
               onUpdate={updateAgentText}
               onReset={!generatingAll ? resetAgent : null}
-              onSpeak={getOpenAiKey() ? speakAssessment : null}
-              speakingAgentId={speakingAgentId}
             />
 
             {/* Live reactions feed */}

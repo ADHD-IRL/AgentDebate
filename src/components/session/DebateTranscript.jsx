@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Loader2, Swords, ChevronDown, ChevronUp, RefreshCw, Trash2, Volume2 } from 'lucide-react';
+import { Loader2, Swords, ChevronDown, ChevronUp, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import WrButton from '@/components/ui/WrButton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -37,7 +37,7 @@ function ThinkingDots({ color = 'bg-amber-500' }) {
   );
 }
 
-function AgentRow({ sa, agent, round, onGenerate, onUpdate, onReset, onSpeak, speaking }) {
+function AgentRow({ sa, agent, round, onGenerate, onUpdate, onReset }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -134,17 +134,7 @@ function AgentRow({ sa, agent, round, onGenerate, onUpdate, onReset, onSpeak, sp
                 <WrButton variant="secondary" size="xs" onClick={onGenerate}>
                   <RefreshCw className="w-3 h-3" /> Regen
                 </WrButton>
-                {onSpeak && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <WrButton variant="secondary" size="xs" onClick={() => onSpeak(text, agent)} disabled={speaking}>
-                        {speaking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
-                      </WrButton>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Speak aloud (requires OpenAI key)</TooltipContent>
-                  </Tooltip>
-                )}
-                {onReset && (
+{onReset && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <WrButton variant="secondary" size="xs" onClick={onReset}>
@@ -175,8 +165,6 @@ export default function DebateTranscript({
   onGenerate,
   onUpdate,
   onReset,
-  onSpeak,
-  speakingAgentId,
 }) {
   const roundLabel = round === 1 ? 'Round 1 — Independent Assessments' : 'Round 2 — Rebuttals';
 
@@ -214,8 +202,6 @@ export default function DebateTranscript({
                 onGenerate={() => onGenerate(sa, round)}
                 onUpdate={(text) => onUpdate(sa, round, text)}
                 onReset={onReset ? () => onReset(sa, round) : null}
-                onSpeak={onSpeak}
-                speaking={speakingAgentId === agent?.id}
               />
             );
           })}

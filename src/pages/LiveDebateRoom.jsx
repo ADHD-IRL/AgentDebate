@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert, Volume2, VolumeX, ArrowRight, StopCircle, Trash2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Zap, Play, Send, Loader2, Search, Globe, FlaskConical, ShieldAlert, ArrowRight, StopCircle, Trash2, RotateCcw } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   generateRound1Stream, generateRound2Stream,
@@ -9,12 +9,9 @@ import {
   parseSeverityFromText,
 } from '@/lib/llm';
 import { saveTurnSources } from '@/lib/sources';
-import { synthesize, hexToHue, DEFAULT_VOICES, getOpenAiKey, createSentenceQueue, splitSentences } from '@/lib/voice';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
 import AddressChips      from '@/components/debate/AddressChips';
-import PushToTalkButton  from '@/components/debate/PushToTalkButton';
 import AgentAvatar       from '@/components/debate/AgentAvatar';
-import VoicePlayer       from '@/components/debate/VoicePlayer';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -54,24 +51,17 @@ function ToolChip({ tc }) {
   );
 }
 
-function AgentBubble({ msg, agent, color, isStreaming, playingMessageId, onPlayPause }) {
-  const isPlaying = playingMessageId === msg.id;
+function AgentBubble({ msg, agent, color, isStreaming }) {
   return (
     <div className="mb-5">
       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-        <AgentAvatar agent={agent} color={color} size={28} status={isStreaming ? 'thinking' : isPlaying ? 'speaking' : 'idle'} />
+        <AgentAvatar agent={agent} color={color} size={28} status={isStreaming ? 'thinking' : 'idle'} />
         <span className="text-xs font-bold" style={{ color }}>{msg.agentName}</span>
         {msg.discipline && <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>· {msg.discipline}</span>}
         {msg.severity && (
           <span className="text-xs font-bold font-mono px-1.5 py-0.5 rounded ml-auto"
             style={{ backgroundColor: `${SEV_COLOR[msg.severity]}15`, color: SEV_COLOR[msg.severity] }}>
             {msg.severity}
-          </span>
-        )}
-        {msg.voice && !isStreaming && (
-          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
-            style={{ backgroundColor: 'rgba(240,165,0,0.12)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
-            <Volume2 style={{ width: 9, height: 9 }} /> VOICE
           </span>
         )}
       </div>
@@ -93,18 +83,6 @@ function AgentBubble({ msg, agent, color, isStreaming, playingMessageId, onPlayP
             style={{ backgroundColor: color }} />
         )}
       </div>
-      {msg.voice && (
-        <div style={{ marginTop: 6 }}>
-          <VoicePlayer
-            audioUrl={msg.voice.audioUrl}
-            duration={msg.voice.durationSec}
-            color={color}
-            voiceLabel={msg.voice.voiceId}
-            isPlaying={isPlaying}
-            onPlayPause={() => onPlayPause(msg.id)}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -114,13 +92,7 @@ function UserBubble({ msg }) {
     <div className="mb-5 flex justify-end">
       <div style={{ maxWidth: '60%' }}>
         <div className="flex items-center justify-end gap-2 mb-1.5 flex-wrap">
-          {msg.voice && (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
-              style={{ backgroundColor: 'rgba(240,165,0,0.12)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.3)' }}>
-              SPOKEN
-            </span>
-          )}
-          {msg.targetAgentName && (
+{msg.targetAgentName && (
             <span className="text-xs px-1.5 py-0.5 rounded"
               style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)', border: '1px solid rgba(240,165,0,0.2)' }}>
               → {msg.targetAgentName}
@@ -144,7 +116,7 @@ function UserBubble({ msg }) {
 
 // ── Roster row ────────────────────────────────────────────────────────────────
 
-function RosterRow({ agent, color, status, muted, onToggleMute, onAddress }) {
+function RosterRow({ agent, color, status, onAddress }) {
   const sev = agent.severity_default;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--wr-border)' }}>
@@ -158,15 +130,7 @@ function RosterRow({ agent, color, status, muted, onToggleMute, onAddress }) {
           {sev.slice(0, 4)}
         </span>
       )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button onClick={onToggleMute} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: muted ? 'var(--wr-text-muted)' : 'var(--wr-amber)' }}>
-            {muted ? <VolumeX style={{ width: 12, height: 12 }} /> : <Volume2 style={{ width: 12, height: 12 }} />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">{muted ? 'Unmute TTS for this agent' : 'Mute TTS for this agent'}</TooltipContent>
-      </Tooltip>
-      <Tooltip>
+<Tooltip>
         <TooltipTrigger asChild>
           <button onClick={onAddress} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--wr-text-muted)' }}>
             <ArrowRight style={{ width: 12, height: 12 }} />
@@ -216,9 +180,7 @@ export default function LiveDebateRoom() {
   const [sessionAgents, setSessionAgents] = useState([]);
   const [profiles, setProfiles]           = useState({});  // agent_id → agent row
   const [colors, setColors]               = useState({});  // agent_id → hex color
-  const [voices, setVoices]               = useState({});  // agent_id → voiceId string
-
-  const [messages, setMessages]           = useState([]);
+const [messages, setMessages]           = useState([]);
   const [agentStatus, setAgentStatus]     = useState({});
   const [agentSeverity, setAgentSeverity] = useState({});
 
@@ -231,21 +193,10 @@ export default function LiveDebateRoom() {
   const [toolsEnabled, setToolsEnabled] = useState(true);
   const [threats, setThreats]           = useState([]);
 
-  // ── Voice state ─────────────────────────────────────────────────────────────
-  const [currentSpeakerId, setCurrentSpeakerId]   = useState(null);
-  const [playingMessageId, setPlayingMessageId]   = useState(null);
-  const [mutedAgents, setMutedAgents]             = useState({});
-  const [autoPlayTTS, setAutoPlayTTS]             = useState(true);
-  const [playbackSpeed, setPlaybackSpeed]         = useState(1.0);
-
-  const transcriptRef       = useRef(null);
+const transcriptRef       = useRef(null);
   const streamBuf           = useRef({});
-  const currentAudioRef     = useRef(null);
-  const streamControllerRef = useRef(null);
-  const ttsQueueRef         = useRef(null);
-  const ttsBufRef           = useRef('');
-
-  // ── Load ────────────────────────────────────────────────────────────────────
+const streamControllerRef = useRef(null);
+// ── Load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!db || !id) return;
     (async () => {
@@ -258,14 +209,13 @@ export default function LiveDebateRoom() {
       setSourcePins(sess?.source_pins || []);
       setSessionAgents(saList);
 
-      const p = {}, c = {}, v = {}, statuses = {}, severities = {};
+      const p = {}, c = {}, statuses = {}, severities = {};
       for (let i = 0; i < saList.length; i++) {
         const sa    = saList[i];
         const agent = await db.Agent.get(sa.agent_id);
         if (agent) {
           p[sa.agent_id] = agent;
           c[sa.agent_id] = agent.color || AGENT_COLORS[i % AGENT_COLORS.length];
-          v[sa.agent_id] = agent.voice_id || agent.voiceId || DEFAULT_VOICES[i % DEFAULT_VOICES.length];
         }
         statuses[sa.agent_id]  = sa.round1_assessment ? 'done' : 'idle';
         if (sa.round2_revised_severity || sa.round1_severity)
@@ -273,7 +223,6 @@ export default function LiveDebateRoom() {
       }
       setProfiles(p);
       setColors(c);
-      setVoices(v);
       setAgentStatus(statuses);
       setAgentSeverity(severities);
 
@@ -319,70 +268,15 @@ export default function LiveDebateRoom() {
     delete streamBuf.current[tempId];
   }, []);
 
-  // Attach TTS audio to a message after streaming completes
-  const attachTTS = useCallback(async (msgId, text, agentId) => {
-    if (!autoPlayTTS || mutedAgents[agentId]) return;
-    const voiceId = voices[agentId] || 'alloy';
-    try {
-      const { url, duration } = await synthesize(text, voiceId);
-      setMessages(prev => prev.map(m =>
-        m.id === msgId ? { ...m, voice: { audioUrl: url, durationSec: duration, voiceId } } : m
-      ));
-      setPlayingMessageId(msgId);
-      setCurrentSpeakerId(agentId);
-    } catch (err) {
-      console.warn('TTS skipped:', err.message);
-    }
-  }, [autoPlayTTS, mutedAgents, voices]);
-
-  // Streaming TTS helpers — start speaking sentence-by-sentence as tokens arrive
-  const startTTSStream = useCallback((agentId) => {
-    if (!autoPlayTTS || mutedAgents[agentId] || !getOpenAiKey()) return;
-    ttsQueueRef.current?.destroy();
-    ttsBufRef.current = '';
-    ttsQueueRef.current = createSentenceQueue({
-      voiceId: voices[agentId] || 'alloy',
-      onSpeakingChange: (speaking) => {
-        if (speaking) {
-          setCurrentSpeakerId(agentId);
-        } else {
-          setCurrentSpeakerId(prev => prev === agentId ? null : prev);
-        }
-      },
-    });
-  }, [autoPlayTTS, mutedAgents, voices]);
-
-  const feedTTSToken = useCallback((token) => {
-    if (!ttsQueueRef.current) return;
-    ttsBufRef.current += token;
-    const { sentences, remaining } = splitSentences(ttsBufRef.current);
-    ttsBufRef.current = remaining;
-    sentences.forEach(s => ttsQueueRef.current.push(s));
-  }, []);
-
-  const flushTTSBuffer = useCallback(() => {
-    if (ttsQueueRef.current && ttsBufRef.current.trim().length >= 4) {
-      ttsQueueRef.current.push(ttsBufRef.current.trim());
-      ttsBufRef.current = '';
-    }
-    ttsQueueRef.current = null;
-  }, []);
-
-  // Interrupt: pause current TTS + abort stream
+  // Interrupt: abort stream
   const cancelRef = useRef(false);
 
   const interrupt = useCallback(() => {
-    if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
     streamControllerRef.current?.abort();
-    setCurrentSpeakerId(null);
-    setPlayingMessageId(null);
   }, []);
 
   const stopRound = useCallback(() => {
     cancelRef.current = true;
-    ttsQueueRef.current?.destroy();
-    ttsQueueRef.current = null;
-    ttsBufRef.current = '';
     interrupt();
   }, [interrupt]);
 
@@ -404,16 +298,7 @@ export default function LiveDebateRoom() {
     setPhase(round === 1 ? 'idle' : 'r1done');
   }, [sessionAgents, resetAgent]);
 
-  // Play/pause toggle for a message
-  const handlePlayPause = useCallback((msgId) => {
-    setPlayingMessageId(prev => prev === msgId ? null : msgId);
-    setCurrentSpeakerId(prev => {
-      const msg = messages.find(m => m.id === msgId);
-      return msg?.agentId ?? prev;
-    });
-  }, [messages]);
-
-  const scenarioCtx = scenario?.context_document || session?.context_override || '';
+const scenarioCtx = scenario?.context_document || session?.context_override || '';
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
 
@@ -448,7 +333,6 @@ export default function LiveDebateRoom() {
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round1_assessment) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
-      startTTSStream(sa.agent_id);
       const tempId = `r1_${sa.agent_id}`;
       streamBuf.current[tempId] = '';
       push({ id: tempId, role: 'agent', agentId: sa.agent_id, agentName: agent.name, discipline: agent.discipline, content: '', round: 1, isStreaming: true });
@@ -456,9 +340,8 @@ export default function LiveDebateRoom() {
         await generateRound1Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
           threatCatalog: threats,
-          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
+          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            flushTTSBuffer();
             const { assessment, severity } = parseSeverityFromText(text, agent.severity_default || 'HIGH');
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
@@ -507,7 +390,6 @@ export default function LiveDebateRoom() {
       const agent = profiles[sa.agent_id];
       if (!agent || sa.round2_rebuttal) continue;
       setAgentStatus(s => ({ ...s, [sa.agent_id]: 'thinking' }));
-      startTTSStream(sa.agent_id);
       const tempId = `r2_${sa.agent_id}`;
       streamBuf.current[tempId] = '';
       push({ id: tempId, role: 'agent', agentId: sa.agent_id, agentName: agent.name, discipline: agent.discipline, content: '', round: 2, isStreaming: true });
@@ -515,9 +397,8 @@ export default function LiveDebateRoom() {
         await generateRound2Stream({
           agent, scenarioContext: scenarioCtx, phaseFocus: session?.phase_focus,
           othersAssessments: othersCtx(sa.agent_id), threatCatalog: threats,
-          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
+          onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            flushTTSBuffer();
             const { assessment, severity } = parseSeverityFromText(text, sa.round1_severity || 'HIGH');
             finishStream(tempId, assessment, { severity });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
@@ -577,16 +458,13 @@ export default function LiveDebateRoom() {
               setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
               const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline, toolCalls } });
               await saveTurnSources(db, id, savedMsg?.id || tempId, sa.agent_id, text, toolCalls);
-              await attachTTS(tempId, text, sa.agent_id);
             },
           });
         } else {
-          startTTSStream(sa.agent_id);
           await generateAgentReply({
             agent, question: q, priorMessages: priorCtx, scenarioContext: scenarioCtx,
-            onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); feedTTSToken(token); },
+            onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
             onDone: async text => {
-              flushTTSBuffer();
               finishStream(tempId, text);
               setAgentStatus(s => ({ ...s, [sa.agent_id]: phase.endsWith('done') ? 'done' : 'idle' }));
               const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: text, metadata: { agentName: agent.name, discipline: agent.discipline } });
@@ -602,20 +480,6 @@ export default function LiveDebateRoom() {
     setAsking(false);
   };
 
-  // ── Voice message from PTT ───────────────────────────────────────────────────
-
-  const handleVoiceMessage = useCallback((_blob, transcript) => {
-    if (!transcript.trim()) return;
-    setQuestion(transcript);
-    // Auto-send after brief delay so user can see the transcribed text
-    setTimeout(() => {
-      setQuestion('');
-      const targetAgent = targetAgentId ? profiles[targetAgentId] : null;
-      push({ role: 'user', content: transcript, targetAgentName: targetAgent?.name || null, voice: true });
-      db.SessionMessage.create({ session_id: id, role: 'user', content: transcript, metadata: { targetAgentName: targetAgent?.name, transcribed: true } });
-    }, 400);
-  }, [targetAgentId, profiles, push, db, id]);
-
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (!session) return (
@@ -629,11 +493,7 @@ export default function LiveDebateRoom() {
   const canSynth = phase === 'r2done' && !running;
 
   const agentList = sessionAgents.map(sa => profiles[sa.agent_id]).filter(Boolean);
-  const speakerText = currentSpeakerId
-    ? messages.filter(m => m.agentId === currentSpeakerId && m.content).slice(-1)[0]?.content?.slice(0, 120)
-    : null;
-
-  return (
+return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -739,9 +599,7 @@ export default function LiveDebateRoom() {
               agents={agentList}
               colors={colors}
               agentStatus={agentStatus}
-              currentSpeakerId={currentSpeakerId}
-              speakerText={speakerText}
-              targetAgentId={targetAgentId}
+targetAgentId={targetAgentId}
               phase={phase}
               running={running}
               onAgentClick={agentId => setTargetAgentId(prev => prev === agentId ? null : agentId)}
@@ -768,8 +626,6 @@ export default function LiveDebateRoom() {
                   agent={profiles[msg.agentId] || { name: msg.agentName || '?', discipline: msg.discipline }}
                   color={colors[msg.agentId] || '#546E7A'}
                   isStreaming={msg.isStreaming}
-                  playingMessageId={playingMessageId}
-                  onPlayPause={handlePlayPause}
                 />
               );
             })}
@@ -787,8 +643,7 @@ export default function LiveDebateRoom() {
 
             {/* Input row */}
             <div className="flex items-end gap-3 px-4 py-3">
-              <PushToTalkButton onRecordingComplete={handleVoiceMessage} disabled={asking || running} />
-              <textarea
+<textarea
                 value={question}
                 onChange={e => setQuestion(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleAsk(); } }}
@@ -822,13 +677,9 @@ export default function LiveDebateRoom() {
             <div className="px-4 py-1.5 border-t flex items-center justify-between text-xs font-mono"
               style={{ borderColor: 'var(--wr-border)', color: 'var(--wr-text-muted)' }}>
               <div className="flex items-center gap-3">
-                <span><kbd style={{ padding: '1px 4px', borderRadius: 3, backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>SPACE</kbd> hold to speak</span>
                 <span><kbd style={{ padding: '1px 4px', borderRadius: 3, backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>⌘1–6</kbd> address agent</span>
                 <span><kbd style={{ padding: '1px 4px', borderRadius: 3, backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>H</kbd> interrupt</span>
               </div>
-              <span style={{ color: autoPlayTTS ? 'var(--wr-amber)' : 'var(--wr-text-muted)' }}>
-                TTS: {autoPlayTTS ? 'AUTO' : 'OFF'}
-              </span>
             </div>
           </div>
         </div>
@@ -860,8 +711,6 @@ export default function LiveDebateRoom() {
                     agent={agent}
                     color={colors[sa.agent_id]}
                     status={status}
-                    muted={!!mutedAgents[sa.agent_id]}
-                    onToggleMute={() => setMutedAgents(m => ({ ...m, [sa.agent_id]: !m[sa.agent_id] }))}
                     onAddress={() => setTargetAgentId(prev => prev === sa.agent_id ? null : sa.agent_id)}
                   />
                   {!running && (hasR1 || hasR2) && (
@@ -887,36 +736,6 @@ export default function LiveDebateRoom() {
                 </div>
               );
             })}
-          </div>
-
-          {/* Voice settings */}
-          <div className="p-4" style={{ borderBottom: '1px solid var(--wr-border)' }}>
-            <p className="text-xs font-bold font-mono tracking-widest mb-3" style={{ color: 'var(--wr-text-muted)' }}>VOICE · AUDIO</p>
-            <div className="space-y-3">
-              <Toggle checked={autoPlayTTS} onChange={setAutoPlayTTS} label="Auto-play TTS" desc="Agents speak responses aloud" />
-              {!getOpenAiKey() && (
-                <div className="rounded px-2.5 py-2 text-xs" style={{ backgroundColor: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', color: '#C0392B' }}>
-                  No OpenAI key — TTS is disabled. Add your key in <strong>Settings</strong>.
-                </div>
-              )}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <p style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--wr-text-primary)' }}>Playback speed</p>
-                  <p style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: 'var(--wr-amber)' }}>{playbackSpeed}×</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  {[0.75, 1.0, 1.25, 1.5, 2.0].map(s => (
-                    <button key={s} onClick={() => setPlaybackSpeed(s)}
-                      style={{
-                        flex: 1, padding: '3px 0', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
-                        backgroundColor: s === playbackSpeed ? 'rgba(240,165,0,0.12)' : 'transparent',
-                        color: s === playbackSpeed ? 'var(--wr-amber)' : 'var(--wr-text-muted)',
-                        outline: `1px solid ${s === playbackSpeed ? 'rgba(240,165,0,0.35)' : 'var(--wr-border)'}`,
-                      }}>{s}×</button>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Sources */}
