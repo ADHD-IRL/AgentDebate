@@ -30,6 +30,7 @@ import Settings from '@/pages/Settings';
 import ChainBreaker from '@/pages/ChainBreaker';
 import WhatIfSimulator from '@/pages/WhatIfSimulator';
 import LiveDebateRoom from '@/pages/LiveDebateRoom';
+import SmeLibrary from '@/pages/SmeLibrary';
 
 const LoadingScreen = () => (
   <div className="fixed inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
@@ -88,6 +89,7 @@ const AppRoutes = () => {
         <Route path="/chain-breaker"        element={<ChainBreaker />} />
         <Route path="/simulator"            element={<WhatIfSimulator />} />
         <Route path="/simulator/:id"        element={<WhatIfSimulator />} />
+        <Route path="/sme-library"          element={<SmeLibrary />} />
         <Route path="/settings"             element={<Settings />} />
         <Route path="/guide"                element={<UserGuide />} />
       </Route>

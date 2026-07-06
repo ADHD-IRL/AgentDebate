@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard, Globe, Target, AlertTriangle,
   Bot, Link2, Swords, BarChart3, Wifi, Map,
-  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical
+  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library
 } from 'lucide-react';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { path: '/scenarios', icon: Target, label: 'Scenarios' },
   { path: '/threats', icon: AlertTriangle, label: 'Threats' },
   { path: '/agents', icon: Bot, label: 'Agents' },
+  { path: '/sme-library', icon: Library, label: 'SME Library' },
   { path: '/chains', icon: Link2, label: 'Chains' },
   { path: '/chain-breaker', icon: Scissors, label: 'Chain Breaker' },
   { path: '/simulator', icon: FlaskConical, label: 'What-If Simulator' },

@@ -294,6 +294,7 @@ ${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : 
 ${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
 ${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
 ${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
+${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
 
 Your cognitive bias: ${agent.cognitive_bias}
 Your red-team focus: ${agent.red_team_focus}
@@ -337,8 +338,10 @@ ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
 ${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
 ${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
 ${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
+${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
 ${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
 ${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
+${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
 
 Your cognitive bias: ${agent.cognitive_bias}
 
@@ -404,6 +407,7 @@ ${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : 
 ${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
 ${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
 ${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
+${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
 
 Your cognitive bias: ${agent.cognitive_bias}
 Your red-team focus: ${agent.red_team_focus}
@@ -438,8 +442,10 @@ ${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
 ${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
 ${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
 ${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
+${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
 ${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
 ${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
+${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
 
 Your cognitive bias: ${agent.cognitive_bias}
 
