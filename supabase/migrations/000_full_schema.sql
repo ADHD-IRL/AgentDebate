@@ -168,6 +168,24 @@ create table if not exists public.agents (
   updated_at  timestamptz default now()
 );
 
+-- Ensure columns added by later migrations exist (safe on fresh or partial DBs)
+alter table public.agents add column if not exists epistemic_style          text;
+alter table public.agents add column if not exists institutional_background text;
+alter table public.agents add column if not exists conflict_triggers        text;
+alter table public.agents add column if not exists decision_style           text;
+alter table public.agents add column if not exists adversary_model          text;
+alter table public.agents add column if not exists institutional_incentives text;
+alter table public.agents add column if not exists source                   text default 'workspace';
+alter table public.agents add column if not exists is_library_sme           boolean default false;
+alter table public.agents add column if not exists usage_count              integer default 0;
+alter table public.agents add column if not exists quality_score            numeric(4,1);
+alter table public.agents add column if not exists cloned_from_id           uuid;
+alter table public.agents add column if not exists scenario_tags            jsonb default '[]';
+alter table public.agents add column if not exists domain_expertise         jsonb default '{}';
+alter table public.agents add column if not exists analytical_framework     text;
+alter table public.agents add column if not exists source_preferences       text;
+alter table public.agents add column if not exists updated_at               timestamptz default now();
+
 alter table public.agents enable row level security;
 drop policy if exists "agents_read" on public.agents;
 create policy "agents_read"         on public.agents for select using (is_member(workspace_id));
@@ -293,6 +311,12 @@ create table if not exists public.sessions (
   created_at       timestamptz default now() not null
 );
 
+-- Ensure session columns from later migrations exist
+alter table public.sessions add column if not exists mode             text not null default 'classic';
+alter table public.sessions add column if not exists source_pins      jsonb not null default '[]';
+alter table public.sessions add column if not exists facilitator_note text;
+alter table public.sessions add column if not exists pinned_chain_ids text[] default '{}';
+
 alter table public.sessions enable row level security;
 drop policy if exists "sessions_read" on public.sessions;
 create policy "sessions_read"   on public.sessions for select using (is_member(workspace_id));
@@ -324,6 +348,11 @@ create table if not exists public.session_agents (
                                        check (status in ('pending','generating_r1','r1_done','generating_r2','complete')),
   created_at                         timestamptz default now() not null
 );
+
+-- Ensure session_agents columns from later migrations exist
+alter table public.session_agents add column if not exists round0_briefing   text;
+alter table public.session_agents add column if not exists round1_confidence integer;
+alter table public.session_agents add column if not exists round2_confidence integer;
 
 alter table public.session_agents enable row level security;
 drop policy if exists "session_agents_read" on public.session_agents;
