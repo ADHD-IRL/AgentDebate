@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash } from 'lucide-react';
+import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash, Library } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
@@ -9,6 +9,7 @@ import { VectorBars } from '@/components/ui/VectorBar';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import AgentImportModal from '@/components/agents/AgentImportModal';
 import BulkDeleteModal from '@/components/agents/BulkDeleteModal';
+import LibraryBrowseModal from '@/components/agents/LibraryBrowseModal';
 
 export default function Agents() {
   const { db, workspace } = useWorkspace();
@@ -21,6 +22,7 @@ export default function Agents() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const isLoadingRef = useRef(false);
   const load = async (retries = 3) => {
@@ -119,6 +121,7 @@ export default function Agents() {
         subtitle={`${agents.length} agents in library`}
         actions={
           <div className="flex gap-2">
+            <WrButton variant="outline" onClick={() => setShowLibrary(true)}><Library className="w-4 h-4" /> Browse Library</WrButton>
             <WrButton variant="outline" onClick={() => setShowImport(true)}><Upload className="w-4 h-4" /> Import</WrButton>
             <WrButton variant="outline" onClick={() => setModal('ai')}><Sparkles className="w-4 h-4" /> AI Generate</WrButton>
             <WrButton onClick={() => setModal('new')}><Plus className="w-4 h-4" /> New Agent</WrButton>
@@ -282,6 +285,13 @@ export default function Agents() {
           )}
         </div>
       </div>
+
+      {showLibrary && (
+        <LibraryBrowseModal
+          onClose={() => setShowLibrary(false)}
+          onCloned={() => { load(); }}
+        />
+      )}
 
       {showImport && (
         <AgentImportModal
