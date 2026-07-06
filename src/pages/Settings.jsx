@@ -4,7 +4,7 @@ import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff, Plus, Trash2
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { getModelId, setModelPref, setWorkspaceApiKey } from '@/lib/llm';
+import { setModelPref, setWorkspaceApiKey } from '@/lib/llm';
 import { getOpenAiKey, setOpenAiKey } from '@/lib/voice';
 import { supabase } from '@/lib/supabase';
 
