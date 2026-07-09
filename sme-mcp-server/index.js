@@ -13,6 +13,11 @@ import { schema as cloneSchema, handler as cloneHandler } from './tools/clone_sm
 import { schema as generateSchema, handler as generateHandler } from './tools/generate_sme_for_scenario.js';
 import { schema as promoteSchema, handler as promoteHandler } from './tools/promote_to_library.js';
 import { schema as qualitySchema, handler as qualityHandler } from './tools/record_session_quality.js';
+import { schema as archiveSchema, handler as archiveHandler } from './tools/archive_sme.js';
+import { schema as assessSchema, handler as assessHandler } from './tools/assess_sme_quality.js';
+import { schema as bulkSchema, handler as bulkHandler } from './tools/bulk_generate_smes.js';
+import { schema as statsSchema, handler as statsHandler } from './tools/library_stats.js';
+import { schema as tokensSchema, handler as tokensHandler } from './tools/manage_tokens.js';
 
 const TOOLS = [
   { schema: listSchema, handler: listHandler },
@@ -25,6 +30,11 @@ const TOOLS = [
   { schema: generateSchema, handler: generateHandler },
   { schema: promoteSchema, handler: promoteHandler },
   { schema: qualitySchema, handler: qualityHandler },
+  { schema: archiveSchema, handler: archiveHandler },
+  { schema: assessSchema, handler: assessHandler },
+  { schema: bulkSchema, handler: bulkHandler },
+  { schema: statsSchema, handler: statsHandler },
+  { schema: tokensSchema, handler: tokensHandler },
 ];
 
 const toolMap = Object.fromEntries(TOOLS.map(t => [t.schema.name, t.handler]));

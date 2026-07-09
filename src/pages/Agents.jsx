@@ -131,8 +131,8 @@ export default function Agents() {
 
       <div className="flex">
         {/* Filter Sidebar */}
-        <div className="w-52 flex-shrink-0 border-r p-4 space-y-4 min-h-screen" style={{ borderColor: 'var(--wr-border)' }}>
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
+        <div className="w-52 flex-shrink-0 border-r p-4 sticky top-0 h-screen flex flex-col" style={{ borderColor: 'var(--wr-border)' }}>
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded flex-shrink-0 mb-4" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
             <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }} />
             <input
               value={search}
@@ -143,9 +143,9 @@ export default function Agents() {
             />
           </div>
 
-          <div>
-            <p className="text-xs font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-muted)' }}>DOMAIN</p>
-            <div className="space-y-1">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <p className="text-xs font-bold tracking-widest mb-2 font-mono flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }}>DOMAIN</p>
+            <div className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
               <button
                 onClick={() => setFilterDomain('')}
                 className="w-full text-left text-xs px-2 py-1 rounded transition-colors"
