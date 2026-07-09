@@ -132,6 +132,95 @@ function DuplicateModal({ group, agentCounts, onMerge, onClose }) {
   );
 }
 
+// ── Sync preview modal ────────────────────────────────────────────────────────
+function SyncPreviewModal({ preview, onConfirm, onClose }) {
+  const [selected, setSelected] = useState(() => new Set(preview.newDomains.map(d => d.name)));
+  const [committing, setCommitting] = useState(false);
+  const allSelected = selected.size === preview.newDomains.length;
+
+  const toggle = (name) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(name) ? next.delete(name) : next.add(name);
+    return next;
+  });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(preview.newDomains.map(d => d.name)));
+
+  const handleConfirm = async () => {
+    setCommitting(true);
+    await onConfirm([...selected]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+      <div className="w-[520px] max-h-[80vh] flex flex-col rounded-lg p-6" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+        <div className="flex items-center justify-between mb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" style={{ color: 'var(--wr-amber)' }} />
+            <h2 className="text-sm font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>
+              SYNC PREVIEW
+            </h2>
+          </div>
+          <button onClick={onClose}><X className="w-4 h-4" style={{ color: 'var(--wr-text-muted)' }} /></button>
+        </div>
+        <p className="text-xs mb-4 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }}>
+          These domains will be created from agent disciplines. Uncheck any you don't want —
+          agents matching an unchecked domain will be left unassigned.
+        </p>
+
+        {preview.newDomains.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-2 px-1 flex-shrink-0">
+              <span className="text-xs font-bold font-mono tracking-widest" style={{ color: 'var(--wr-text-muted)' }}>
+                {selected.size} OF {preview.newDomains.length} SELECTED
+              </span>
+              <button onClick={toggleAll} className="text-xs underline" style={{ color: 'var(--wr-amber)' }}>
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+            <div className="space-y-1.5 mb-4 overflow-y-auto min-h-0 pr-1">
+              {preview.newDomains.map(d => {
+                const isChecked = selected.has(d.name);
+                return (
+                  <label key={d.name}
+                    className="w-full flex items-center gap-3 p-2.5 rounded cursor-pointer transition-all"
+                    style={{
+                      backgroundColor: isChecked ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)',
+                      border: `1px solid ${isChecked ? 'rgba(240,165,0,0.4)' : 'var(--wr-border)'}`,
+                      opacity: isChecked ? 1 : 0.6,
+                    }}
+                  >
+                    <input type="checkbox" checked={isChecked} onChange={() => toggle(d.name)} className="flex-shrink-0 accent-amber-500" />
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className="flex-1 text-sm font-semibold truncate" style={{ color: 'var(--wr-text-primary)' }}>{d.name}</span>
+                    <span className="flex-shrink-0 text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                      {d.agentCount} agent{d.agentCount !== 1 ? 's' : ''}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {preview.existingAssignments > 0 && (
+          <p className="text-xs mb-4 px-1 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }}>
+            {preview.existingAssignments} agent{preview.existingAssignments !== 1 ? 's' : ''} will also be linked to existing domains.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 flex-shrink-0">
+          <WrButton variant="secondary" onClick={onClose} disabled={committing}>Cancel</WrButton>
+          <WrButton onClick={handleConfirm} disabled={committing || (selected.size === 0 && preview.existingAssignments === 0)}>
+            {committing ? 'Syncing...' : selected.size > 0
+              ? `Create ${selected.size} Domain${selected.size !== 1 ? 's' : ''} & Sync`
+              : 'Sync Assignments Only'}
+          </WrButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Domains() {
   const { db } = useWorkspace();
@@ -146,6 +235,7 @@ export default function Domains() {
   const [loading, setLoading]           = useState(true);
   const [syncing, setSyncing]           = useState(false);
   const [syncResult, setSyncResult]     = useState(null);
+  const [syncPreview, setSyncPreview]   = useState(null); // { newDomains, existingAssignments }
 
   const load = async () => {
     if (!db) return;
@@ -180,8 +270,14 @@ export default function Domains() {
     load();
   };
 
-  // Sync: create domains from agent disciplines, assign agents with missing domain_id
-  const syncDomainsFromAgents = async () => {
+  // Broad discipline name for an agent lacking a valid domain, or null
+  const broadDiscipline = (agent) => {
+    if (!agent.discipline) return null;
+    return agent.discipline.split(/[\/,]/)[0].trim() || null;
+  };
+
+  // Sync step 1 (read-only): compute what a sync would do and open the preview modal
+  const previewSync = async () => {
     setSyncing(true);
     setSyncResult(null);
     const currentDomains = await queued(() => db.Domain.list());
@@ -190,55 +286,79 @@ export default function Domains() {
     const existingIds   = new Set(currentDomains.map(d => d.id));
     const existingNames = new Map(currentDomains.map(d => [d.name.toLowerCase(), d.id]));
 
-    // Collect discipline names from agents that lack a valid domain
-    const disciplineCandidates = new Set();
+    // Count orphaned agents per broad discipline
+    const candidateCounts = new Map(); // broad name → agent count
+    let existingAssignments = 0;
     agents.forEach(a => {
       if (!a.domain_id || !existingIds.has(a.domain_id)) {
-        if (a.discipline) {
-          const broad = a.discipline.split(/[\/,]/)[0].trim();
-          if (broad) disciplineCandidates.add(broad);
+        const broad = broadDiscipline(a);
+        if (!broad) return;
+        if (existingNames.has(broad.toLowerCase())) {
+          existingAssignments++;
+        } else {
+          candidateCounts.set(broad, (candidateCounts.get(broad) || 0) + 1);
         }
       }
     });
 
-    // Build lookup: discipline name → domain id (existing or newly created)
-    const domainCache = new Map(existingNames);
-    let created = 0;
-    const createdNames = [];
-    let colorIdx = currentDomains.length;
-
-    for (const name of disciplineCandidates) {
-      if (!domainCache.has(name.toLowerCase())) {
-        const color = DOMAIN_COLORS[colorIdx % DOMAIN_COLORS.length];
-        const newDomain = await db.Domain.create({
-          name,
-          color,
-          description: 'Auto-created from agent discipline sync.',
-        });
-        domainCache.set(name.toLowerCase(), newDomain.id);
-        createdNames.push(name);
-        created++;
-        colorIdx++;
-      }
+    if (candidateCounts.size === 0 && existingAssignments === 0) {
+      setSyncResult({ created: 0, names: [], reassigned: 0 });
+      setSyncing(false);
+      return;
     }
 
-    // Assign domain_id to agents that were missing one
+    let colorIdx = currentDomains.length;
+    const newDomains = [...candidateCounts.entries()].map(([name, agentCount]) => ({
+      name,
+      agentCount,
+      color: DOMAIN_COLORS[colorIdx++ % DOMAIN_COLORS.length],
+    })).sort((a, b) => b.agentCount - a.agentCount || a.name.localeCompare(b.name));
+
+    setSyncPreview({ newDomains, existingAssignments });
+    setSyncing(false);
+  };
+
+  // Sync step 2 (writes): create only the selected domains, then assign orphaned agents
+  const commitSync = async (selectedNames) => {
+    const selectedSet = new Set(selectedNames.map(n => n.toLowerCase()));
+    const preview = syncPreview;
+    const currentDomains = await queued(() => db.Domain.list());
+    const agents = await queued(() => db.Agent.list());
+
+    const existingIds = new Set(currentDomains.map(d => d.id));
+    const domainCache = new Map(currentDomains.map(d => [d.name.toLowerCase(), d.id]));
+
+    let created = 0;
+    const createdNames = [];
+    for (const cand of preview.newDomains) {
+      if (!selectedSet.has(cand.name.toLowerCase())) continue;
+      if (domainCache.has(cand.name.toLowerCase())) continue;
+      const newDomain = await db.Domain.create({
+        name: cand.name,
+        color: cand.color,
+        description: 'Auto-created from agent discipline sync.',
+      });
+      domainCache.set(cand.name.toLowerCase(), newDomain.id);
+      createdNames.push(cand.name);
+      created++;
+    }
+
+    // Assign domain_id to orphaned agents whose discipline maps to an existing or newly created domain
     let reassigned = 0;
     for (const agent of agents) {
       if (!agent.domain_id || !existingIds.has(agent.domain_id)) {
-        if (agent.discipline) {
-          const broad = agent.discipline.split(/[\/,]/)[0].trim();
-          const newId = domainCache.get(broad.toLowerCase());
-          if (newId) {
-            await db.Agent.update(agent.id, { domain_id: newId });
-            reassigned++;
-          }
+        const broad = broadDiscipline(agent);
+        if (!broad) continue;
+        const newId = domainCache.get(broad.toLowerCase());
+        if (newId) {
+          await db.Agent.update(agent.id, { domain_id: newId });
+          reassigned++;
         }
       }
     }
 
     setSyncResult({ created, names: createdNames, reassigned });
-    setSyncing(false);
+    setSyncPreview(null);
     load();
   };
 
@@ -268,9 +388,9 @@ export default function Domains() {
         subtitle="Organizational categories for your analysis workspace"
         actions={
           <div className="flex gap-2">
-            <WrButton variant="outline" onClick={syncDomainsFromAgents} disabled={syncing}>
+            <WrButton variant="outline" onClick={previewSync} disabled={syncing}>
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync from Agents'}
+              {syncing ? 'Scanning...' : 'Sync from Agents'}
             </WrButton>
             <WrButton onClick={() => setModal('new')}><Plus className="w-4 h-4" /> New Domain</WrButton>
           </div>
@@ -341,7 +461,7 @@ export default function Domains() {
             {' — '}run <strong>Sync from Agents</strong> to assign them automatically.
           </div>
           <div className="ml-4 flex-shrink-0">
-            <WrButton variant="outline" onClick={syncDomainsFromAgents} disabled={syncing}>
+            <WrButton variant="outline" onClick={previewSync} disabled={syncing}>
               <RefreshCw className="w-3.5 h-3.5" /> Sync Now
             </WrButton>
           </div>
@@ -438,6 +558,14 @@ export default function Domains() {
           agentCounts={agentCounts}
           onMerge={handleMergeDuplicates}
           onClose={() => setDupModal(null)}
+        />
+      )}
+
+      {syncPreview && (
+        <SyncPreviewModal
+          preview={syncPreview}
+          onConfirm={commitSync}
+          onClose={() => setSyncPreview(null)}
         />
       )}
     </div>
