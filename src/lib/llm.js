@@ -252,23 +252,30 @@ export function parseMarkers(fullText, fallbackSeverity) {
   const lines = fullText.trimEnd().split('\n');
   let severity = fallbackSeverity || 'HIGH';
   let confidence = null;
+  let likelihood = null;
+  let impact = null;
   let compound_chain_text = '';
   let markerEnd = lines.length;
 
-  for (let i = lines.length - 1; i >= 0 && markerEnd - i <= 5; i--) {
+  // Scan a slightly larger tail since there are now up to 5 marker lines
+  for (let i = lines.length - 1; i >= 0 && markerEnd - i <= 7; i--) {
     const line = lines[i].trim();
     if (!line) continue;
     const sev = line.match(/^SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
     if (sev) { severity = sev[1].toUpperCase(); markerEnd = Math.min(markerEnd, i); continue; }
     const conf = line.match(/^CONFIDENCE:\s*(\d+)/i);
     if (conf) { confidence = Math.min(100, Math.max(0, parseInt(conf[1], 10))); markerEnd = Math.min(markerEnd, i); continue; }
+    const lik = line.match(/^LIKELIHOOD:\s*([1-5])/i);
+    if (lik) { likelihood = parseInt(lik[1], 10); markerEnd = Math.min(markerEnd, i); continue; }
+    const imp = line.match(/^IMPACT:\s*([1-5])/i);
+    if (imp) { impact = parseInt(imp[1], 10); markerEnd = Math.min(markerEnd, i); continue; }
     const chain = line.match(/^COMPOUND_CHAIN:\s*(.+)/i);
     if (chain) { compound_chain_text = chain[1].trim(); markerEnd = Math.min(markerEnd, i); continue; }
     break;
   }
 
   const assessment = lines.slice(0, markerEnd).join('\n').trim();
-  return { assessment, severity, confidence, compound_chain_text };
+  return { assessment, severity, confidence, likelihood, impact, compound_chain_text };
 }
 
 // --- generateRound1 ---
@@ -314,6 +321,8 @@ ${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
 After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 — 1 Rare, 2 Unlikely, 3 Possible, 4 Likely, 5 Almost Certain, for your top threat]
+IMPACT: [1-5 — 1 Negligible, 2 Minor, 3 Moderate, 4 Major, 5 Severe, for your top threat]
 CONFIDENCE: [0-100 integer — be calibrated: 85+ only where you have direct evidence or deep expertise; 50-70 where you are extrapolating outside your domain; below 50 where you are speculating]
 COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
@@ -358,6 +367,8 @@ Now write your Round 2 rebuttal (300-450 words) covering:
 
 After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 for your top risk, revised after cross-examination]
+IMPACT: [1-5 for your top risk, revised after cross-examination]
 CONFIDENCE: [0-100 integer — recalibrate: if other experts corroborated you, confidence may rise; if credible experts contradicted you, it should fall]
 COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
@@ -429,6 +440,8 @@ ${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
 After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 for your top threat: 1 Rare … 5 Almost Certain]
+IMPACT: [1-5 for your top threat: 1 Negligible … 5 Severe]
 CONFIDENCE: [0-100 integer — be calibrated: 85+ only with direct evidence or deep expertise; 50-70 when extrapolating outside your domain; below 50 when speculating]
 COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
@@ -466,6 +479,8 @@ Now write your Round 2 rebuttal (300-450 words) covering:
 
 After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 for your top risk, revised]
+IMPACT: [1-5 for your top risk, revised]
 CONFIDENCE: [0-100 integer — recalibrate: corroboration raises confidence, credible contradiction lowers it]
 COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 

@@ -349,13 +349,13 @@ const scenarioCtx = scenario?.context_document || session?.context_override || '
           threatCatalog: threats,
           onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            const { assessment, severity, confidence, compound_chain_text } = parseMarkers(text, agent.severity_default || 'HIGH');
+            const { assessment, severity, confidence, likelihood, impact, compound_chain_text } = parseMarkers(text, agent.severity_default || 'HIGH');
             finishStream(tempId, assessment, { severity, confidence });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
             // Update local state so Round 2 othersCtx sees the fresh assessment
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, round1_confidence: confidence, status: 'r1_done' } : s));
-            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, round1_confidence: confidence, compound_chain_text: compound_chain_text || null, status: 'r1_done' });
+            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, round1_confidence: confidence, round1_likelihood: likelihood, round1_impact: impact, compound_chain_text: compound_chain_text || null, status: 'r1_done' });
             const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity, confidence } });
             await saveTurnSources(db, id, savedMsg?.id || tempId, sa.agent_id, assessment);
           },
@@ -410,12 +410,12 @@ const scenarioCtx = scenario?.context_document || session?.context_override || '
           othersAssessments: othersCtx(sa.agent_id), threatCatalog: threats,
           onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            const { assessment, severity, confidence, compound_chain_text } = parseMarkers(text, sa.round1_severity || 'HIGH');
+            const { assessment, severity, confidence, likelihood, impact, compound_chain_text } = parseMarkers(text, sa.round1_severity || 'HIGH');
             finishStream(tempId, assessment, { severity, confidence });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
             setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, round2_confidence: confidence, status: 'complete' } : s));
-            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, round2_confidence: confidence, compound_chain_text: compound_chain_text || null, status: 'complete' });
+            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, round2_confidence: confidence, round2_likelihood: likelihood, round2_impact: impact, compound_chain_text: compound_chain_text || null, status: 'complete' });
             const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity, confidence } });
             await saveTurnSources(db, id, savedMsg?.id || tempId, sa.agent_id, assessment);
           },

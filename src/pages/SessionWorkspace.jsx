@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, StopCircle, Trash2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
 import EvidenceLedger from '@/components/session/EvidenceLedger';
+import { riskScore, riskBandFromScore, likelihoodLabel, impactLabel } from '@/lib/risk';
+import RiskMatrix from '@/components/session/RiskMatrix';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -54,6 +56,10 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
   const text = round === 1 ? sa.round1_assessment : sa.round2_rebuttal;
   const severity = round === 1 ? sa.round1_severity : sa.round2_revised_severity;
   const confidence = round === 1 ? sa.round1_confidence : sa.round2_confidence;
+  const likelihood = round === 1 ? sa.round1_likelihood : sa.round2_likelihood;
+  const impact = round === 1 ? sa.round1_impact : sa.round2_impact;
+  const rScore = riskScore(likelihood, impact);
+  const rBand = riskBandFromScore(rScore);
   const color = agent?.domain_color || '#F0A500';
 
   const SEV_COLORS = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
@@ -75,6 +81,15 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
             <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{agent?.discipline}</p>
           </div>
           <div className="flex items-center gap-2">
+            {rScore != null && (
+              <span
+                className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-full"
+                title={`Likelihood ${likelihood}/5 (${likelihoodLabel(likelihood)}) × Impact ${impact}/5 (${impactLabel(impact)}) = risk ${rScore}/25`}
+                style={{ backgroundColor: `${rBand.color}18`, color: rBand.color, border: `1px solid ${rBand.color}40` }}
+              >
+                L{likelihood}×I{impact}={rScore}
+              </span>
+            )}
             {confidence != null && (
               <span
                 className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-full"
@@ -1229,12 +1244,16 @@ const briefAllAgents = async () => {
           round1_assessment: res.assessment,
           round1_severity: res.severity || agent.severity_default,
           round1_confidence: res.confidence,
+          round1_likelihood: res.likelihood,
+          round1_impact: res.impact,
           compound_chain_text: res.compound_chain_text || null,
           status: 'r1_done',
         } : {
           round2_rebuttal: res.assessment,
           round2_revised_severity: res.severity || sa.round1_severity,
           round2_confidence: res.confidence,
+          round2_likelihood: res.likelihood,
+          round2_impact: res.impact,
           compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
           status: 'complete',
         };
@@ -1308,12 +1327,16 @@ const briefAllAgents = async () => {
         round1_assessment: res.assessment,
         round1_severity: res.severity || agent.severity_default,
         round1_confidence: res.confidence,
+        round1_likelihood: res.likelihood,
+        round1_impact: res.impact,
         compound_chain_text: res.compound_chain_text || null,
         status: 'r1_done',
       } : {
         round2_rebuttal: res.assessment,
         round2_revised_severity: res.severity || sa.round1_severity,
         round2_confidence: res.confidence,
+        round2_likelihood: res.likelihood,
+        round2_impact: res.impact,
         compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
         status: 'complete',
       };
@@ -1775,6 +1798,13 @@ const briefAllAgents = async () => {
                 <div className="w-full h-1 rounded-full" style={{ backgroundColor: 'var(--wr-border)' }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${(progress.current/progress.total)*100}%`, backgroundColor: 'var(--wr-amber)' }} />
                 </div>
+              </div>
+            )}
+
+            {/* Quantified risk matrix — shown once any assessment carries L×I */}
+            {sessionAgents.some(sa => (round === 1 ? sa.round1_likelihood : sa.round2_likelihood)) && (
+              <div className="mb-4">
+                <RiskMatrix sessionAgents={sessionAgents} agents={agents} round={round} />
               </div>
             )}
 

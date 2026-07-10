@@ -13,8 +13,10 @@ const SEVERITIES = ['CRITICAL','HIGH','MEDIUM','LOW'];
 const SEV_COLORS = { CRITICAL:'#C0392B', HIGH:'#D68910', MEDIUM:'#2E86AB', LOW:'#27AE60' };
 
 function ThreatModal({ threat, domains, scenarios, onSave, onClose }) {
-  const [form, setForm] = useState({ name:'', description:'', severity:'HIGH', domain_id:'', scenario_id:'', category:'', tags:[], ...threat });
+  const [form, setForm] = useState({ name:'', description:'', severity:'HIGH', domain_id:'', scenario_id:'', category:'', tags:[], likelihood:null, impact:null, ...threat });
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
+  const LIK = { 1:'Rare', 2:'Unlikely', 3:'Possible', 4:'Likely', 5:'Almost Certain' };
+  const IMP = { 1:'Negligible', 2:'Minor', 3:'Moderate', 4:'Major', 5:'Severe' };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor:'rgba(0,0,0,0.7)' }}>
@@ -49,6 +51,34 @@ function ThreatModal({ threat, domains, scenarios, onSave, onClose }) {
             {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </WrSelect>
           <WrInput label="CATEGORY" value={form.category} onChange={v => set('category',v)} placeholder="e.g. Supply Chain, Cyber, HUMINT..." />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-2 tracking-wide" style={{ color:'var(--wr-text-secondary)' }}>LIKELIHOOD</label>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => set('likelihood', form.likelihood===n ? null : n)} title={LIK[n]}
+                    className="flex-1 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                    style={{ backgroundColor: form.likelihood===n ? '#2E86AB' : 'var(--wr-bg-secondary)', color: form.likelihood===n ? '#fff' : 'var(--wr-text-muted)', border:'1px solid var(--wr-border)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-1" style={{ color:'var(--wr-text-muted)' }}>{form.likelihood ? LIK[form.likelihood] : '1 Rare … 5 Almost Certain'}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-2 tracking-wide" style={{ color:'var(--wr-text-secondary)' }}>IMPACT</label>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => set('impact', form.impact===n ? null : n)} title={IMP[n]}
+                    className="flex-1 py-1.5 rounded text-xs font-bold font-mono transition-all"
+                    style={{ backgroundColor: form.impact===n ? '#C0392B' : 'var(--wr-bg-secondary)', color: form.impact===n ? '#fff' : 'var(--wr-text-muted)', border:'1px solid var(--wr-border)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-1" style={{ color:'var(--wr-text-muted)' }}>{form.impact ? IMP[form.impact] : '1 Negligible … 5 Severe'}</p>
+            </div>
+          </div>
         </div>
         <div className="flex justify-end gap-2 mt-6">
           <WrButton variant="secondary" onClick={onClose}>Cancel</WrButton>
