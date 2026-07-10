@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { SEV_ORDER as SEVERITIES, SEV_COLORS, categoriesOf } from './mapUtils';
+import { SEV_ORDER as SEVERITIES, SEV_COLORS, categoriesOf, normSev } from './mapUtils';
 
 const TOOLTIP_W = 340;
 const TOOLTIP_H = 360; // conservative max height estimate
@@ -15,6 +15,7 @@ function hexToRgba(hex, alpha) {
 export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
   const [hovered, setHovered] = useState(null); // { groupId, cat }
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [showEmpty, setShowEmpty] = useState(false);
 
   const handleMouseMove = useCallback((e) => {
     const vw = window.innerWidth;
@@ -27,6 +28,13 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
     });
   }, []);
 
+  // Rows with no threats are hidden by default — they turn the map into a wall of blanks
+  const visibleGroups = useMemo(
+    () => (showEmpty ? groups : groups.filter(g => g.total > 0)),
+    [groups, showEmpty]
+  );
+  const emptyCount = groups.length - groups.filter(g => g.total > 0).length;
+
   const categories = useMemo(
     () => categoriesOf(groups.flatMap(g => g.threats)),
     [groups]
@@ -35,14 +43,14 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
   // cell data per group × category
   const heatData = useMemo(() => {
     const map = {};
-    groups.forEach(g => {
+    visibleGroups.forEach(g => {
       map[g.id] = {};
       categories.forEach(cat => {
         const cellThreats = g.threats.filter(t => (t.category || 'Uncategorized') === cat);
         const severities = {};
         let maxSev = null;
         cellThreats.forEach(t => {
-          const sev = t.severity || 'MEDIUM';
+          const sev = normSev(t.severity);
           severities[sev] = (severities[sev] || 0) + 1;
           if (!maxSev || SEVERITIES.indexOf(sev) < SEVERITIES.indexOf(maxSev)) maxSev = sev;
         });
@@ -50,28 +58,28 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
           count: cellThreats.length,
           maxSev,
           severities,
-          threatList: cellThreats.map(t => ({ name: t.name || 'Unnamed', severity: t.severity || 'MEDIUM' })),
+          threatList: cellThreats.map(t => ({ name: t.name || 'Unnamed', severity: normSev(t.severity) })),
         };
       });
     });
     return map;
-  }, [groups, categories]);
+  }, [visibleGroups, categories]);
 
   const maxCount = useMemo(() => {
     let m = 0;
-    groups.forEach(g => categories.forEach(c => {
+    visibleGroups.forEach(g => categories.forEach(c => {
       if (heatData[g.id]?.[c]?.count > m) m = heatData[g.id][c].count;
     }));
     return Math.max(m, 1);
-  }, [heatData, groups, categories]);
+  }, [heatData, visibleGroups, categories]);
 
   const catTotals = useMemo(() => {
     const t = {};
     categories.forEach(cat => {
-      t[cat] = groups.reduce((s, g) => s + (heatData[g.id]?.[cat]?.count || 0), 0);
+      t[cat] = visibleGroups.reduce((s, g) => s + (heatData[g.id]?.[cat]?.count || 0), 0);
     });
     return t;
-  }, [heatData, groups, categories]);
+  }, [heatData, visibleGroups, categories]);
 
   // Use rgba background so text stays fully opaque at all intensity levels
   const getCellBg = (groupId, cat) => {
@@ -81,7 +89,7 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
     return hexToRgba(SEV_COLORS[cell.maxSev], intensity);
   };
 
-  const hoveredGroup = hovered ? groups.find(g => g.id === hovered.groupId) : null;
+  const hoveredGroup = hovered ? visibleGroups.find(g => g.id === hovered.groupId) : null;
   const hoveredCell = hovered ? heatData[hovered.groupId]?.[hovered.cat] : null;
 
   return (
@@ -107,6 +115,14 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
             <div className="w-16 h-3 rounded-sm" style={{ background: 'linear-gradient(to right, rgba(46,134,171,0.15), rgba(46,134,171,0.8))' }} />
             <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>low → high volume</span>
           </div>
+          {emptyCount > 0 && (
+            <label className="flex items-center gap-1.5 pl-3 cursor-pointer" style={{ borderLeft: '1px solid var(--wr-border)' }}>
+              <input type="checkbox" checked={showEmpty} onChange={e => setShowEmpty(e.target.checked)} />
+              <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                show {emptyCount} empty row{emptyCount !== 1 ? 's' : ''}
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
@@ -174,7 +190,7 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
               </tr>
             </thead>
             <tbody>
-              {groups.map((g) => (
+              {visibleGroups.map((g) => (
                 <tr key={g.id} style={{ borderTop: '1px solid var(--wr-border)', opacity: g.isUnassigned ? 0.75 : 1 }}>
                   <td
                     title={g.isUnassigned ? 'Threats with no domain assignment' : g.name}
@@ -246,9 +262,11 @@ export default function ThreatHeatmap({ groups, axisLabel, onSelect }) {
           </table>
         </div>
 
-        {groups.length === 0 && (
-          <div className="py-12 text-center text-sm" style={{ color: 'var(--wr-text-muted)' }}>
-            Nothing to map yet. Add agents and threats with domain assignments.
+        {visibleGroups.length === 0 && (
+          <div className="py-12 text-center text-sm px-6" style={{ color: 'var(--wr-text-muted)' }}>
+            {groups.length === 0
+              ? 'Nothing to map yet. Add agents and threats, then assign domains to both.'
+              : `All ${groups.length} ${axisLabel}s have zero mapped threats. Threats link to ${axisLabel}s through their domain assignment — check that your threats have a domain set.`}
           </div>
         )}
       </div>

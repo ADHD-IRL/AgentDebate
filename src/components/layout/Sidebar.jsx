@@ -1,44 +1,92 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard, Globe, Target, AlertTriangle,
   Bot, Link2, Swords, BarChart3, Wifi, Map,
-  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library
+  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library, ShieldCheck, GitBranch, BookMarked
 } from 'lucide-react';
 
-const navItems = [
+// Menu is ordered as the actual workflow: build a reusable library, plan the
+// engagement, run the red team, then act on what it surfaces.
+const primary = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/domains', icon: Globe, label: 'Domains' },
-  { path: '/scenarios', icon: Target, label: 'Scenarios' },
-  { path: '/threats', icon: AlertTriangle, label: 'Threats' },
-  { path: '/agents', icon: Bot, label: 'Agents' },
-  { path: '/sme-library', icon: Library, label: 'SME Library' },
-  { path: '/chains', icon: Link2, label: 'Chains' },
-  { path: '/chain-breaker', icon: Scissors, label: 'Chain Breaker' },
-  { path: '/simulator', icon: FlaskConical, label: 'What-If Simulator' },
-  { path: '/sessions', icon: Swords, label: 'Sessions' },
 ];
 
-const reportsItems = [
-  { path: '/reports', icon: BarChart3, label: 'Reports' },
+const groups = [
+  {
+    title: '1 · Build',
+    hint: 'Your reusable panel & taxonomy',
+    items: [
+      { path: '/domains', icon: Globe, label: 'Domains' },
+      { path: '/agents', icon: Bot, label: 'Agents' },
+      { path: '/sme-library', icon: Library, label: 'SME Library' },
+      { path: '/knowledge', icon: BookMarked, label: 'Knowledge Base' },
+    ],
+  },
+  {
+    title: '2 · Plan',
+    hint: 'What you want to stress-test',
+    items: [
+      { path: '/decisions', icon: GitBranch, label: 'Decisions' },
+      { path: '/scenarios', icon: Target, label: 'Scenarios' },
+      { path: '/threats', icon: AlertTriangle, label: 'Threats' },
+    ],
+  },
+  {
+    title: '3 · Run',
+    hint: 'The red-team analysis',
+    items: [
+      { path: '/sessions', icon: Swords, label: 'Sessions' },
+      { path: '/simulator', icon: FlaskConical, label: 'What-If Simulator' },
+    ],
+  },
+  {
+    title: '4 · Act on Findings',
+    hint: 'Coverage, chains & mitigation',
+    items: [
+      { path: '/threatmap', icon: Map, label: 'Threat Map' },
+      { path: '/chains', icon: Link2, label: 'Chains' },
+      { path: '/chain-breaker', icon: Scissors, label: 'Chain Breaker' },
+      { path: '/mitigations', icon: ShieldCheck, label: 'Mitigations' },
+      { path: '/reports', icon: BarChart3, label: 'Reports' },
+    ],
+  },
+  {
+    title: 'Insights',
+    items: [
+      { path: '/agent-analytics', icon: Brain, label: 'Agent Analytics' },
+      { path: '/compare', icon: GitCompare, label: 'Compare' },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { path: '/settings', icon: Settings2, label: 'Settings' },
+      { path: '/guide', icon: BookOpen, label: 'User Guide' },
+    ],
+  },
 ];
 
-const analyticsItems = [
-  { path: '/threatmap', icon: Map, label: 'Threat Map' },
-  { path: '/agent-analytics', icon: Brain, label: 'Agent Analytics' },
-  { path: '/compare', icon: GitCompare, label: 'Compare' },
-];
-
-const settingsItems = [
-  { path: '/settings', icon: Settings2, label: 'Settings' },
-];
-
-const helpItems = [
-  { path: '/guide', icon: BookOpen, label: 'User Guide' },
-];
+function NavLink({ path, icon: Icon, label, active }) {
+  return (
+    <Link
+      to={path}
+      className="flex items-center gap-3 px-5 py-2 mx-2 rounded text-sm font-medium transition-all duration-150"
+      style={{
+        color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
+        backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
+        borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
+      }}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <span className="tracking-wide">{label}</span>
+    </Link>
+  );
+}
 
 export default function Sidebar({ stats }) {
   const location = useLocation();
+  const isActive = (path) =>
+    location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
   return (
     <div className="fixed left-0 top-0 h-full w-56 flex flex-col z-50"
@@ -52,113 +100,34 @@ export default function Sidebar({ stats }) {
             AgentDebate
           </span>
         </div>
-
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 overflow-y-auto flex flex-col">
-        <div className="flex-1">
-          {navItems.map(({ path, icon: Icon, label }) => {
-            const active = location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
-            return (
-              <Link
-                key={path}
-                to={path}
-                className="flex items-center gap-3 px-5 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150"
-                style={{
-                  color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
-                  backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
-                  borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
-                }}
-              >
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                <span className="tracking-wide">{label}</span>
-              </Link>
-            );
-          })}
+      <nav className="flex-1 py-3 overflow-y-auto flex flex-col">
+        <div className="mb-1">
+          {primary.map(item => (
+            <NavLink key={item.path} {...item} active={isActive(item.path)} />
+          ))}
         </div>
 
-        {/* Reports section */}
-        <div className="mx-4 mt-3 mb-1 border-t" style={{ borderColor: 'var(--wr-border)' }} />
-        <p className="px-5 py-1 text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>REPORTS</p>
-        {reportsItems.map(({ path, icon: Icon, label }) => {
-          const active = location.pathname === path;
-          return (
-            <Link key={path} to={path}
-              className="flex items-center gap-3 px-5 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150"
-              style={{
-                color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
-                backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
-                borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
-              }}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="tracking-wide">{label}</span>
-            </Link>
-          );
-        })}
-
-        {/* Analytics section */}
-        <div className="mx-4 mt-3 mb-1 border-t" style={{ borderColor: 'var(--wr-border)' }} />
-        <p className="px-5 py-1 text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>ANALYTICS</p>
-        {analyticsItems.map(({ path, icon: Icon, label }) => {
-          const active = location.pathname === path;
-          return (
-            <Link
-              key={path}
-              to={path}
-              className="flex items-center gap-3 px-5 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150"
-              style={{
-                color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
-                backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
-                borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
-              }}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="tracking-wide">{label}</span>
-            </Link>
-          );
-        })}
-
-        {/* Settings section */}
-        <div className="mx-4 mt-3 mb-1 border-t" style={{ borderColor: 'var(--wr-border)' }} />
-        <p className="px-5 py-1 text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SETTINGS</p>
-        {settingsItems.map(({ path, icon: Icon, label }) => {
-          const active = location.pathname === path;
-          return (
-            <Link key={path} to={path}
-              className="flex items-center gap-3 px-5 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150"
-              style={{
-                color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
-                backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
-                borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
-              }}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="tracking-wide">{label}</span>
-            </Link>
-          );
-        })}
-
-        {/* Help section */}
-        <div className="mx-4 mt-3 mb-1 border-t" style={{ borderColor: 'var(--wr-border)' }} />
-        <p className="px-5 py-1 text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>HELP</p>
-        {helpItems.map(({ path, icon: Icon, label }) => {
-          const active = location.pathname === path;
-          return (
-            <Link key={path} to={path}
-              className="flex items-center gap-3 px-5 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150"
-              style={{
-                color: active ? 'var(--wr-amber)' : 'var(--wr-text-secondary)',
-                backgroundColor: active ? 'rgba(240,165,0,0.1)' : 'transparent',
-                borderLeft: active ? '2px solid var(--wr-amber)' : '2px solid transparent',
-              }}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="tracking-wide">{label}</span>
-            </Link>
-          );
-        })}
+        {groups.map((group, gi) => (
+          <div key={group.title}>
+            <div className="mx-4 mt-3 mb-1 border-t" style={{ borderColor: 'var(--wr-border)' }} />
+            <div className="px-5 pt-1 pb-0.5">
+              <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                {group.title.toUpperCase()}
+              </p>
+              {group.hint && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)', opacity: 0.55 }}>
+                  {group.hint}
+                </p>
+              )}
+            </div>
+            {group.items.map(item => (
+              <NavLink key={item.path} {...item} active={isActive(item.path)} />
+            ))}
+          </div>
+        ))}
       </nav>
 
       {/* Status bar */}
@@ -171,7 +140,6 @@ export default function Sidebar({ stats }) {
           <span>{stats?.agentCount ?? 0} agents</span>
           <span>{stats?.activeSessions ?? 0} active sessions</span>
         </div>
-
       </div>
     </div>
   );

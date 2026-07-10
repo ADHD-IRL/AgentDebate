@@ -8,6 +8,10 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, StopCircle, Trash2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
+import EvidenceLedger from '@/components/session/EvidenceLedger';
+import { riskScore, riskBandFromScore, likelihoodLabel, impactLabel } from '@/lib/risk';
+import RiskMatrix from '@/components/session/RiskMatrix';
+import { retrieveKnowledge, formatKnowledgeContext } from '@/lib/knowledge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -53,6 +57,10 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
   const text = round === 1 ? sa.round1_assessment : sa.round2_rebuttal;
   const severity = round === 1 ? sa.round1_severity : sa.round2_revised_severity;
   const confidence = round === 1 ? sa.round1_confidence : sa.round2_confidence;
+  const likelihood = round === 1 ? sa.round1_likelihood : sa.round2_likelihood;
+  const impact = round === 1 ? sa.round1_impact : sa.round2_impact;
+  const rScore = riskScore(likelihood, impact);
+  const rBand = riskBandFromScore(rScore);
   const color = agent?.domain_color || '#F0A500';
 
   const SEV_COLORS = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
@@ -74,6 +82,15 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
             <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>{agent?.discipline}</p>
           </div>
           <div className="flex items-center gap-2">
+            {rScore != null && (
+              <span
+                className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-full"
+                title={`Likelihood ${likelihood}/5 (${likelihoodLabel(likelihood)}) × Impact ${impact}/5 (${impactLabel(impact)}) = risk ${rScore}/25`}
+                style={{ backgroundColor: `${rBand.color}18`, color: rBand.color, border: `1px solid ${rBand.color}40` }}
+              >
+                L{likelihood}×I{impact}={rScore}
+              </span>
+            )}
             {confidence != null && (
               <span
                 className="text-xs font-mono tabular-nums px-2 py-0.5 rounded-full"
@@ -754,6 +771,7 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
   const [validityReport, setValidityReport] = useState(null);
   const [validityError, setValidityError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [view, setView] = useState('sme'); // 'sme' = evidence ledger, 'tier' = by credibility
 
   const agentMap = Object.fromEntries((agents || []).map(a => [a.id, a]));
 
@@ -812,12 +830,27 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SESSION SOURCES</h2>
+          <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+            {view === 'sme' ? 'SME EVIDENCE LEDGER' : 'SESSION SOURCES'}
+          </h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{sources.length} source{sources.length !== 1 ? 's' : ''} captured</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* View toggle */}
+          <div className="flex rounded overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+            {[{ id: 'sme', label: 'By SME' }, { id: 'tier', label: 'By Tier' }].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)}
+                className="text-xs font-mono font-bold px-3 py-1.5 transition-colors"
+                style={{
+                  backgroundColor: view === v.id ? 'var(--wr-amber)' : 'transparent',
+                  color: view === v.id ? '#0D1B2A' : 'var(--wr-text-muted)',
+                }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setShowAddForm(v => !v)} className="text-xs font-mono font-bold px-3 py-1.5 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)' }}>
             + Add
           </button>
@@ -833,8 +866,11 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
       {validityError && <p className="text-xs p-3 rounded" style={{ backgroundColor: 'rgba(192,57,43,0.1)', color: '#C0392B', border: '1px solid rgba(192,57,43,0.2)' }}>{validityError}</p>}
       {validityReport && <ValidityReport report={validityReport} />}
 
-      {/* Sources by tier */}
-      {TIERS.map(tier => {
+      {/* By SME — evidence ledger */}
+      {view === 'sme' && <EvidenceLedger sources={sources} agents={agents || []} />}
+
+      {/* By tier — credibility grouping */}
+      {view === 'tier' && TIERS.map(tier => {
         const list = grouped[tier];
         if (!list.length) return null;
         const c = TIER_COLORS[tier];
@@ -1160,6 +1196,9 @@ const briefAllAgents = async () => {
     setProgress({ current: 0, total: agentsToRun.length });
     const others = round === 2 ? sessionAgents.filter(sa => sa.round1_assessment) : [];
     const chainContext = buildChainContext();
+    // Retrieve org knowledge for the scenario once per round run
+    const kChunks = await retrieveKnowledge(db, `${scenario?.context_document || ''} ${session?.phase_focus || ''}`, 5);
+    const knowledgeContext = formatKnowledgeContext(kChunks);
 
     // Save facilitator note to session if changed
     if (facilitatorNote !== (session?.facilitator_note || '')) {
@@ -1190,7 +1229,8 @@ const briefAllAgents = async () => {
           .filter(o => o.agent_id !== sa.agent_id)
           .map(o => {
             const oAgent = getAgent(o.agent_id);
-            return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
+            const conf = o.round1_confidence != null ? ` · confidence ${o.round1_confidence}%` : '';
+            return `=== ${oAgent?.name} (${oAgent?.discipline}) [${o.round1_severity || '?'}${conf}] ===\n${o.round1_assessment}`;
           }).join('\n\n');
 
         const fn = round === 1 ? generateRound1 : generateRound2;
@@ -1202,18 +1242,23 @@ const briefAllAgents = async () => {
           threatCatalog: threats,
           chainContext,
           facilitator_note: facilitatorNote,
+          knowledgeContext,
         });
 
         const updates = round === 1 ? {
           round1_assessment: res.assessment,
           round1_severity: res.severity || agent.severity_default,
           round1_confidence: res.confidence,
+          round1_likelihood: res.likelihood,
+          round1_impact: res.impact,
           compound_chain_text: res.compound_chain_text || null,
           status: 'r1_done',
         } : {
           round2_rebuttal: res.assessment,
           round2_revised_severity: res.severity || sa.round1_severity,
           round2_confidence: res.confidence,
+          round2_likelihood: res.likelihood,
+          round2_impact: res.impact,
           compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
           status: 'complete',
         };
@@ -1265,10 +1310,13 @@ const briefAllAgents = async () => {
     const others = round === 2 ? sessionAgents.filter(o => o.agent_id !== sa.agent_id && o.round1_assessment) : [];
     const othersText = others.map(o => {
       const oAgent = getAgent(o.agent_id);
-      return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
+      const conf = o.round1_confidence != null ? ` · confidence ${o.round1_confidence}%` : '';
+      return `=== ${oAgent?.name} (${oAgent?.discipline}) [${o.round1_severity || '?'}${conf}] ===\n${o.round1_assessment}`;
     }).join('\n\n');
 
     const chainContext = buildChainContext();
+    const kChunks = await retrieveKnowledge(db, `${scenario?.context_document || ''} ${session?.phase_focus || ''}`, 5);
+    const knowledgeContext = formatKnowledgeContext(kChunks);
 
     try {
       const fn2 = round === 1 ? generateRound1 : generateRound2;
@@ -1280,18 +1328,23 @@ const briefAllAgents = async () => {
         threatCatalog: threats,
         chainContext,
         facilitator_note: facilitatorNote,
+        knowledgeContext,
       });
 
       const updates = round === 1 ? {
         round1_assessment: res.assessment,
         round1_severity: res.severity || agent.severity_default,
         round1_confidence: res.confidence,
+        round1_likelihood: res.likelihood,
+        round1_impact: res.impact,
         compound_chain_text: res.compound_chain_text || null,
         status: 'r1_done',
       } : {
         round2_rebuttal: res.assessment,
         round2_revised_severity: res.severity || sa.round1_severity,
         round2_confidence: res.confidence,
+        round2_likelihood: res.likelihood,
+        round2_impact: res.impact,
         compound_chain_text: res.compound_chain_text || sa.compound_chain_text || null,
         status: 'complete',
       };
@@ -1753,6 +1806,13 @@ const briefAllAgents = async () => {
                 <div className="w-full h-1 rounded-full" style={{ backgroundColor: 'var(--wr-border)' }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${(progress.current/progress.total)*100}%`, backgroundColor: 'var(--wr-amber)' }} />
                 </div>
+              </div>
+            )}
+
+            {/* Quantified risk matrix — shown once any assessment carries L×I */}
+            {sessionAgents.some(sa => (round === 1 ? sa.round1_likelihood : sa.round2_likelihood)) && (
+              <div className="mb-4">
+                <RiskMatrix sessionAgents={sessionAgents} agents={agents} round={round} />
               </div>
             )}
 

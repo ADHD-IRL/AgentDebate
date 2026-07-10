@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Mic2, Search, Zap } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Library, Sparkles, Users, Scissors, LayoutDashboard } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -22,6 +22,27 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
     `,
   },
   {
+    id: 'workflow-map',
+    icon: LayoutDashboard,
+    color: '#27AE60',
+    title: 'The Workflow at a Glance',
+    content: `
+The sidebar is organized as the workflow, top to bottom. Follow it in order and each step feeds the next:
+
+**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), the **SME Library** (curate and reuse experts), and the **Knowledge Base** (your own documents that ground the analysis). These persist across every session.
+
+**2 · Plan** — Define the specific engagement: a **Decision** (the design choice and options you're comparing), a **Scenario** (the situation to stress-test), and, optionally, a **Threats** catalog (known risks). Tag them with domains.
+
+**3 · Run** — Bring a scenario and agents together in a **Session** (structured two-round analysis) or the **What-If Simulator**. This is where the red-teaming happens.
+
+**4 · Act on Findings** — Work the output: the **Threat Map** (coverage gaps), **Chains** (kill chains), **Chain Breaker** (mitigation roadmaps), **Mitigations** (the register that tracks them to done), and **Reports** (executive PDFs).
+
+**Insights** — **Agent Analytics** and **Compare** for cross-session trends. **System** holds Settings and this guide.
+
+**New here?** The **Dashboard** shows a getting-started checklist that tracks these steps and always points to your next action. It disappears once you've run your first session.
+    `,
+  },
+  {
     id: 'concepts',
     icon: Lightbulb,
     color: '#2E86AB',
@@ -31,9 +52,13 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
         icon: Globe,
         color: '#F0A500',
         title: 'Domains',
-        body: `Domains are **organizational categories** — the broad buckets that your work, threats, and agents live inside. Think of them like departments in a university: "Cybersecurity," "Geopolitics," "Supply Chain." They don't do anything on their own, but they keep everything organized and color-coded so you can instantly see which discipline a piece of analysis belongs to.
+        body: `Domains are **organizational categories** — the broad buckets that your work, threats, and agents live inside. Think of them like departments in a university: "Cybersecurity," "Geopolitics," "Supply Chain." They keep everything organized and color-coded, and they are the **connective tissue of the platform**: the Threat Map, coverage analysis, and agent filtering all link threats to agents through their shared domain.
 
-**Set these up first.** Everything else (agents, scenarios, threats) can be tagged to a domain.`
+**Set these up first.** Everything else (agents, scenarios, threats) can be tagged to a domain — and an untagged threat or agent is invisible to the Threat Map's coverage analysis.
+
+**Keep domains broad.** Aim for 10–15 wide buckets ("Critical Infrastructure & Industrial Resilience") rather than one domain per specialty. Broad domains let you group many agents and threats together, which is what makes the map and coverage views readable.
+
+**Sync from Agents.** If your agents have disciplines but no domains, the "Sync from Agents" button on the Domains page derives domain candidates from agent disciplines. A **preview popup** shows every domain that would be created — with a checkbox per domain and the number of agents it would receive — before anything is written to the database. Uncheck any junk candidates, then confirm. Nothing is saved until you do.`
       },
       {
         icon: Target,
@@ -57,12 +82,13 @@ The analogy: imagine hiring a panel of consultants for a day. One is a former co
 
 Each Agent has:
 - **Discipline** — their professional identity (e.g., "HUMINT Officer," "Critical Infrastructure Engineer")
+- **Domain** — the broad category they belong to (links them to threats on the Threat Map)
 - **Persona Description** — who they are and how they think
 - **Cognitive Bias** — what they systematically over- or under-weight (this is deliberate — biases create diversity of view)
 - **Red Team Focus** — what specific threats they're hunting for
 - **Vector Weights** — how much they emphasize Human, Technical, Physical, and Futures dimensions (0–100 each)
-- **Severity Default** — their baseline alarm level (CRITICAL / HIGH / MEDIUM / LOW)
-- **Voice** — used in Live Debate mode to give each agent a distinct spoken voice
+- **Default Severity** — their baseline risk posture (CRITICAL / HIGH / MEDIUM / LOW). This is the colored pill on the agent card. It is NOT a rating of the agent — it describes how alarmed this persona tends to be, and it is used as their fallback severity in debate rounds if a response doesn't declare one. Hover the pill for a full explanation.
+- **Extended persona fields** — epistemic style, institutional background, conflict triggers, decision style, adversary model, institutional incentives, and analytical framework. These are injected into the debate prompts, so the richer they are, the more distinct and realistic each agent's voice becomes.
 
 You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. You can also **create a new agent directly inside the session builder** using the "+ New Agent" button — it saves to your agent library and is immediately selected for the session.`
       },
@@ -72,7 +98,9 @@ You can build agents manually, generate them with AI, or import batches from a f
         title: 'Threats',
         body: `Threats are **named risk items** — specific, catalogued dangers associated with a scenario or domain. Think of them as entries in a risk register: "Supply chain compromise via tier-3 vendor," "Insider threat during transition period."
 
-Threats live in the library and can be tagged, categorized, and linked to scenarios. They can also be AI-generated from a scenario context document. Threats are the *what* — Agents assess the *how bad* and *why it matters*.`
+Threats live in the library and can be tagged, categorized, and linked to scenarios. They can also be AI-generated from a scenario context document. Threats are the *what* — Agents assess the *how bad* and *why it matters*.
+
+**Give every threat a Domain and a Category.** The Domain links it to the agents who can analyze it (this powers the Threat Map and coverage analysis); the Category groups it with similar threats (these become the heatmap columns). A threat without a domain shows up in the map's "Unassigned" row until you assign one.`
       },
       {
         icon: Link2,
@@ -84,7 +112,9 @@ The analogy: a Chain is like a **kill chain or attack tree**, but written in pla
 
 Each step can be attributed to an Agent or labeled freely. Chains can be built manually or AI-generated from a scenario.
 
-**Chains are automatically extracted from synthesis.** When you generate a synthesis report, AgentDebate parses out any compound threat chains identified by the AI and saves them directly to your chain library — tagged to that session and scenario. You don't need to do anything manually.`
+**Chains are automatically extracted from synthesis.** When you generate a synthesis report, AgentDebate parses out any compound threat chains identified by the AI and saves them directly to your chain library — tagged to that session and scenario. You don't need to do anything manually.
+
+**Chains are now generated as true kill chains.** Each step is an adversary action with an explicit "enabled by" precondition tied to the previous step, so the chain reads as a dependency sequence a defender can attack: break any one step and the chain stops. Feed a chain into the **Chain Breaker** (next section) to turn it into a prioritized mitigation plan.`
       },
       {
         icon: Swords,
@@ -100,7 +130,7 @@ Think of a Session like a **formal analytical war game**:
 
 Sessions have two modes:
 - **Classic Analysis** — structured two-round written assessment with synthesis
-- **Live Debate** — real-time streaming debate where agents respond to each other with spoken voice, and you can interject with facilitator questions
+- **Live Debate** — real-time streaming debate where agents respond to each other turn by turn, and you can interject with facilitator questions
 
 Sessions track a **status** as they progress: pending → round1 → round2 → complete.`
       },
@@ -127,12 +157,16 @@ Sessions track a **status** as they progress: pending → round1 → round2 → 
 1. Sets the agent's status to "generating_r1"
 2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario context document, phase focus, and any pinned chains
 3. Sends this prompt to Claude (Anthropic's AI model) via streaming
-4. The model responds in character — writing a structured threat assessment with findings, assumptions, a severity rating, and inline source citations
-5. The assessment and severity are saved; status updates to "r1_done"
+4. The model responds in character — a structured assessment with findings, assumptions, inline source citations, a severity rating, a **likelihood and impact band (1–5 each)**, and a **calibrated confidence score (0–100)**. If you've added Knowledge Base documents, the most relevant passages are injected into the prompt first, so the assessment is grounded in your material.
+5. The assessment, severity, likelihood, impact, and confidence are saved; status updates to "r1_done"
 6. When the last agent completes manually (without using Generate All), the session status auto-advances to "round1"
 
-Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.`,
-        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first. The "Generate All" button disables automatically once every agent has a completed assessment.'
+Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.
+
+**Two things each Round 1 assessment now includes by design:**
+- **A cross-domain handoff** — every agent must name the OTHER discipline whose interaction with their findings worries them most and pose a direct question to that expert. This plants the hooks that Round 2 turns into compound risks.
+- **A confidence score** — the agent's calibrated self-assessment (85+ only with direct evidence or deep expertise, 50–70 when extrapolating outside their domain, below 50 when speculating). Shown as a pill next to the severity badge.`,
+        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first. Watch the confidence pills: a CRITICAL rating at 40% confidence is a flag to dig in, not a settled finding.'
       },
       {
         num: '03',
@@ -144,28 +178,158 @@ Agents do NOT see each other's assessments in Round 1. This ensures independent 
       {
         num: '04',
         title: 'Generate Round 2 — Cross-Examination',
-        what: 'Click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 and produces a rebuttal — revising, reinforcing, or challenging. Same smart skip logic applies: already-completed agents are never re-run.',
+        what: 'Click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 — including their severity and confidence — and produces a rebuttal that revises, reinforces, or challenges. Same smart skip logic applies: already-completed agents are never re-run.',
         system: `For each Agent:
-1. Compiles all other agents' Round 1 assessments into a single "others" block
-2. Asks the agent to respond: who do they most agree with? Who do they most disagree with, and why? Does their severity change?
-3. The model responds with a structured rebuttal including a revised severity, strongest ally identification, and a compound chain narrative
-4. All results saved; when the last agent completes, session status auto-advances to "round2" and synthesis is triggered automatically`,
-        tip: 'Round 2 is where the most interesting dynamics emerge — when the economist and the cyberspecialist fundamentally disagree on severity, that tension is worth exploring.'
+1. Compiles all other agents' Round 1 assessments (with their severity and confidence) into a single "others" block
+2. Requires an **interaction risk** as the headline: one compound risk that exists ONLY because this agent's domain interacts with another's — a risk neither would list alone — with the coupling mechanism spelled out step by step
+3. Asks who they most agree with, who they most disagree with (and where that agent's rating looks miscalibrated), and whether their own severity changes
+4. The model responds with a revised severity, a **recalibrated confidence** (corroboration raises it, credible contradiction lowers it), the interaction risk, and a compound chain
+5. All results saved; when the last agent completes, session status auto-advances to "round2" and synthesis is triggered automatically`,
+        tip: 'The interaction-risk section is the whole point of the platform — it surfaces the risks a single-domain review can never see. If an agent\'s Round 2 doesn\'t name a genuine cross-domain coupling, that\'s a sign the panel lacks the right adjacent expertise.'
       },
       {
         num: '05',
         title: 'Generate Synthesis',
         what: 'Click "Generate Synthesis." AgentDebate reads all Round 1 and Round 2 assessments and produces a single consolidated report. This also runs automatically when Round 2 completes.',
-        system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
-- Consensus findings (what most agents agree on)
-- Contested findings (where agents significantly disagree)
-- Compound chains (how threats chain together across disciplines)
+        system: `AgentDebate sends all agent assessments (with their severity and confidence) to Claude with instructions to act as a senior analytical director. The model identifies:
+- Compound chains (kill chains — how threats chain together, each step enabling the next, across disciplines)
+- **Cross-domain interaction risks** — the core deliverable: risks that exist only because two or more domains interact, drawn from the Round 2 interaction findings. If none emerged, the synthesis flags that as a process failure
+- Consensus findings (weighted by confidence — high-confidence agreement counts for more than hedged agreement)
+- Contested findings (where agents disagree, noting each side's confidence)
 - Blind spots (what was conspicuously absent)
 - Priority mitigations (what to address first)
 - Sharpest insights (the most incisive individual observations)
 
 The synthesis is saved as a SessionSynthesis record, the session status moves to "complete," and any compound chains found are automatically saved to the chain library tagged to this session.`,
         tip: 'The synthesis is a starting point, not a final verdict. Use it to structure a human debrief. You can regenerate it at any time — re-running will update the existing synthesis record.'
+      },
+    ]
+  },
+  {
+    id: 'decision-support',
+    icon: GitBranch,
+    color: '#27AE60',
+    title: 'Decision Support & Quantified Risk',
+    subsections: [
+      {
+        icon: GitBranch,
+        color: '#27AE60',
+        title: 'Framing a Decision & Comparing Options',
+        body: `Analysis is most useful when it's tied to a **decision**, not just a scenario. The **Decisions** page (sidebar → 2 · Plan) frames a design choice: the question, the **options** you're comparing (2–4), the **acceptance criteria**, and the **assumptions** it rests on.
+
+**How it works:**
+- Create a Decision and list the options (e.g. "Option A: managed identity provider" vs "Option B: build in-house").
+- For each option, click **"Run panel for this option"** — it launches a Session pre-scoped to that option. Run your normal two-round analysis.
+- The Decision detail page then shows the options **side by side**, each with its **peak risk (out of 25)**, **average exposure**, and severity mix — aggregated from that option's sessions. The lowest-risk option is auto-flagged.
+- Track **key assumptions** with a criticality and a status (holds / monitoring / **invalidated**). An invalidated assumption is your trigger to re-assess.
+- When you decide, click **Record Decision**: choose the option, capture who decided and the rationale — including what risk is being *knowingly accepted*. That's a durable, auditable decision record.
+
+This is what turns the platform from "threat brainstorming" into defensible decision support: you can show *why* an option was chosen and what was known at the time.`,
+        usage: `
+1. Sidebar → Decisions → New Decision. Name the choice and list 2–4 options.
+2. Add the assumptions the decision depends on.
+3. On each option card, click "Run panel for this option" and complete a session.
+4. Compare the options' peak risk and exposure side by side.
+5. Click Record Decision, pick the option, and capture the rationale.
+`
+      },
+      {
+        icon: BarChart2,
+        color: '#C0392B',
+        title: 'Quantified Risk — Likelihood × Impact',
+        body: `Severity (CRITICAL/HIGH/…) tells you *how bad*, but not *how likely*. Every assessment now also carries a **likelihood (1–5)** and **impact (1–5)** band, giving a **risk score of 1–25** you can sort and compare.
+
+- **Likelihood**: 1 Rare · 2 Unlikely · 3 Possible · 4 Likely · 5 Almost Certain
+- **Impact**: 1 Negligible · 2 Minor · 3 Moderate · 4 Major · 5 Severe
+- **Risk score** = likelihood × impact, mapped to the standard 5-zone matrix (15+ critical, 9+ high, 4+ medium, else low)
+
+Each assessment card shows an **L×I=score** chip. At the top of each round, a **Risk Matrix** plots every SME's top risk on the 5×5 grid, with the **peak risk** and a **confidence-weighted average exposure** — so a high-consequence, high-likelihood, high-confidence risk sorts above a hedged one. Threats in your catalog can carry likelihood/impact too. This is what makes per-option comparison in Decisions a real number, not a label.`,
+        usage: `
+1. Run a session — agents now emit likelihood and impact with their severity.
+2. Read the Risk Matrix at the top of each round: the top-right zone is your worst risk.
+3. Use peak risk and average exposure to compare rounds, options, and sessions.
+`
+      },
+      {
+        icon: BookMarked,
+        color: '#2E86AB',
+        title: 'Knowledge Base — Grounding Analysis in Your Documents',
+        body: `By default, agents reason from their persona and general knowledge — which is why some cite little in the evidence ledger. The **Knowledge Base** (sidebar → 1 · Build) fixes that: add your own **design docs, incident postmortems, standards, and prior assessments**, and the analysis is grounded in *your* material.
+
+**How it works:**
+- Paste or upload (.txt/.md) a document. It's **chunked** and indexed on ingest.
+- At analysis time, the most relevant chunks for the scenario are **automatically retrieved and injected** into every agent's prompt as an "Organizational Knowledge Base" block, with instruction to cite them.
+- Those citations then show up in the **SME Evidence Ledger**, so the analysis is traceable to your documents rather than to general training knowledge.
+- In Live Debate, the agents' knowledge-search tool also checks your Knowledge Base first.
+
+The more you put in, the more grounded — and defensible — the assessments become.`,
+        usage: `
+1. Sidebar → Knowledge Base → Add Document. Paste or upload the text.
+2. Run a session as normal — retrieval happens automatically.
+3. Open the SOURCES tab (By SME) and confirm agents cited your documents.
+`
+      },
+    ]
+  },
+  {
+    id: 'chain-breaker',
+    icon: Scissors,
+    color: '#C0392B',
+    title: 'Chain Breaker & Mitigation',
+    subsections: [
+      {
+        icon: Scissors,
+        color: '#C0392B',
+        title: 'Turning a Kill Chain into a Defense Plan',
+        body: `The **Chain Breaker** (sidebar → Act on Findings → Chain Breaker) takes any compound chain and works out where a defender should intervene, in what order, and what each intervention costs.
+
+The governing principle: **an attacker must complete every step, but a defender only has to break one.** So the tool hunts for the cheapest, most reliable place to cut — and it distinguishes steps the adversary can route around from true chokepoints they can't.
+
+For each step it assesses:
+- **Adversary objective** and **dependencies** (what must already be true)
+- **Leverage** — how much breaking this step sets back the whole chain
+- **Chokepoint** — flagged when the adversary has no realistic alternate path; cutting a chokepoint collapses the chain
+- **Detectability** — how visible the step is with typical instrumentation (Observable / Partial / Stealthy)
+- **Countermeasures** — each tagged with its control type (Preventive / Detective / Responsive), effort (Low / Medium / High), and time to deploy (Days / Weeks / Months)
+- **Residual risk** — what still gets through even after those controls`,
+        usage: `
+1. Run at least one session so chains are extracted, or build a chain manually on the Chains page.
+2. Go to **Chain Breaker** and select a chain.
+3. Click **Run Analysis** — the tool dissects every step.
+4. Read the **"Cut here first"** callout: the single best place to break the chain.
+5. Work the **Mitigation Roadmap** top to bottom — it's already prioritized.
+6. Click **Generate Report** for a print-ready PDF of the whole analysis.
+`
+      },
+      {
+        icon: Shield,
+        color: '#27AE60',
+        title: 'The Mitigation Roadmap',
+        body: `Below the step-by-step analysis, the Chain Breaker produces a consolidated **Mitigation Roadmap** — the actionable payoff.
+
+- **"Cut here first"** names the single highest-value first move (a high-leverage chokepoint that's cheap and fast to defend) with the rationale.
+- The **roadmap** is a deduplicated, priority-ordered action plan. Countermeasures that recur across several steps are merged into one action, each tagged with control type, effort, time to deploy, **which steps it breaks**, and the effect on the adversary ("collapses the chain — no alternate path" vs "forces a noisier, slower approach").
+- **Quick wins** are surfaced separately: low-effort, fast countermeasures you can start immediately.
+
+The result is a defender's to-do list you can hand to a team, rather than a flat list of controls with no priority. It's included in the printed report.`
+      },
+      {
+        icon: ShieldCheck,
+        color: '#27AE60',
+        title: 'The Mitigation Register — Closing the Loop',
+        body: `A roadmap is a plan; the **Mitigation Register** (sidebar → 4 · Act on Findings → Mitigations) tracks it to completion and shows your **net** risk.
+
+- On any Chain Breaker roadmap item, click **"+ Register"** to add it as a tracked mitigation. Its inherent risk is seeded from the leverage of the steps it breaks.
+- On the Mitigations page, set an **owner** and move each item through its lifecycle: proposed → accepted → in progress → implemented → verified (or rejected).
+- Re-score **residual risk** (likelihood × impact) once a control is in place. The page then shows **Net Risk Reduction** — summed inherent → residual across all tracked mitigations.
+
+This closes the loop: instead of "here are risks," you can show "here's the risk, here's what we're doing about it, here's who owns it, and here's the residual after mitigation" — which is exactly what governance and audit ask for.`,
+        usage: `
+1. Run Chain Breaker on a chain, then click "+ Register" on the roadmap items you'll act on.
+2. Go to Mitigations, assign owners, and update status as work progresses.
+3. Set residual likelihood/impact once a control is implemented.
+4. Report the Net Risk Reduction figure to stakeholders.
+`
       },
     ]
   },
@@ -185,32 +349,8 @@ Choose Live Debate when you want:
 - Dynamic back-and-forth between agents (not just independent assessments)
 - A facilitator-directed conversation where you can interject, redirect, and challenge
 - An observable, streaming experience where you watch agents think in real time
-- Voice output — agents speak their responses aloud as they stream
 
-**How it works:** You start the debate, agents take turns responding, and you can intervene at any point with a facilitator message that redirects the conversation.`
-      },
-      {
-        icon: Mic2,
-        color: '#9B59B6',
-        title: 'Streaming Text-to-Speech',
-        body: `In Live Debate, agents **speak as they write** — you don't wait for the full response to finish before hearing it. Each agent has an assigned voice (configurable in their profile), and sentences are spoken aloud the moment they complete streaming.
-
-**How it works:**
-- As the AI streams tokens, AgentDebate detects sentence boundaries in real time
-- Each complete sentence is immediately sent to the voice engine and queued for playback
-- Sentences play back-to-back with no gaps — the audio is seamless even though it's generated on the fly
-- A speaking indicator shows which agent is currently talking
-- You can mute voice output at any time with the speaker toggle
-
-**Agent voices** are assigned per-agent in the agent settings (Alloy, Echo, Nova, Onyx, Fable, Shimmer). Give each agent a distinct voice to make the debate easier to follow aurally. You need an OpenAI API key configured in your workspace settings to enable TTS.`,
-        usage: `
-1. Set a voice for each agent in their profile (Agent Library → edit agent → Voice field).
-2. When starting a Live Debate session, ensure your OpenAI API key is set in workspace settings.
-3. Start the debate — agents will speak automatically as they respond.
-4. The speaker icon in the agent card lights up to show which agent is currently speaking.
-5. Click the speaker toggle (top-right of the debate room) to mute/unmute all voice output.
-6. If no voice is set for an agent, that agent's responses will be text-only.
-`
+**How it works:** You start the debate, agents take turns responding (their text streams onto the screen as they "think"), and you can intervene at any point with a facilitator message that redirects the conversation — challenge an assumption, ask a follow-up, or steer the panel toward a neglected angle.`
       },
     ]
   },
@@ -251,6 +391,27 @@ These are parsed from the response text and saved with the citing sentence as co
 **3. Facilitator entries** — You can manually add a source via the "Add Source" button in the SOURCES tab. Use this to pin reference documents, standards, or external reports relevant to the session.
 
 Each source row shows: the domain with credibility tier badge, the agent that cited it, and the exact sentence that referenced it.`
+      },
+      {
+        icon: Bot,
+        color: '#F0A500',
+        title: 'SME Evidence Ledger',
+        body: `The SOURCES tab has a **By SME / By Tier** toggle. **By SME** (the default) is the evidence ledger: it groups everything each SME referenced this session so you can see exactly what each expert leaned on to support its knowledge and its debate positions.
+
+For each SME the ledger shows:
+- **Every source they cited**, best-tier-first, each with the credibility badge, the source type, and the **exact claim it was cited to support**
+- A **credibility mix bar** and a **0–100 evidence-quality score** — a tier-weighted measure (authoritative counts most) that lets you rank which SMEs argued from strong evidence versus thin sourcing at a glance
+
+Critically, it also surfaces **Unsupported Assessments** — SMEs that participated but cited nothing. Their conclusions rest on persona reasoning alone, which is exactly what you want flagged before weighting their findings or briefing leadership.
+
+The ledger is only as rich as the citations agents produce, so it rewards scenarios where the citation instruction is doing its job. It works for both Classic and Live Debate sessions.`,
+        usage: `
+1. Open a completed session and go to the **SOURCES tab**.
+2. Leave the toggle on **By SME** (the default).
+3. Scan the evidence-quality scores — low scores mean thin sourcing.
+4. Check the **Unsupported Assessments** callout at the bottom: those SMEs' conclusions have no evidence behind them.
+5. Switch to **By Tier** when you want to audit overall source credibility instead of per-expert.
+`
       },
       {
         icon: Brain,
@@ -333,88 +494,129 @@ The report is fully print-ready — charts are inline SVG (no external dependenc
     id: 'threat-map',
     icon: Map,
     color: '#D68910',
-    title: 'Threat Visualization & Analytics',
+    title: 'Threat Map — Visualization & Coverage',
     subsections: [
       {
         icon: Map,
         color: '#D68910',
-        title: 'Threat Heatmap',
-        body: `The **Threat Heatmap** is a visual grid showing how severity assessments cluster across **agents and threat combinations**. It's a pattern-detection tool designed to surface consensus, disagreements, and outliers at a glance.
+        title: 'How the Threat Map Works',
+        body: `The Threat Map answers one question: **where do your threats concentrate, and can your agent panel actually cover them?**
 
-**What it shows:**
-- **Rows** represent agents (ordered by overall severity bias)
-- **Columns** represent threats or findings
-- **Color intensity** reflects severity: bright red (CRITICAL) → orange (HIGH) → blue (MEDIUM) → green (LOW)
+Everything on the page is built from one relationship: **threats link to agents through their shared Domain.** A threat tagged "Cybersecurity & Technology Risk" is covered by the agents in that same domain. This means the map is only as good as your domain assignments:
+- A threat with **no domain** isn't spread across every row (that would inflate the numbers) — it lands in a single italic **"Unassigned" row** at the bottom, and an amber banner tells you how many threats need domains.
+- An agent with no domain doesn't count toward any threat area's coverage.
 
-**How to use it:**
-1. **Spot consensus** — columns with uniform color indicate strong agreement across the panel
-2. **Find contested areas** — mixed-color columns highlight threats where severity estimates diverge (these are prime discussion points)
-3. **Identify outliers** — watch for agents whose color patterns differ sharply from peers; they're flagging alternative interpretations
-4. **Track severity trends** — compare heatmaps across multiple sessions to see how threat assessment evolves over time
+**The toolbar controls every view:**
+- **GROUP BY: Domain / Discipline** — Domain (the default) gives you 10–15 broad rows; Discipline breaks the same data into finer professional specialties. Use Domain for the big picture, Discipline to see exactly which specialty carries the load.
+- **Severity pills (CRIT / HIGH / MED / LOW)** — click one to filter the whole page to that severity; click again to clear.
+- **Session dropdown** — restrict the map to the threats and agents of a single session.
 
-**Pro tip:** Use the heatmap after Round 2 when severity values are finalized. Sort by "highest average" to see which threats dominate concern across the panel.`,
+Your view, axis, and filter choices are stored in the page URL — copy the address bar to share the exact view you're looking at.`
+      },
+      {
+        icon: BarChart2,
+        color: '#C0392B',
+        title: 'Heatmap View',
+        body: `The **Threat Concentration Heatmap** is a grid of your risk landscape:
+- **Rows** = domains (or disciplines, per the toggle)
+- **Columns** = threat categories, with a total count under each header
+- **Cell color** = the highest severity present at that intersection (red CRITICAL → amber HIGH → blue MEDIUM → green LOW)
+- **Cell intensity** = volume — the darker the cell, the more threats concentrated there
+
+Rows with zero mapped threats are hidden by default so the map stays dense and readable; a **"show N empty rows"** checkbox in the legend reveals them (useful for spotting domains you've staffed but never mapped threats to).
+
+**Hover** any cell for a breakdown of its threats by severity with full titles. **Click** any cell (or a row name, or a row total) to open the **drill-down panel**.`,
         usage: `
-1. Navigate to **Threat Map** from the main menu.
-2. Select a session to visualize its agent assessments.
-3. The heatmap auto-loads, showing all agents and their severity ratings.
-4. **Hover over cells** to see the agent's full assessment text.
-5. **Click on a cell** to expand and read the complete rationale behind that severity rating.
-6. Use the **domain filter** (top-right) to show only agents from a specific discipline.
-7. Use the **sort options** to reorder agents by pessimism, optimism, or assessment count.
+1. Navigate to **Threat Map** from the sidebar — the heatmap is the default view.
+2. Scan for dark red cells first: that's where critical threats concentrate.
+3. Hover a cell to preview its threats; click it to open the drill-down panel.
+4. Check the "Unassigned" row at the bottom — threats there need a domain before they can be analyzed for coverage.
+5. Toggle GROUP BY to Discipline to see which specific specialty within a hot domain is carrying the load.
 `
       },
       {
         icon: Brain,
         color: '#7B2D8B',
-        title: 'Discipline Radar Chart',
-        body: `The **Discipline Radar** visualizes how heavily agents from different **professional disciplines** are weighting five key threat dimensions: **Human, Technical, Physical, Futures, and Economic factors**.
+        title: 'Exposure Radar & Severity Breakdown Views',
+        body: `**Exposure Radar** plots each domain (or discipline) as a spoke; the further the shape extends, the higher that group's **exposure score** (Critical×4 + High×3 + Medium×2 + Low×1). The radar shows the top 12 groups; a ranked list alongside it shows everything, each row with its severity mix bar and agent count. Use it to see, in one shape, which parts of your risk landscape dominate.
 
-Each discipline (e.g., "Cybersecurity," "Supply Chain," "Geopolitics") has its own radar profile — a star-shaped polygon showing where that discipline's attention concentrates.
+**Severity Breakdown** gives you three layers:
+- **Summary cards** — total threats at each severity level with percentages
+- **Stacked bars per group** — each row's threat load split by severity, sorted by exposure score
+- **Group × Category matrix** — a compact grid of colored dots showing the highest severity at each intersection; empty dark cells are intersections with no recorded threats
 
-**What it reveals:**
-- **Spiky profiles** (uneven coverage) show disciplinary blind spots. A purely cybersecurity-focused team will be weak on geopolitical or supply chain angles.
-- **Well-rounded profiles** (balanced coverage) indicate multidisciplinary awareness.
-- **Overlapping radars** highlight where disciplines naturally agree, and **gaps** where they conflict.
+All rows and matrix cells are clickable — everything opens the same drill-down panel as the heatmap.`
+      },
+      {
+        icon: Users,
+        color: '#27AE60',
+        title: 'Panel Coverage — Threat Load vs Agent Bench',
+        body: `The coverage panel at the bottom of every view is the **actionable core of the Threat Map**. For each domain it compares the **threat load** (the weighted exposure score) against the **agent bench** (how many agents cover that domain), and sorts the results into:
 
-**Use cases:**
-- Identify which threat dimensions your agent panel neglects
-- Diagnose why severity estimates diverge (often because different disciplines weight the Human vs. Technical trade-off differently)
-- Validate that you've assembled sufficiently diverse expertise before running a session`,
+- **COVERAGE GAPS** (red) — domains with real threat load but **zero or one agent**. Your panel cannot credibly analyze these. Each gap row has a **⚡SME button** that jumps straight to the Agents page with the AI-generate modal already open and pre-seeded with the domain — see a gap, close a gap in two clicks.
+- **STRETCHED BENCH** (amber) — domains carrying critical or heavy load with below-median staffing. Not empty, but thin.
+- **COVERED** (green) — threat areas with a healthy bench.
+- **IDLE BENCH** — domains where you have agents but zero mapped threats. Either genuinely low-risk, or a sign you haven't catalogued that area's threats yet.
+
+Click any row to open the drill-down panel for that domain.`,
         usage: `
-1. From the Threat Map page, look for the **Discipline Radar** section.
-2. The chart displays a colored polygon for each discipline represented in the current session.
-3. **Each axis** represents a threat dimension (Human, Technical, Physical, Futures, Economic).
-4. **Larger/longer rays** indicate higher emphasis by that discipline on that dimension.
-5. **Compare radars visually** — overlapping areas show shared concern; gaps show disciplinary blind spots.
-6. Hover over lines to see the exact percentages and disciplines.
-7. Use this as input for **future session design**: if your radar is weak on "Futures," consider adding a futurist or strategic foresight specialist.
+1. Scroll to the bottom of any Threat Map view — the coverage panel is always visible.
+2. Start with COVERAGE GAPS: these are threats nobody on your panel can speak to.
+3. Click ⚡SME on a gap to generate a matching expert — the AI modal opens pre-filled with the domain and a suggested expert type.
+4. Review STRETCHED BENCH next: consider generating or cloning a second agent for domains carrying critical load alone.
+5. Treat IDLE BENCH as a prompt: run AI threat generation for those domains, or accept them as low-priority.
 `
       },
       {
-        icon: BarChart2,
+        icon: Search,
         color: '#2E86AB',
-        title: 'Severity Breakdown by Discipline',
-        body: `The **Severity Breakdown** shows how each discipline's agents distribute their severity assessments across the four levels: CRITICAL, HIGH, MEDIUM, and LOW.
+        title: 'Drill-Down Panel & Housekeeping',
+        body: `**Drill-down panel.** Clicking anything on the map opens a side panel listing the actual records behind that slice: every threat (severity-sorted, with category) and every agent (with discipline and default-severity pill) in the selected domain. Two links at the top — **Open in Threats** and **Open in Agents** — jump to those pages with the matching filters already applied, so you can go from "this cell looks bad" to editing the underlying records in one click. A slice with threats but no agents is flagged in red as a coverage gap.
 
-It's a stacked bar chart where each bar represents one discipline, and the colored segments show the proportion of assessments at each severity level.
+**Category merge nudge.** Threat categories are free text, so near-duplicates creep in ("Cyber" vs "Cybers") and fragment the heatmap columns. When the map detects similar category names, a blue banner appears offering a one-click **Merge** — it rewrites the category on the affected threats to the most common variant. You confirm before anything changes.
 
-**What it tells you:**
-- **Red-heavy disciplines** (lots of CRITICAL/HIGH) are naturally pessimistic or focused on high-impact risks
-- **Green-heavy disciplines** (lots of LOW/MEDIUM) tend toward more moderate threat assessment
-- **Even distributions** suggest balanced, nuanced threat modeling
+**Unassigned threats banner.** If any threats lack a domain, an amber banner reports the count with an "Open Threats" button. Assign domains there and the map recalculates immediately.`
+      },
+    ]
+  },
+  {
+    id: 'sme-library',
+    icon: Library,
+    color: '#9B59B6',
+    title: 'SME Library',
+    subsections: [
+      {
+        icon: Library,
+        color: '#9B59B6',
+        title: 'What is the SME Library?',
+        body: `The **SME Library** (sidebar → SME Library) is the management dashboard for your Subject Matter Expert collection — a superset view of your agents focused on **curation, quality, and reuse** rather than running sessions.
 
-**Why it matters:**
-When you see one discipline producing 70% CRITICAL ratings and another producing 70% MEDIUM ratings for the same threat, you've found a genuine analytical disagreement. That gap is often where the richest insights hide.`,
-        usage: `
-1. From the Threat Map page, locate the **Severity Breakdown by Discipline** bar chart.
-2. Each bar represents one discipline with agents in the session.
-3. The bar is divided into **colored segments** (CRITICAL, HIGH, MEDIUM, LOW).
-4. The **width of each segment** shows the percentage of that discipline's assessments at that severity level.
-5. Hover over a segment to see the exact count and percentage.
-6. **Compare bars across disciplines** to spot which ones are pessimistic vs. optimistic.
-7. Use the **domain filter** at the top to drill down or widen your view.
-`
-      }
+It has seven tabs:
+- **Overview** — KPI tiles (total SMEs, average quality score, high-quality count, unscored count) plus quality-distribution and top-by-usage charts
+- **Library** — the curated, shared SME collection: sortable, searchable, with inline Promote / Clone / Archive / Delete actions
+- **Workspace** — the same table scoped to your own workspace's SMEs, with a Promote-to-Library action for your best profiles
+- **Generate** — describe a scenario and AI-generate a panel of matching SME profiles, then promote the keepers
+- **Quality** — a quality monitor: score distribution, low-scoring profiles that need enrichment, and unscored profiles
+- **Tokens** — create and revoke API tokens for programmatic access to your SME collection (the token is shown once at creation — copy it immediately)
+- **Import/Export** — export your collection as JSON or CSV, and import SMEs from a JSON file with a preview step
+
+**Library vs Workspace:** library SMEs are the curated, shared collection; workspace SMEs are your private working set. Clone a library SME into your workspace to customize it without touching the shared version; promote a polished workspace SME into the library to share it.`
+      },
+      {
+        icon: Sparkles,
+        color: '#F0A500',
+        title: 'Quality Scores & Curation Workflow',
+        body: `Each SME can carry a **quality score (0–100)** reflecting how complete, specific, consistent, and distinctive its profile is. Scores come from AI assessment and improve as you fill in the extended persona fields (epistemic style, institutional background, adversary model, and so on).
+
+**A practical curation loop:**
+1. Import or generate SMEs in bulk
+2. Check the **Quality tab** — profiles scoring low usually have empty extended fields
+3. Open a low scorer, use the per-field AI regenerate buttons to enrich it
+4. Promote your best profiles to the library so every scenario can draw on them
+5. Archive (don't delete) SMEs you're not using — archiving is reversible
+
+Usage counts accumulate as SMEs participate in sessions, so over time the Overview tab shows you which experts actually earn their place on panels.`
+      },
     ]
   },
   {
@@ -440,20 +642,36 @@ When you see one discipline producing 70% CRITICAL ratings and another producing
         body: 'When one agent rates a threat CRITICAL and another rates it LOW, that isn\'t noise — it\'s signal. It means the threat\'s impact is highly dependent on which domain lens you apply. Explore those gaps, not just the consensus.'
       },
       {
-        title: 'Review sources before presenting findings',
-        body: 'Open the SOURCES tab after a session and run Validity Analysis. It surfaces unsupported claims and inter-agent contradictions before you present. A finding with zero credible sources deserves more scrutiny than one backed by three authoritative citations.'
+        title: 'Check the evidence ledger before presenting',
+        body: 'Open the SOURCES tab (By SME view) after a session. The evidence-quality score and the Unsupported Assessments callout tell you which experts argued from real evidence and which relied on persona reasoning alone. Then run Validity Analysis to catch inter-agent contradictions. A CRITICAL finding at 40% confidence with no cited sources deserves far more scrutiny than a HIGH backed by authoritative citations.'
       },
       {
-        title: 'Let synthesis auto-generate your chains',
-        body: 'You don\'t need to manually build chains from session findings. Generate the synthesis report and AgentDebate automatically extracts and saves compound attack chains to your library. Review and edit them afterward if needed.'
+        title: 'Turn chains into mitigation plans',
+        body: 'Synthesis auto-extracts kill chains to your library — but don\'t stop there. Feed each chain into the Chain Breaker to get a prioritized Mitigation Roadmap: where to cut first, which controls break which steps, and what each costs. That roadmap is the hand-off to your defensive team.'
       },
       {
         title: 'Use Live Debate for stakeholder engagement',
-        body: 'Classic Analysis is best for rigorous documented assessment. Live Debate is better when you want to demonstrate the process to stakeholders — the streaming voice output makes the AI reasoning visible and engaging in a way that a written report cannot replicate.'
+        body: 'Classic Analysis is best for rigorous documented assessment. Live Debate is better when you want to demonstrate the process to stakeholders — watching agents challenge each other in real time makes the AI reasoning visible and engaging in a way that a written report cannot replicate.'
+      },
+      {
+        title: 'Assign domains to everything',
+        body: 'Domains are how threats find their agents. A threat without a domain sits in the Threat Map\'s "Unassigned" row; an agent without a domain counts toward no coverage. After any bulk import, run "Sync from Agents" on the Domains page (review the preview before confirming) and sweep the Threats page for missing domain assignments.'
+      },
+      {
+        title: 'Tie analysis to a decision and feed the Knowledge Base',
+        body: 'For design decisions, frame a Decision with the real options and run the panel against each — the side-by-side peak risk and exposure make the trade-off concrete. And load your design docs and past incidents into the Knowledge Base first: grounded assessments cite your material in the evidence ledger instead of leaning on general knowledge.'
+      },
+      {
+        title: 'Close the loop in the Mitigation Register',
+        body: 'Don\'t let Chain Breaker roadmaps evaporate. "+ Register" the ones you\'ll act on, assign owners, and re-score residual risk as controls land. The Net Risk Reduction figure — inherent → residual — is the number leadership actually wants.'
+      },
+      {
+        title: 'Work the coverage gaps, not just the hot cells',
+        body: 'The scariest part of the Threat Map isn\'t the dark red cells — it\'s the red COVERAGE GAPS list: threat areas where nobody on your panel is qualified to push back. Use the ⚡SME button on each gap to generate a matching expert before your next session.'
       },
       {
         title: 'Don\'t just run one session',
-        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change. Use the Threat Heatmap across sessions to spot trends.'
+        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change. Use the Threat Map across sessions to spot trends.'
       },
     ]
   },

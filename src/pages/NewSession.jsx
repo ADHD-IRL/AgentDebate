@@ -193,6 +193,8 @@ export default function NewSession() {
         source_pins: form.source_pins,
         status: 'pending',
         agent_ids: selectedAgents.map(a => a.id),
+        decision_id: searchParams.get('decision') || null,
+        decision_option_id: searchParams.get('option') || null,
       };
       const session = await db.Session.create(payload);
       for (const agent of selectedAgents) {

@@ -16,9 +16,15 @@ export function riskBand(score) {
   return           { label: 'LOW',      color: '#27AE60', bg: 'rgba(39,174,96,0.15)' };
 }
 
+/** Normalize any severity value to a valid SEV_ORDER member. */
+export function normSev(sev) {
+  const s = (sev || '').toString().toUpperCase().trim();
+  return SEV_ORDER.includes(s) ? s : 'MEDIUM';
+}
+
 function summarize(threats) {
   const counts = Object.fromEntries(SEV_ORDER.map(s => [s, 0]));
-  threats.forEach(t => { counts[t.severity || 'MEDIUM'] = (counts[t.severity || 'MEDIUM'] || 0) + 1; });
+  threats.forEach(t => { counts[normSev(t.severity)]++; });
   const score = SEV_ORDER.reduce((s, k) => s + counts[k] * SEV_WEIGHT[k], 0);
   return { counts, score };
 }

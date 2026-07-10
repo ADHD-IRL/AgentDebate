@@ -3,7 +3,7 @@ import { analyzeChainBreaker } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
   Scissors, AlertTriangle, Loader2, Save, FileText,
-  CheckCircle2, Trash2, FolderOpen, Zap,
+  CheckCircle2, Trash2, FolderOpen, Zap, Shield, Plus,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
@@ -26,6 +26,8 @@ const LEVERAGE = {
   LOW:    { color: '#2E86AB', bg: 'rgba(46,134,171,0.1)', border: 'rgba(46,134,171,0.35)' },
 };
 const RESILIENCE_COLOR = { HIGH: '#C0392B', MEDIUM: '#D68910', LOW: '#27AE60' };
+const MROADMAP_EFFORT = { LOW: '#27AE60', MEDIUM: '#D68910', HIGH: '#C0392B' };
+const MROADMAP_TYPE = { PREVENTIVE: '#2E86AB', DETECTIVE: '#9B59B6', RESPONSIVE: '#D68910' };
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -342,6 +344,41 @@ export default function ChainBreaker() {
     });
   };
 
+  // Push a roadmap item into the mitigation register. Seeds inherent risk from
+  // the peak severity of the steps it breaks; residual is left for the owner.
+  const [addedRoadmap, setAddedRoadmap] = useState({});
+  const addToRegister = async (m, idx) => {
+    if (!db) return;
+    const SEV_LI = { CRITICAL: [4, 5], HIGH: [4, 4], MEDIUM: [3, 3], LOW: [2, 2] };
+    // Inherent from the worst leverage among the steps this action breaks
+    let inherent = [3, 3];
+    (m.breaks_steps || []).forEach(sn => {
+      const lev = analysisMap[sn]?.leverage;
+      const map = { HIGH: [4, 5], MEDIUM: [3, 4], LOW: [2, 3] }[lev];
+      if (map && map[0] * map[1] > inherent[0] * inherent[1]) inherent = map;
+    });
+    try {
+      await db.Mitigation.create({
+        title: m.action,
+        effect: m.effect || null,
+        control_type: m.type || null,
+        effort: m.effort || null,
+        time_to_deploy: m.time_to_deploy || null,
+        breaks_steps: m.breaks_steps || [],
+        status: 'proposed',
+        source: 'chain_breaker',
+        chain_id: source === 'library' ? selectedChainId : null,
+        scenario_id: selectedScenarioId || null,
+        inherent_likelihood: inherent[0],
+        inherent_impact: inherent[1],
+      });
+      setAddedRoadmap(a => ({ ...a, [idx]: true }));
+      toast({ title: 'Added to mitigation register', description: m.action });
+    } catch (e) {
+      toast({ title: 'Could not add', description: e.message, variant: 'destructive' });
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -602,6 +639,91 @@ export default function ChainBreaker() {
                               {sa.leverage}
                             </span>
                           )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended first cut */}
+              {analysis.recommended_cut?.step_number != null && (
+                <div className="rounded-lg px-4 py-3 flex items-start gap-3"
+                  style={{ backgroundColor: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.35)' }}>
+                  <Scissors className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#27AE60' }} />
+                  <div>
+                    <p className="text-xs font-bold font-mono mb-1" style={{ color: '#27AE60' }}>
+                      CUT HERE FIRST — STEP {analysis.recommended_cut.step_number}
+                    </p>
+                    <p className="text-sm leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>
+                      {analysis.recommended_cut.rationale}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Mitigation roadmap — deduplicated, prioritized action plan */}
+              {analysis.mitigation_roadmap?.length > 0 && (
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+                  <div className="flex items-center gap-2 px-4 py-2.5" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
+                    <Shield className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />
+                    <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                      MITIGATION ROADMAP — DO IN ORDER
+                    </p>
+                  </div>
+                  <div>
+                    {[...analysis.mitigation_roadmap].sort((a, b) => (a.priority || 99) - (b.priority || 99)).map((m, i) => {
+                      const effClr = MROADMAP_EFFORT[m.effort] || 'var(--wr-text-muted)';
+                      const typeClr = MROADMAP_TYPE[m.type] || 'var(--wr-text-muted)';
+                      return (
+                        <div key={i} className="flex items-start gap-3 px-4 py-3"
+                          style={{ borderTop: i ? '1px solid var(--wr-border)' : 'none' }}>
+                          <span className="flex items-center justify-center flex-shrink-0 rounded-full font-mono font-bold text-xs"
+                            style={{ width: 22, height: 22, backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)' }}>
+                            {m.priority ?? i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium" style={{ color: 'var(--wr-text-primary)' }}>{m.action}</p>
+                            {m.effect && (
+                              <p className="text-xs mt-1" style={{ color: 'var(--wr-text-muted)' }}>{m.effect}</p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {m.type && (
+                                <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: `${typeClr}1f`, color: typeClr, border: `1px solid ${typeClr}55` }}>
+                                  {m.type}
+                                </span>
+                              )}
+                              {m.effort && (
+                                <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: `${effClr}1f`, color: effClr, border: `1px solid ${effClr}55` }}>
+                                  {m.effort} EFFORT
+                                </span>
+                              )}
+                              {m.time_to_deploy && (
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)' }}>
+                                  {m.time_to_deploy}
+                                </span>
+                              )}
+                              {m.breaks_steps?.length > 0 && (
+                                <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                                  breaks step{m.breaks_steps.length !== 1 ? 's' : ''} {m.breaks_steps.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => addToRegister(m, i)}
+                            disabled={addedRoadmap[i]}
+                            className="flex-shrink-0 text-xs font-mono font-bold px-2 py-1 rounded flex items-center gap-1"
+                            style={{
+                              backgroundColor: addedRoadmap[i] ? 'rgba(39,174,96,0.12)' : 'rgba(240,165,0,0.12)',
+                              color: addedRoadmap[i] ? '#27AE60' : 'var(--wr-amber)',
+                              border: `1px solid ${addedRoadmap[i] ? 'rgba(39,174,96,0.3)' : 'rgba(240,165,0,0.3)'}`,
+                            }}>
+                            {addedRoadmap[i] ? <><CheckCircle2 className="w-3 h-3" /> Added</> : <><Plus className="w-3 h-3" /> Register</>}
+                          </button>
                         </div>
                       );
                     })}

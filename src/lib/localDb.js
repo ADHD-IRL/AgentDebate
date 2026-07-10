@@ -87,5 +87,11 @@ export const localDb = {
     AppConfig:        makeEntity('app_configs'),
     Workspace:        makeEntity('workspaces'),
     WorkspaceMember:  makeEntity('workspace_members'),
+    Mitigation:       makeEntity('mitigations'),
+    Decision:            makeEntity('decisions'),
+    DecisionOption:      makeEntity('decision_options'),
+    DecisionAssumption:  makeEntity('decision_assumptions'),
+    KnowledgeDocument:   makeEntity('knowledge_documents'),
+    KnowledgeChunk:      makeEntity('knowledge_chunks'),
   },
 };

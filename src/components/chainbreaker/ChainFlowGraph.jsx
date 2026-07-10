@@ -1,5 +1,6 @@
 import { useState, Fragment } from 'react';
-import { Scissors, AlertTriangle, X } from 'lucide-react';
+import { Scissors, AlertTriangle, X, Target, Eye } from 'lucide-react';
+import { countermeasureText } from '@/lib/llm';
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
@@ -10,6 +11,21 @@ const LEVERAGE = {
 };
 
 const DIFFICULTY_COLOR = { EASY: '#27AE60', MODERATE: '#D68910', HARD: '#C0392B' };
+const EFFORT_COLOR = { LOW: '#27AE60', MEDIUM: '#D68910', HIGH: '#C0392B' };
+const TYPE_COLOR = { PREVENTIVE: '#2E86AB', DETECTIVE: '#9B59B6', RESPONSIVE: '#D68910' };
+
+function CMBadge({ label, color }) {
+  if (!label) return null;
+  return (
+    <span style={{
+      fontSize: 8.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
+      padding: '0px 4px', borderRadius: 2, whiteSpace: 'nowrap',
+      backgroundColor: `${color}1f`, color, border: `1px solid ${color}55`,
+    }}>
+      {label}
+    </span>
+  );
+}
 
 // ── Arrow between nodes ───────────────────────────────────────────────────────
 
@@ -191,6 +207,26 @@ function StepDetailPanel({ step, analysis, priorityRank, onClose }) {
                 {analysis.difficulty}
               </span>
             )}
+            {analysis?.is_chokepoint && (
+              <span style={{
+                fontSize: 10, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                padding: '1px 7px', borderRadius: 3,
+                backgroundColor: 'rgba(192,57,43,0.15)', color: '#C0392B', border: '1px solid rgba(192,57,43,0.4)',
+              }} title="No realistic adversary path around this step — cutting it collapses the chain">
+                <Target style={{ width: 10, height: 10 }} /> CHOKEPOINT
+              </span>
+            )}
+            {analysis?.detectability && (
+              <span style={{
+                fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                padding: '1px 7px', borderRadius: 3,
+                backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)',
+              }} title="How visible this step is with typical instrumentation">
+                <Eye style={{ width: 10, height: 10 }} /> {analysis.detectability}
+              </span>
+            )}
           </div>
           {step.agent_label && (
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--wr-amber)', lineHeight: 1.3 }}>
@@ -260,11 +296,7 @@ function StepDetailPanel({ step, analysis, priorityRank, onClose }) {
               }}>
                 BREAK POINT — COUNTERMEASURES
               </p>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: analysis.countermeasures.length > 2 ? '1fr 1fr' : '1fr',
-                gap: '5px 20px',
-              }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 {analysis.countermeasures.map((cm, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{
@@ -273,7 +305,16 @@ function StepDetailPanel({ step, analysis, priorityRank, onClose }) {
                     }}>
                       {i + 1}.
                     </span>
-                    <p style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--wr-text-secondary)' }}>{cm}</p>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--wr-text-secondary)' }}>{countermeasureText(cm)}</p>
+                      {(cm.type || cm.effort || cm.time_to_deploy) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                          <CMBadge label={cm.type} color={TYPE_COLOR[cm.type] || 'var(--wr-text-muted)'} />
+                          {cm.effort && <CMBadge label={`${cm.effort} EFFORT`} color={EFFORT_COLOR[cm.effort] || 'var(--wr-text-muted)'} />}
+                          {cm.time_to_deploy && <CMBadge label={cm.time_to_deploy} color="#546E7A" />}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

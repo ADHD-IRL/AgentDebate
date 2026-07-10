@@ -15,6 +15,12 @@ const TABLE = {
   Workspace:        'workspaces',
   WorkspaceMember:  'workspace_members',
   SmeToken:         'sme_tokens',
+  Mitigation:       'mitigations',
+  Decision:            'decisions',
+  DecisionOption:      'decision_options',
+  DecisionAssumption:  'decision_assumptions',
+  KnowledgeDocument:   'knowledge_documents',
+  KnowledgeChunk:      'knowledge_chunks',
 };
 
 function applySort(query, sort) {

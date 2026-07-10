@@ -6,7 +6,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import {
   generateRound1Stream, generateRound2Stream,
   generateAgentReply, generateAgentReplyWithTools,
-  parseSeverityFromText,
+  parseMarkers,
 } from '@/lib/llm';
 import { saveTurnSources } from '@/lib/sources';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
@@ -62,6 +62,13 @@ function AgentBubble({ msg, agent, color, isStreaming }) {
           <span className="text-xs font-bold font-mono px-1.5 py-0.5 rounded ml-auto"
             style={{ backgroundColor: `${SEV_COLOR[msg.severity]}15`, color: SEV_COLOR[msg.severity] }}>
             {msg.severity}
+          </span>
+        )}
+        {msg.confidence != null && (
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+            title="Agent's self-assessed confidence in this assessment"
+            style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)' }}>
+            {msg.confidence}%
           </span>
         )}
       </div>
@@ -240,7 +247,7 @@ const streamControllerRef = useRef(null);
         id: m.id, role: m.role, content: m.content,
         agentId: m.agent_id, agentName: m.metadata?.agentName,
         discipline: m.metadata?.discipline, severity: m.metadata?.severity,
-        targetAgentName: m.metadata?.targetAgentName,
+        confidence: m.metadata?.confidence, targetAgentName: m.metadata?.targetAgentName,
       })));
     })();
   }, [db, id]);
@@ -342,14 +349,14 @@ const scenarioCtx = scenario?.context_document || session?.context_override || '
           threatCatalog: threats,
           onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            const { assessment, severity } = parseSeverityFromText(text, agent.severity_default || 'HIGH');
-            finishStream(tempId, assessment, { severity });
+            const { assessment, severity, confidence, likelihood, impact, compound_chain_text } = parseMarkers(text, agent.severity_default || 'HIGH');
+            finishStream(tempId, assessment, { severity, confidence });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
             // Update local state so Round 2 othersCtx sees the fresh assessment
-            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, status: 'r1_done' } : s));
-            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, status: 'r1_done' });
-            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round1_assessment: assessment, round1_severity: severity, round1_confidence: confidence, status: 'r1_done' } : s));
+            await db.SessionAgent.update(sa.id, { round1_assessment: assessment, round1_severity: severity, round1_confidence: confidence, round1_likelihood: likelihood, round1_impact: impact, compound_chain_text: compound_chain_text || null, status: 'r1_done' });
+            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 1, metadata: { agentName: agent.name, discipline: agent.discipline, severity, confidence } });
             await saveTurnSources(db, id, savedMsg?.id || tempId, sa.agent_id, assessment);
           },
         });
@@ -382,7 +389,11 @@ const scenarioCtx = scenario?.context_document || session?.context_override || '
     setSessionAgents(freshAgents);
     const othersCtx = (currentId) => freshAgents
       .filter(sa => sa.agent_id !== currentId && sa.round1_assessment)
-      .map(sa => `=== ${profiles[sa.agent_id]?.name} ===\n${sa.round1_assessment}`)
+      .map(sa => {
+        const p = profiles[sa.agent_id];
+        const conf = sa.round1_confidence != null ? ` · confidence ${sa.round1_confidence}%` : '';
+        return `=== ${p?.name} (${p?.discipline}) [${sa.round1_severity || '?'}${conf}] ===\n${sa.round1_assessment}`;
+      })
       .join('\n\n---\n\n');
 
     for (const sa of freshAgents) {
@@ -399,13 +410,13 @@ const scenarioCtx = scenario?.context_document || session?.context_override || '
           othersAssessments: othersCtx(sa.agent_id), threatCatalog: threats,
           onToken: token => { setAgentStatus(s => ({ ...s, [sa.agent_id]: 'streaming' })); appendToken(tempId, token); },
           onDone: async text => {
-            const { assessment, severity } = parseSeverityFromText(text, sa.round1_severity || 'HIGH');
-            finishStream(tempId, assessment, { severity });
+            const { assessment, severity, confidence, likelihood, impact, compound_chain_text } = parseMarkers(text, sa.round1_severity || 'HIGH');
+            finishStream(tempId, assessment, { severity, confidence });
             setAgentStatus(s => ({ ...s, [sa.agent_id]: 'done' }));
             setAgentSeverity(s => ({ ...s, [sa.agent_id]: severity }));
-            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' } : s));
-            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, status: 'complete' });
-            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity } });
+            setSessionAgents(prev => prev.map(s => s.id === sa.id ? { ...s, round2_rebuttal: assessment, round2_revised_severity: severity, round2_confidence: confidence, status: 'complete' } : s));
+            await db.SessionAgent.update(sa.id, { round2_rebuttal: assessment, round2_revised_severity: severity, round2_confidence: confidence, round2_likelihood: likelihood, round2_impact: impact, compound_chain_text: compound_chain_text || null, status: 'complete' });
+            const savedMsg = await db.SessionMessage.create({ session_id: id, agent_id: sa.agent_id, role: 'agent', content: assessment, round: 2, metadata: { agentName: agent.name, discipline: agent.discipline, severity, confidence } });
             await saveTurnSources(db, id, savedMsg?.id || tempId, sa.agent_id, assessment);
           },
         });

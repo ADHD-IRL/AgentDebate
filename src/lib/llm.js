@@ -248,31 +248,38 @@ Write in first person as the expert. Be direct and specific.`;
   return { briefing: text.trim() };
 }
 
-function parseMarkers(fullText, fallbackSeverity) {
+export function parseMarkers(fullText, fallbackSeverity) {
   const lines = fullText.trimEnd().split('\n');
   let severity = fallbackSeverity || 'HIGH';
   let confidence = null;
+  let likelihood = null;
+  let impact = null;
   let compound_chain_text = '';
   let markerEnd = lines.length;
 
-  for (let i = lines.length - 1; i >= 0 && markerEnd - i <= 5; i--) {
+  // Scan a slightly larger tail since there are now up to 5 marker lines
+  for (let i = lines.length - 1; i >= 0 && markerEnd - i <= 7; i--) {
     const line = lines[i].trim();
     if (!line) continue;
     const sev = line.match(/^SEVERITY:\s*(CRITICAL|HIGH|MEDIUM|LOW)/i);
     if (sev) { severity = sev[1].toUpperCase(); markerEnd = Math.min(markerEnd, i); continue; }
     const conf = line.match(/^CONFIDENCE:\s*(\d+)/i);
     if (conf) { confidence = Math.min(100, Math.max(0, parseInt(conf[1], 10))); markerEnd = Math.min(markerEnd, i); continue; }
+    const lik = line.match(/^LIKELIHOOD:\s*([1-5])/i);
+    if (lik) { likelihood = parseInt(lik[1], 10); markerEnd = Math.min(markerEnd, i); continue; }
+    const imp = line.match(/^IMPACT:\s*([1-5])/i);
+    if (imp) { impact = parseInt(imp[1], 10); markerEnd = Math.min(markerEnd, i); continue; }
     const chain = line.match(/^COMPOUND_CHAIN:\s*(.+)/i);
     if (chain) { compound_chain_text = chain[1].trim(); markerEnd = Math.min(markerEnd, i); continue; }
     break;
   }
 
   const assessment = lines.slice(0, markerEnd).join('\n').trim();
-  return { assessment, severity, confidence, compound_chain_text };
+  return { assessment, severity, confidence, likelihood, impact, compound_chain_text };
 }
 
 // --- generateRound1 ---
-export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
+export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '' }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
     : '';
@@ -303,17 +310,20 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}${chainSection}${facilSection}
+${threatSection}${chainSection}${facilSection}${knowledgeContext}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
 3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify any critical gaps not in the list' : ''}
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
-${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
+${threatCatalog.length ? '6.' : '5.'} Cross-domain handoff — name the OTHER discipline whose interaction with your findings worries you most, state the specific coupling you suspect, and pose one direct question you need that expert to answer
+${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
 After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
-CONFIDENCE: [0-100 integer representing your confidence this assessment is correct]
+LIKELIHOOD: [1-5 — 1 Rare, 2 Unlikely, 3 Possible, 4 Likely, 5 Almost Certain, for your top threat]
+IMPACT: [1-5 — 1 Negligible, 2 Minor, 3 Moderate, 4 Major, 5 Severe, for your top threat]
+CONFIDENCE: [0-100 integer — be calibrated: 85+ only where you have direct evidence or deep expertise; 50-70 where you are extrapolating outside your domain; below 50 where you are speculating]
 COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
 Write in first person as the expert. Be specific and opinionated.`;
@@ -323,7 +333,7 @@ Write in first person as the expert. Be specific and opinionated.`;
 }
 
 // --- generateRound2 ---
-export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
+export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '' }) {
   const chainSection = chainContext
     ? `\nPINNED THREAT CHAINS (reference for compound chain reasoning):\n${chainContext}\n`
     : '';
@@ -348,15 +358,18 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
-Now write your Round 2 rebuttal (250-400 words) covering:
-1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
-2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}${knowledgeContext}
+Now write your Round 2 rebuttal (300-450 words) covering:
+1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
+2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+3. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument). Note where their severity or confidence rating seems miscalibrated given their evidence.
+4. Whether you've revised your severity rating and why${threatCatalog.length ? '\n5. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
 After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
-CONFIDENCE: [0-100 integer representing your confidence in this revised assessment]
+LIKELIHOOD: [1-5 for your top risk, revised after cross-examination]
+IMPACT: [1-5 for your top risk, revised after cross-examination]
+CONFIDENCE: [0-100 integer — recalibrate: if other experts corroborated you, confidence may rise; if credible experts contradicted you, it should fall]
 COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
 Be direct. Name names. Change your position if persuaded.`;
@@ -390,7 +403,7 @@ If no URL is known: [SOURCE: "NIST SP 800-53 Rev 5"]
 Only cite real, specific sources. Do not fabricate citations.`;
 
 // --- streaming variants ---
-export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
+export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '', onToken, onDone }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
     : '';
@@ -416,23 +429,28 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}${chainSection}${facilSection}
+${threatSection}${chainSection}${facilSection}${knowledgeContext}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
 3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify gaps not in the list' : ''}
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
-${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
+${threatCatalog.length ? '6.' : '5.'} Cross-domain handoff — name the OTHER discipline whose interaction with your findings worries you most, state the specific coupling you suspect, and pose one direct question to that expert
+${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
-After your assessment, on the very last line output exactly:
+After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 for your top threat: 1 Rare … 5 Almost Certain]
+IMPACT: [1-5 for your top threat: 1 Negligible … 5 Severe]
+CONFIDENCE: [0-100 integer — be calibrated: 85+ only with direct evidence or deep expertise; 50-70 when extrapolating outside your domain; below 50 when speculating]
+COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
 Write in first person as the expert. Be specific and opinionated.${CITATION_INSTRUCTION}`;
 
   return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400, onToken, onDone });
 }
 
-export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
+export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '', onToken, onDone }) {
   const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
   const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
 
@@ -452,14 +470,19 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
-Now write your Round 2 rebuttal (250-400 words) covering:
-1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
-2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}${knowledgeContext}
+Now write your Round 2 rebuttal (300-450 words) covering:
+1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
+2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+3. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument). Note where their severity or confidence seems miscalibrated given their evidence.
+4. Whether you've revised your severity rating and why${threatCatalog.length ? '\n5. Any catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
-After your rebuttal, on the very last line output exactly:
+After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+LIKELIHOOD: [1-5 for your top risk, revised]
+IMPACT: [1-5 for your top risk, revised]
+CONFIDENCE: [0-100 integer — recalibrate: corroboration raises confidence, credible contradiction lowers it]
+COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
 Be direct. Name names. Change your position if persuaded.${CITATION_INSTRUCTION}`;
 
@@ -515,7 +538,21 @@ export const DEBATE_TOOLS = [
   },
 ];
 
+// Optional org knowledge retriever, injected by WorkspaceContext.
+// When set, search_knowledge checks the org knowledge base before Wikipedia.
+let _knowledgeRetriever = null;
+export function setKnowledgeRetriever(fn) { _knowledgeRetriever = fn; }
+
 async function runSearchKnowledge(query) {
+  // Prefer the organization's own knowledge base when available
+  if (_knowledgeRetriever) {
+    try {
+      const chunks = await _knowledgeRetriever(query, 3);
+      if (chunks?.length) {
+        return chunks.map((c, i) => `[Knowledge base${c.title ? `: ${c.title}` : ''}]\n${(c.content || '').slice(0, 1200)}`).join('\n\n');
+      }
+    } catch { /* fall through to public search */ }
+  }
   try {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`;
     const searchRes = await fetch(searchUrl);
@@ -736,11 +773,13 @@ export async function generateSynthesis({ session, sessionAgents, scenarioContex
   const agentsText = sessionAgents.map(sa => {
     const parts = [`=== ${sa.agentName} (${sa.discipline}) ===`];
     if (sa.round1_assessment) {
-      parts.push(`ROUND 1 [${sa.round1_severity}]:`);
+      const conf1 = sa.round1_confidence != null ? ` · confidence ${sa.round1_confidence}%` : '';
+      parts.push(`ROUND 1 [${sa.round1_severity}${conf1}]:`);
       parts.push((sa.round1_assessment || '').substring(0, 500));
     }
     if (sa.round2_rebuttal) {
-      parts.push(`ROUND 2 [${sa.round2_revised_severity}]:`);
+      const conf2 = sa.round2_confidence != null ? ` · confidence ${sa.round2_confidence}%` : '';
+      parts.push(`ROUND 2 [${sa.round2_revised_severity}${conf2}]:`);
       parts.push((sa.round2_rebuttal || '').substring(0, 400));
     }
     return parts.join('\n');
@@ -760,18 +799,21 @@ ${agentsText}
 Generate a comprehensive synthesis report with EXACTLY these sections in this order:
 
 ## COMPOUND CHAINS
-List 2-4 multi-step threat sequences that emerged from agents building on each other's work. Format EACH chain EXACTLY as shown:
+List 2-4 multi-step attack chains that emerged from agents building on each other's work. Prefer chains that cross domains — where one discipline's threat becomes the enabling condition for another's. Each chain should read as a kill chain a defender can attack: every step must be an action the adversary takes that DEPENDS on the previous step succeeding, so that breaking any one step stops the chain. Format EACH chain EXACTLY as shown:
 ### [Chain Name]
-Step 1: [description]
-Step 2: [description]
-Step 3: [description]
-(Each chain must have at least 3 steps. If no compound chains exist, write a single chain labeled "No compound chains identified".)
+Step 1: [adversary action] — enabled by: [what must already be true]
+Step 2: [adversary action] — enabled by: [the prior step's result]
+Step 3: [adversary action] — enabled by: [...]
+(Each chain must have at least 3 steps, ordered by dependency. Escalate toward the highest-consequence outcome. If no compound chains exist, write a single chain labeled "No compound chains identified".)
+
+## CROSS-DOMAIN INTERACTION RISKS
+(The core purpose of this analysis: risks that exist ONLY because two or more domains interact — risks no single-discipline assessment would surface. For each: name the domains involved, the agents who surfaced it, the coupling mechanism, and the combined severity. Prioritize the Round 2 "interaction risk" findings. If none emerged, state that explicitly as a process failure worth noting.)
 
 ## CONSENSUS FINDINGS
-(Points that multiple agents agreed on, sorted by severity)
+(Points that multiple agents agreed on, sorted by severity. Weight agreement by the agents' stated confidence — high-confidence consensus is stronger than hedged consensus.)
 
 ## CONTESTED FINDINGS
-(Points of significant disagreement between agents — format as "Agent A vs Agent B: [the disagreement]")
+(Points of significant disagreement between agents — format as "Agent A vs Agent B: [the disagreement]". Note each side's confidence: a 90%-confident CRITICAL vs a 40%-confident LOW is not a symmetric dispute.)
 
 ## BLIND SPOTS
 (Areas or threat vectors that no agent adequately covered)
@@ -917,19 +959,49 @@ Output a clean scenario context document (3-6 paragraphs). No disclaimers.`;
 }
 
 // --- analyzeChainBreaker ---
-const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and identify exactly where defenders should intervene to prevent adversary success.
+const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and tell defenders EXACTLY where to intervene, in what order, and what each intervention costs and buys them.
 
 You will receive a JSON input with two fields:
 - chain: an object with name, description, and steps (array of { step_number, agent_label, step_text })
 - scenarioContext: optional free-text scenario context
 
-For each step assess: adversary objective, dependencies, leverage (HIGH/MEDIUM/LOW), countermeasures (2-4 specific controls), difficulty (EASY/MODERATE/HARD), residual risk.
+Core principle: an attacker must complete EVERY step; a defender only has to break ONE. So find the cheapest, most reliable place to cut. Reward chokepoints (single points of failure the adversary cannot route around) over steps that have alternate paths.
 
-Also provide: summary, priority_steps (array of step numbers), chain_resilience (HIGH/MEDIUM/LOW).
+For EACH step assess:
+- adversary_objective — what the attacker achieves at this step
+- dependencies — what conditions must already hold for this step to succeed
+- leverage — HIGH/MEDIUM/LOW: how much breaking THIS step sets back the whole chain (a step the adversary can bypass is LOW leverage even if important)
+- is_chokepoint — true only if the adversary has no realistic alternate path around this step
+- detectability — OBSERVABLE / PARTIAL / STEALTHY: how visible this step is with typical instrumentation
+- countermeasures — 2-4 specific controls, EACH as an object with:
+    - control: the concrete action ("Enforce phishing-resistant MFA on all privileged accounts")
+    - type: PREVENTIVE / DETECTIVE / RESPONSIVE
+    - effort: LOW / MEDIUM / HIGH (implementation cost and operational burden)
+    - time_to_deploy: DAYS / WEEKS / MONTHS
+- difficulty — EASY/MODERATE/HARD: how hard it is for the defender to break this step overall
+- residual_risk — what still gets through even after the countermeasures above
+
+Then synthesize across steps:
+- recommended_cut — { step_number, rationale }: the single best place to break this chain first (favor a high-leverage chokepoint with LOW-effort, fast countermeasures)
+- mitigation_roadmap — a DEDUPLICATED, PRIORITIZED action plan (3-6 items). Consolidate countermeasures that recur across steps into one action. Each item:
+    - priority: 1 = do first
+    - action: the concrete control
+    - breaks_steps: array of step_numbers this action degrades or blocks
+    - type: PREVENTIVE / DETECTIVE / RESPONSIVE
+    - effort: LOW / MEDIUM / HIGH
+    - time_to_deploy: DAYS / WEEKS / MONTHS
+    - effect: what breaking these steps does to the adversary (e.g. "collapses the chain — no alternate path" or "forces a noisier, slower approach")
+- quick_wins — array of step_numbers whose countermeasures are LOW effort AND fast (the immediate to-do list)
+- summary — 2-3 sentences a decision-maker can act on
+- priority_steps — step numbers ordered by break value (highest first)
+- chain_resilience — HIGH/MEDIUM/LOW: how hard the chain is to break overall
 
 Return ONLY valid JSON matching this schema exactly:
 {
-  "steps": [{ "step_number": 1, "adversary_objective": "", "dependencies": "", "leverage": "HIGH", "countermeasures": [""], "difficulty": "EASY", "residual_risk": "" }],
+  "steps": [{ "step_number": 1, "adversary_objective": "", "dependencies": "", "leverage": "HIGH", "is_chokepoint": true, "detectability": "PARTIAL", "countermeasures": [{ "control": "", "type": "PREVENTIVE", "effort": "LOW", "time_to_deploy": "DAYS" }], "difficulty": "MODERATE", "residual_risk": "" }],
+  "recommended_cut": { "step_number": 1, "rationale": "" },
+  "mitigation_roadmap": [{ "priority": 1, "action": "", "breaks_steps": [1], "type": "PREVENTIVE", "effort": "LOW", "time_to_deploy": "DAYS", "effect": "" }],
+  "quick_wins": [1],
   "summary": "",
   "priority_steps": [1],
   "chain_resilience": "HIGH"
@@ -957,7 +1029,20 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
     throw new Error('Model returned non-JSON response. Try again.');
   }
   if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
+  // Normalize countermeasures to objects so the UI can render one shape
+  // (older models / retries may still emit plain strings)
+  result.steps = result.steps.map(s => ({
+    ...s,
+    countermeasures: (s.countermeasures || []).map(cm =>
+      typeof cm === 'string' ? { control: cm, type: null, effort: null, time_to_deploy: null } : cm
+    ),
+  }));
   return result;
+}
+
+/** Render countermeasures as strings whether stored as objects or legacy strings. */
+export function countermeasureText(cm) {
+  return typeof cm === 'string' ? cm : (cm?.control || '');
 }
 
 // --- analyzeSourceValidity ---
