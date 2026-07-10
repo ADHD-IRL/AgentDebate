@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Library, Sparkles, Users } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Library, Sparkles, Users, Scissors, LayoutDashboard } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -19,6 +19,27 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
 - It's not a chatbot. It's a structured analytical framework.
 - It's not a prediction engine. It surfaces risk — it doesn't forecast futures.
 - It's not a replacement for human judgment. It's a tool to sharpen it.
+    `,
+  },
+  {
+    id: 'workflow-map',
+    icon: LayoutDashboard,
+    color: '#27AE60',
+    title: 'The Workflow at a Glance',
+    content: `
+The sidebar is organized as the workflow, top to bottom. Follow it in order and each step feeds the next:
+
+**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), and the **SME Library** (curate and reuse experts). These persist across every session.
+
+**2 · Plan** — Define the specific engagement: a **Scenario** (the situation to stress-test) and, optionally, a **Threats** catalog (known risks). Tag both with domains.
+
+**3 · Run** — Bring a scenario and agents together in a **Session** (structured two-round analysis) or the **What-If Simulator**. This is where the red-teaming happens.
+
+**4 · Act on Findings** — Work the output: the **Threat Map** (coverage gaps), **Chains** (kill chains), **Chain Breaker** (mitigation roadmaps), and **Reports** (executive PDFs).
+
+**Insights** — **Agent Analytics** and **Compare** for cross-session trends. **System** holds Settings and this guide.
+
+**New here?** The **Dashboard** shows a getting-started checklist that tracks these steps and always points to your next action. It disappears once you've run your first session.
     `,
   },
   {
@@ -91,7 +112,9 @@ The analogy: a Chain is like a **kill chain or attack tree**, but written in pla
 
 Each step can be attributed to an Agent or labeled freely. Chains can be built manually or AI-generated from a scenario.
 
-**Chains are automatically extracted from synthesis.** When you generate a synthesis report, AgentDebate parses out any compound threat chains identified by the AI and saves them directly to your chain library — tagged to that session and scenario. You don't need to do anything manually.`
+**Chains are automatically extracted from synthesis.** When you generate a synthesis report, AgentDebate parses out any compound threat chains identified by the AI and saves them directly to your chain library — tagged to that session and scenario. You don't need to do anything manually.
+
+**Chains are now generated as true kill chains.** Each step is an adversary action with an explicit "enabled by" precondition tied to the previous step, so the chain reads as a dependency sequence a defender can attack: break any one step and the chain stops. Feed a chain into the **Chain Breaker** (next section) to turn it into a prioritized mitigation plan.`
       },
       {
         icon: Swords,
@@ -134,12 +157,16 @@ Sessions track a **status** as they progress: pending → round1 → round2 → 
 1. Sets the agent's status to "generating_r1"
 2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario context document, phase focus, and any pinned chains
 3. Sends this prompt to Claude (Anthropic's AI model) via streaming
-4. The model responds in character — writing a structured threat assessment with findings, assumptions, a severity rating, and inline source citations
-5. The assessment and severity are saved; status updates to "r1_done"
+4. The model responds in character — a structured assessment with findings, assumptions, inline source citations, a severity rating, and a **calibrated confidence score (0–100)**
+5. The assessment, severity, and confidence are saved; status updates to "r1_done"
 6. When the last agent completes manually (without using Generate All), the session status auto-advances to "round1"
 
-Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.`,
-        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first. The "Generate All" button disables automatically once every agent has a completed assessment.'
+Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.
+
+**Two things each Round 1 assessment now includes by design:**
+- **A cross-domain handoff** — every agent must name the OTHER discipline whose interaction with their findings worries them most and pose a direct question to that expert. This plants the hooks that Round 2 turns into compound risks.
+- **A confidence score** — the agent's calibrated self-assessment (85+ only with direct evidence or deep expertise, 50–70 when extrapolating outside their domain, below 50 when speculating). Shown as a pill next to the severity badge.`,
+        tip: 'Richer scenario context documents produce sharper, more targeted assessments. Use AI Assist on your scenario first. Watch the confidence pills: a CRITICAL rating at 40% confidence is a flag to dig in, not a settled finding.'
       },
       {
         num: '03',
@@ -151,28 +178,74 @@ Agents do NOT see each other's assessments in Round 1. This ensures independent 
       {
         num: '04',
         title: 'Generate Round 2 — Cross-Examination',
-        what: 'Click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 and produces a rebuttal — revising, reinforcing, or challenging. Same smart skip logic applies: already-completed agents are never re-run.',
+        what: 'Click "Generate All Round 2." Each agent now reads what every other agent found in Round 1 — including their severity and confidence — and produces a rebuttal that revises, reinforces, or challenges. Same smart skip logic applies: already-completed agents are never re-run.',
         system: `For each Agent:
-1. Compiles all other agents' Round 1 assessments into a single "others" block
-2. Asks the agent to respond: who do they most agree with? Who do they most disagree with, and why? Does their severity change?
-3. The model responds with a structured rebuttal including a revised severity, strongest ally identification, and a compound chain narrative
-4. All results saved; when the last agent completes, session status auto-advances to "round2" and synthesis is triggered automatically`,
-        tip: 'Round 2 is where the most interesting dynamics emerge — when the economist and the cyberspecialist fundamentally disagree on severity, that tension is worth exploring.'
+1. Compiles all other agents' Round 1 assessments (with their severity and confidence) into a single "others" block
+2. Requires an **interaction risk** as the headline: one compound risk that exists ONLY because this agent's domain interacts with another's — a risk neither would list alone — with the coupling mechanism spelled out step by step
+3. Asks who they most agree with, who they most disagree with (and where that agent's rating looks miscalibrated), and whether their own severity changes
+4. The model responds with a revised severity, a **recalibrated confidence** (corroboration raises it, credible contradiction lowers it), the interaction risk, and a compound chain
+5. All results saved; when the last agent completes, session status auto-advances to "round2" and synthesis is triggered automatically`,
+        tip: 'The interaction-risk section is the whole point of the platform — it surfaces the risks a single-domain review can never see. If an agent\'s Round 2 doesn\'t name a genuine cross-domain coupling, that\'s a sign the panel lacks the right adjacent expertise.'
       },
       {
         num: '05',
         title: 'Generate Synthesis',
         what: 'Click "Generate Synthesis." AgentDebate reads all Round 1 and Round 2 assessments and produces a single consolidated report. This also runs automatically when Round 2 completes.',
-        system: `AgentDebate sends all agent assessments to Claude with instructions to act as a senior analytical director. The model identifies:
-- Consensus findings (what most agents agree on)
-- Contested findings (where agents significantly disagree)
-- Compound chains (how threats chain together across disciplines)
+        system: `AgentDebate sends all agent assessments (with their severity and confidence) to Claude with instructions to act as a senior analytical director. The model identifies:
+- Compound chains (kill chains — how threats chain together, each step enabling the next, across disciplines)
+- **Cross-domain interaction risks** — the core deliverable: risks that exist only because two or more domains interact, drawn from the Round 2 interaction findings. If none emerged, the synthesis flags that as a process failure
+- Consensus findings (weighted by confidence — high-confidence agreement counts for more than hedged agreement)
+- Contested findings (where agents disagree, noting each side's confidence)
 - Blind spots (what was conspicuously absent)
 - Priority mitigations (what to address first)
 - Sharpest insights (the most incisive individual observations)
 
 The synthesis is saved as a SessionSynthesis record, the session status moves to "complete," and any compound chains found are automatically saved to the chain library tagged to this session.`,
         tip: 'The synthesis is a starting point, not a final verdict. Use it to structure a human debrief. You can regenerate it at any time — re-running will update the existing synthesis record.'
+      },
+    ]
+  },
+  {
+    id: 'chain-breaker',
+    icon: Scissors,
+    color: '#C0392B',
+    title: 'Chain Breaker & Mitigation',
+    subsections: [
+      {
+        icon: Scissors,
+        color: '#C0392B',
+        title: 'Turning a Kill Chain into a Defense Plan',
+        body: `The **Chain Breaker** (sidebar → Act on Findings → Chain Breaker) takes any compound chain and works out where a defender should intervene, in what order, and what each intervention costs.
+
+The governing principle: **an attacker must complete every step, but a defender only has to break one.** So the tool hunts for the cheapest, most reliable place to cut — and it distinguishes steps the adversary can route around from true chokepoints they can't.
+
+For each step it assesses:
+- **Adversary objective** and **dependencies** (what must already be true)
+- **Leverage** — how much breaking this step sets back the whole chain
+- **Chokepoint** — flagged when the adversary has no realistic alternate path; cutting a chokepoint collapses the chain
+- **Detectability** — how visible the step is with typical instrumentation (Observable / Partial / Stealthy)
+- **Countermeasures** — each tagged with its control type (Preventive / Detective / Responsive), effort (Low / Medium / High), and time to deploy (Days / Weeks / Months)
+- **Residual risk** — what still gets through even after those controls`,
+        usage: `
+1. Run at least one session so chains are extracted, or build a chain manually on the Chains page.
+2. Go to **Chain Breaker** and select a chain.
+3. Click **Run Analysis** — the tool dissects every step.
+4. Read the **"Cut here first"** callout: the single best place to break the chain.
+5. Work the **Mitigation Roadmap** top to bottom — it's already prioritized.
+6. Click **Generate Report** for a print-ready PDF of the whole analysis.
+`
+      },
+      {
+        icon: Shield,
+        color: '#27AE60',
+        title: 'The Mitigation Roadmap',
+        body: `Below the step-by-step analysis, the Chain Breaker produces a consolidated **Mitigation Roadmap** — the actionable payoff.
+
+- **"Cut here first"** names the single highest-value first move (a high-leverage chokepoint that's cheap and fast to defend) with the rationale.
+- The **roadmap** is a deduplicated, priority-ordered action plan. Countermeasures that recur across several steps are merged into one action, each tagged with control type, effort, time to deploy, **which steps it breaks**, and the effect on the adversary ("collapses the chain — no alternate path" vs "forces a noisier, slower approach").
+- **Quick wins** are surfaced separately: low-effort, fast countermeasures you can start immediately.
+
+The result is a defender's to-do list you can hand to a team, rather than a flat list of controls with no priority. It's included in the printed report.`
       },
     ]
   },
@@ -234,6 +307,27 @@ These are parsed from the response text and saved with the citing sentence as co
 **3. Facilitator entries** — You can manually add a source via the "Add Source" button in the SOURCES tab. Use this to pin reference documents, standards, or external reports relevant to the session.
 
 Each source row shows: the domain with credibility tier badge, the agent that cited it, and the exact sentence that referenced it.`
+      },
+      {
+        icon: Bot,
+        color: '#F0A500',
+        title: 'SME Evidence Ledger',
+        body: `The SOURCES tab has a **By SME / By Tier** toggle. **By SME** (the default) is the evidence ledger: it groups everything each SME referenced this session so you can see exactly what each expert leaned on to support its knowledge and its debate positions.
+
+For each SME the ledger shows:
+- **Every source they cited**, best-tier-first, each with the credibility badge, the source type, and the **exact claim it was cited to support**
+- A **credibility mix bar** and a **0–100 evidence-quality score** — a tier-weighted measure (authoritative counts most) that lets you rank which SMEs argued from strong evidence versus thin sourcing at a glance
+
+Critically, it also surfaces **Unsupported Assessments** — SMEs that participated but cited nothing. Their conclusions rest on persona reasoning alone, which is exactly what you want flagged before weighting their findings or briefing leadership.
+
+The ledger is only as rich as the citations agents produce, so it rewards scenarios where the citation instruction is doing its job. It works for both Classic and Live Debate sessions.`,
+        usage: `
+1. Open a completed session and go to the **SOURCES tab**.
+2. Leave the toggle on **By SME** (the default).
+3. Scan the evidence-quality scores — low scores mean thin sourcing.
+4. Check the **Unsupported Assessments** callout at the bottom: those SMEs' conclusions have no evidence behind them.
+5. Switch to **By Tier** when you want to audit overall source credibility instead of per-expert.
+`
       },
       {
         icon: Brain,
@@ -464,12 +558,12 @@ Usage counts accumulate as SMEs participate in sessions, so over time the Overvi
         body: 'When one agent rates a threat CRITICAL and another rates it LOW, that isn\'t noise — it\'s signal. It means the threat\'s impact is highly dependent on which domain lens you apply. Explore those gaps, not just the consensus.'
       },
       {
-        title: 'Review sources before presenting findings',
-        body: 'Open the SOURCES tab after a session and run Validity Analysis. It surfaces unsupported claims and inter-agent contradictions before you present. A finding with zero credible sources deserves more scrutiny than one backed by three authoritative citations.'
+        title: 'Check the evidence ledger before presenting',
+        body: 'Open the SOURCES tab (By SME view) after a session. The evidence-quality score and the Unsupported Assessments callout tell you which experts argued from real evidence and which relied on persona reasoning alone. Then run Validity Analysis to catch inter-agent contradictions. A CRITICAL finding at 40% confidence with no cited sources deserves far more scrutiny than a HIGH backed by authoritative citations.'
       },
       {
-        title: 'Let synthesis auto-generate your chains',
-        body: 'You don\'t need to manually build chains from session findings. Generate the synthesis report and AgentDebate automatically extracts and saves compound attack chains to your library. Review and edit them afterward if needed.'
+        title: 'Turn chains into mitigation plans',
+        body: 'Synthesis auto-extracts kill chains to your library — but don\'t stop there. Feed each chain into the Chain Breaker to get a prioritized Mitigation Roadmap: where to cut first, which controls break which steps, and what each costs. That roadmap is the hand-off to your defensive team.'
       },
       {
         title: 'Use Live Debate for stakeholder engagement',
