@@ -1190,7 +1190,8 @@ const briefAllAgents = async () => {
           .filter(o => o.agent_id !== sa.agent_id)
           .map(o => {
             const oAgent = getAgent(o.agent_id);
-            return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
+            const conf = o.round1_confidence != null ? ` · confidence ${o.round1_confidence}%` : '';
+            return `=== ${oAgent?.name} (${oAgent?.discipline}) [${o.round1_severity || '?'}${conf}] ===\n${o.round1_assessment}`;
           }).join('\n\n');
 
         const fn = round === 1 ? generateRound1 : generateRound2;
@@ -1265,7 +1266,8 @@ const briefAllAgents = async () => {
     const others = round === 2 ? sessionAgents.filter(o => o.agent_id !== sa.agent_id && o.round1_assessment) : [];
     const othersText = others.map(o => {
       const oAgent = getAgent(o.agent_id);
-      return `=== ${oAgent?.name} (${oAgent?.discipline}) ===\n${o.round1_assessment}`;
+      const conf = o.round1_confidence != null ? ` · confidence ${o.round1_confidence}%` : '';
+      return `=== ${oAgent?.name} (${oAgent?.discipline}) [${o.round1_severity || '?'}${conf}] ===\n${o.round1_assessment}`;
     }).join('\n\n');
 
     const chainContext = buildChainContext();

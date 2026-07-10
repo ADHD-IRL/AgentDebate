@@ -248,7 +248,7 @@ Write in first person as the expert. Be direct and specific.`;
   return { briefing: text.trim() };
 }
 
-function parseMarkers(fullText, fallbackSeverity) {
+export function parseMarkers(fullText, fallbackSeverity) {
   const lines = fullText.trimEnd().split('\n');
   let severity = fallbackSeverity || 'HIGH';
   let confidence = null;
@@ -309,11 +309,12 @@ Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
 3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify any critical gaps not in the list' : ''}
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
-${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
+${threatCatalog.length ? '6.' : '5.'} Cross-domain handoff — name the OTHER discipline whose interaction with your findings worries you most, state the specific coupling you suspect, and pose one direct question you need that expert to answer
+${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
 After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
-CONFIDENCE: [0-100 integer representing your confidence this assessment is correct]
+CONFIDENCE: [0-100 integer — be calibrated: 85+ only where you have direct evidence or deep expertise; 50-70 where you are extrapolating outside your domain; below 50 where you are speculating]
 COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
 Write in first person as the expert. Be specific and opinionated.`;
@@ -349,14 +350,15 @@ You have just read all Round 1 assessments from the other experts. Here they are
 
 ${othersAssessments || '(No other assessments available yet)'}
 ${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
-Now write your Round 2 rebuttal (250-400 words) covering:
-1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
-2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
+Now write your Round 2 rebuttal (300-450 words) covering:
+1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
+2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+3. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument). Note where their severity or confidence rating seems miscalibrated given their evidence.
+4. Whether you've revised your severity rating and why${threatCatalog.length ? '\n5. Any threat catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
 After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
-CONFIDENCE: [0-100 integer representing your confidence in this revised assessment]
+CONFIDENCE: [0-100 integer — recalibrate: if other experts corroborated you, confidence may rise; if credible experts contradicted you, it should fall]
 COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
 Be direct. Name names. Change your position if persuaded.`;
@@ -422,10 +424,13 @@ Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
 3. Second threat — same structure${threatCatalog.length ? '\n4. Threat catalog review — validate, challenge, or escalate at least one T-number entry; identify gaps not in the list' : ''}
 ${threatCatalog.length ? '5.' : '4.'} Invalidating assumption — one assumption that if wrong changes your whole assessment
-${threatCatalog.length ? '6.' : '5.'} Key finding — one-sentence bottom line
+${threatCatalog.length ? '6.' : '5.'} Cross-domain handoff — name the OTHER discipline whose interaction with your findings worries you most, state the specific coupling you suspect, and pose one direct question to that expert
+${threatCatalog.length ? '7.' : '6.'} Key finding — one-sentence bottom line
 
-After your assessment, on the very last line output exactly:
+After your assessment, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+CONFIDENCE: [0-100 integer — be calibrated: 85+ only with direct evidence or deep expertise; 50-70 when extrapolating outside your domain; below 50 when speculating]
+COMPOUND_CHAIN: [one sentence describing the most critical compound threat chain you identified, or "none"]
 
 Write in first person as the expert. Be specific and opinionated.${CITATION_INSTRUCTION}`;
 
@@ -453,13 +458,16 @@ You have just read all Round 1 assessments from the other experts. Here they are
 
 ${othersAssessments || '(No other assessments available yet)'}
 ${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
-Now write your Round 2 rebuttal (250-400 words) covering:
-1. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
-2. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument)
-3. Whether you've revised your severity rating and why${threatCatalog.length ? '\n4. Any catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
+Now write your Round 2 rebuttal (300-450 words) covering:
+1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
+2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
+3. Strongest disagreement — which agent you most disagree with and exactly why (name them, cite their argument). Note where their severity or confidence seems miscalibrated given their evidence.
+4. Whether you've revised your severity rating and why${threatCatalog.length ? '\n5. Any catalog entries that Round 1 assessments confirmed, escalated, or invalidated' : ''}
 
-After your rebuttal, on the very last line output exactly:
+After your rebuttal, output these markers on the final lines:
 SEVERITY: [CRITICAL|HIGH|MEDIUM|LOW]
+CONFIDENCE: [0-100 integer — recalibrate: corroboration raises confidence, credible contradiction lowers it]
+COMPOUND_CHAIN: [one sentence naming the most important compound threat chain that emerged from cross-agent analysis, or "none"]
 
 Be direct. Name names. Change your position if persuaded.${CITATION_INSTRUCTION}`;
 
@@ -736,11 +744,13 @@ export async function generateSynthesis({ session, sessionAgents, scenarioContex
   const agentsText = sessionAgents.map(sa => {
     const parts = [`=== ${sa.agentName} (${sa.discipline}) ===`];
     if (sa.round1_assessment) {
-      parts.push(`ROUND 1 [${sa.round1_severity}]:`);
+      const conf1 = sa.round1_confidence != null ? ` · confidence ${sa.round1_confidence}%` : '';
+      parts.push(`ROUND 1 [${sa.round1_severity}${conf1}]:`);
       parts.push((sa.round1_assessment || '').substring(0, 500));
     }
     if (sa.round2_rebuttal) {
-      parts.push(`ROUND 2 [${sa.round2_revised_severity}]:`);
+      const conf2 = sa.round2_confidence != null ? ` · confidence ${sa.round2_confidence}%` : '';
+      parts.push(`ROUND 2 [${sa.round2_revised_severity}${conf2}]:`);
       parts.push((sa.round2_rebuttal || '').substring(0, 400));
     }
     return parts.join('\n');
@@ -767,11 +777,14 @@ Step 2: [description]
 Step 3: [description]
 (Each chain must have at least 3 steps. If no compound chains exist, write a single chain labeled "No compound chains identified".)
 
+## CROSS-DOMAIN INTERACTION RISKS
+(The core purpose of this analysis: risks that exist ONLY because two or more domains interact — risks no single-discipline assessment would surface. For each: name the domains involved, the agents who surfaced it, the coupling mechanism, and the combined severity. Prioritize the Round 2 "interaction risk" findings. If none emerged, state that explicitly as a process failure worth noting.)
+
 ## CONSENSUS FINDINGS
-(Points that multiple agents agreed on, sorted by severity)
+(Points that multiple agents agreed on, sorted by severity. Weight agreement by the agents' stated confidence — high-confidence consensus is stronger than hedged consensus.)
 
 ## CONTESTED FINDINGS
-(Points of significant disagreement between agents — format as "Agent A vs Agent B: [the disagreement]")
+(Points of significant disagreement between agents — format as "Agent A vs Agent B: [the disagreement]". Note each side's confidence: a 90%-confident CRITICAL vs a 40%-confident LOW is not a symmetric dispute.)
 
 ## BLIND SPOTS
 (Areas or threat vectors that no agent adequately covered)
