@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Mic2, Search, Zap } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Library, Sparkles, Users } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -31,9 +31,13 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
         icon: Globe,
         color: '#F0A500',
         title: 'Domains',
-        body: `Domains are **organizational categories** — the broad buckets that your work, threats, and agents live inside. Think of them like departments in a university: "Cybersecurity," "Geopolitics," "Supply Chain." They don't do anything on their own, but they keep everything organized and color-coded so you can instantly see which discipline a piece of analysis belongs to.
+        body: `Domains are **organizational categories** — the broad buckets that your work, threats, and agents live inside. Think of them like departments in a university: "Cybersecurity," "Geopolitics," "Supply Chain." They keep everything organized and color-coded, and they are the **connective tissue of the platform**: the Threat Map, coverage analysis, and agent filtering all link threats to agents through their shared domain.
 
-**Set these up first.** Everything else (agents, scenarios, threats) can be tagged to a domain.`
+**Set these up first.** Everything else (agents, scenarios, threats) can be tagged to a domain — and an untagged threat or agent is invisible to the Threat Map's coverage analysis.
+
+**Keep domains broad.** Aim for 10–15 wide buckets ("Critical Infrastructure & Industrial Resilience") rather than one domain per specialty. Broad domains let you group many agents and threats together, which is what makes the map and coverage views readable.
+
+**Sync from Agents.** If your agents have disciplines but no domains, the "Sync from Agents" button on the Domains page derives domain candidates from agent disciplines. A **preview popup** shows every domain that would be created — with a checkbox per domain and the number of agents it would receive — before anything is written to the database. Uncheck any junk candidates, then confirm. Nothing is saved until you do.`
       },
       {
         icon: Target,
@@ -57,12 +61,13 @@ The analogy: imagine hiring a panel of consultants for a day. One is a former co
 
 Each Agent has:
 - **Discipline** — their professional identity (e.g., "HUMINT Officer," "Critical Infrastructure Engineer")
+- **Domain** — the broad category they belong to (links them to threats on the Threat Map)
 - **Persona Description** — who they are and how they think
 - **Cognitive Bias** — what they systematically over- or under-weight (this is deliberate — biases create diversity of view)
 - **Red Team Focus** — what specific threats they're hunting for
 - **Vector Weights** — how much they emphasize Human, Technical, Physical, and Futures dimensions (0–100 each)
-- **Severity Default** — their baseline alarm level (CRITICAL / HIGH / MEDIUM / LOW)
-- **Voice** — used in Live Debate mode to give each agent a distinct spoken voice
+- **Default Severity** — their baseline risk posture (CRITICAL / HIGH / MEDIUM / LOW). This is the colored pill on the agent card. It is NOT a rating of the agent — it describes how alarmed this persona tends to be, and it is used as their fallback severity in debate rounds if a response doesn't declare one. Hover the pill for a full explanation.
+- **Extended persona fields** — epistemic style, institutional background, conflict triggers, decision style, adversary model, institutional incentives, and analytical framework. These are injected into the debate prompts, so the richer they are, the more distinct and realistic each agent's voice becomes.
 
 You can build agents manually, generate them with AI, or import batches from a formatted Markdown file. You can also **create a new agent directly inside the session builder** using the "+ New Agent" button — it saves to your agent library and is immediately selected for the session.`
       },
@@ -72,7 +77,9 @@ You can build agents manually, generate them with AI, or import batches from a f
         title: 'Threats',
         body: `Threats are **named risk items** — specific, catalogued dangers associated with a scenario or domain. Think of them as entries in a risk register: "Supply chain compromise via tier-3 vendor," "Insider threat during transition period."
 
-Threats live in the library and can be tagged, categorized, and linked to scenarios. They can also be AI-generated from a scenario context document. Threats are the *what* — Agents assess the *how bad* and *why it matters*.`
+Threats live in the library and can be tagged, categorized, and linked to scenarios. They can also be AI-generated from a scenario context document. Threats are the *what* — Agents assess the *how bad* and *why it matters*.
+
+**Give every threat a Domain and a Category.** The Domain links it to the agents who can analyze it (this powers the Threat Map and coverage analysis); the Category groups it with similar threats (these become the heatmap columns). A threat without a domain shows up in the map's "Unassigned" row until you assign one.`
       },
       {
         icon: Link2,
@@ -100,7 +107,7 @@ Think of a Session like a **formal analytical war game**:
 
 Sessions have two modes:
 - **Classic Analysis** — structured two-round written assessment with synthesis
-- **Live Debate** — real-time streaming debate where agents respond to each other with spoken voice, and you can interject with facilitator questions
+- **Live Debate** — real-time streaming debate where agents respond to each other turn by turn, and you can interject with facilitator questions
 
 Sessions track a **status** as they progress: pending → round1 → round2 → complete.`
       },
@@ -185,32 +192,8 @@ Choose Live Debate when you want:
 - Dynamic back-and-forth between agents (not just independent assessments)
 - A facilitator-directed conversation where you can interject, redirect, and challenge
 - An observable, streaming experience where you watch agents think in real time
-- Voice output — agents speak their responses aloud as they stream
 
-**How it works:** You start the debate, agents take turns responding, and you can intervene at any point with a facilitator message that redirects the conversation.`
-      },
-      {
-        icon: Mic2,
-        color: '#9B59B6',
-        title: 'Streaming Text-to-Speech',
-        body: `In Live Debate, agents **speak as they write** — you don't wait for the full response to finish before hearing it. Each agent has an assigned voice (configurable in their profile), and sentences are spoken aloud the moment they complete streaming.
-
-**How it works:**
-- As the AI streams tokens, AgentDebate detects sentence boundaries in real time
-- Each complete sentence is immediately sent to the voice engine and queued for playback
-- Sentences play back-to-back with no gaps — the audio is seamless even though it's generated on the fly
-- A speaking indicator shows which agent is currently talking
-- You can mute voice output at any time with the speaker toggle
-
-**Agent voices** are assigned per-agent in the agent settings (Alloy, Echo, Nova, Onyx, Fable, Shimmer). Give each agent a distinct voice to make the debate easier to follow aurally. You need an OpenAI API key configured in your workspace settings to enable TTS.`,
-        usage: `
-1. Set a voice for each agent in their profile (Agent Library → edit agent → Voice field).
-2. When starting a Live Debate session, ensure your OpenAI API key is set in workspace settings.
-3. Start the debate — agents will speak automatically as they respond.
-4. The speaker icon in the agent card lights up to show which agent is currently speaking.
-5. Click the speaker toggle (top-right of the debate room) to mute/unmute all voice output.
-6. If no voice is set for an agent, that agent's responses will be text-only.
-`
+**How it works:** You start the debate, agents take turns responding (their text streams onto the screen as they "think"), and you can intervene at any point with a facilitator message that redirects the conversation — challenge an assumption, ask a follow-up, or steer the panel toward a neglected angle.`
       },
     ]
   },
@@ -333,88 +316,129 @@ The report is fully print-ready — charts are inline SVG (no external dependenc
     id: 'threat-map',
     icon: Map,
     color: '#D68910',
-    title: 'Threat Visualization & Analytics',
+    title: 'Threat Map — Visualization & Coverage',
     subsections: [
       {
         icon: Map,
         color: '#D68910',
-        title: 'Threat Heatmap',
-        body: `The **Threat Heatmap** is a visual grid showing how severity assessments cluster across **agents and threat combinations**. It's a pattern-detection tool designed to surface consensus, disagreements, and outliers at a glance.
+        title: 'How the Threat Map Works',
+        body: `The Threat Map answers one question: **where do your threats concentrate, and can your agent panel actually cover them?**
 
-**What it shows:**
-- **Rows** represent agents (ordered by overall severity bias)
-- **Columns** represent threats or findings
-- **Color intensity** reflects severity: bright red (CRITICAL) → orange (HIGH) → blue (MEDIUM) → green (LOW)
+Everything on the page is built from one relationship: **threats link to agents through their shared Domain.** A threat tagged "Cybersecurity & Technology Risk" is covered by the agents in that same domain. This means the map is only as good as your domain assignments:
+- A threat with **no domain** isn't spread across every row (that would inflate the numbers) — it lands in a single italic **"Unassigned" row** at the bottom, and an amber banner tells you how many threats need domains.
+- An agent with no domain doesn't count toward any threat area's coverage.
 
-**How to use it:**
-1. **Spot consensus** — columns with uniform color indicate strong agreement across the panel
-2. **Find contested areas** — mixed-color columns highlight threats where severity estimates diverge (these are prime discussion points)
-3. **Identify outliers** — watch for agents whose color patterns differ sharply from peers; they're flagging alternative interpretations
-4. **Track severity trends** — compare heatmaps across multiple sessions to see how threat assessment evolves over time
+**The toolbar controls every view:**
+- **GROUP BY: Domain / Discipline** — Domain (the default) gives you 10–15 broad rows; Discipline breaks the same data into finer professional specialties. Use Domain for the big picture, Discipline to see exactly which specialty carries the load.
+- **Severity pills (CRIT / HIGH / MED / LOW)** — click one to filter the whole page to that severity; click again to clear.
+- **Session dropdown** — restrict the map to the threats and agents of a single session.
 
-**Pro tip:** Use the heatmap after Round 2 when severity values are finalized. Sort by "highest average" to see which threats dominate concern across the panel.`,
+Your view, axis, and filter choices are stored in the page URL — copy the address bar to share the exact view you're looking at.`
+      },
+      {
+        icon: BarChart2,
+        color: '#C0392B',
+        title: 'Heatmap View',
+        body: `The **Threat Concentration Heatmap** is a grid of your risk landscape:
+- **Rows** = domains (or disciplines, per the toggle)
+- **Columns** = threat categories, with a total count under each header
+- **Cell color** = the highest severity present at that intersection (red CRITICAL → amber HIGH → blue MEDIUM → green LOW)
+- **Cell intensity** = volume — the darker the cell, the more threats concentrated there
+
+Rows with zero mapped threats are hidden by default so the map stays dense and readable; a **"show N empty rows"** checkbox in the legend reveals them (useful for spotting domains you've staffed but never mapped threats to).
+
+**Hover** any cell for a breakdown of its threats by severity with full titles. **Click** any cell (or a row name, or a row total) to open the **drill-down panel**.`,
         usage: `
-1. Navigate to **Threat Map** from the main menu.
-2. Select a session to visualize its agent assessments.
-3. The heatmap auto-loads, showing all agents and their severity ratings.
-4. **Hover over cells** to see the agent's full assessment text.
-5. **Click on a cell** to expand and read the complete rationale behind that severity rating.
-6. Use the **domain filter** (top-right) to show only agents from a specific discipline.
-7. Use the **sort options** to reorder agents by pessimism, optimism, or assessment count.
+1. Navigate to **Threat Map** from the sidebar — the heatmap is the default view.
+2. Scan for dark red cells first: that's where critical threats concentrate.
+3. Hover a cell to preview its threats; click it to open the drill-down panel.
+4. Check the "Unassigned" row at the bottom — threats there need a domain before they can be analyzed for coverage.
+5. Toggle GROUP BY to Discipline to see which specific specialty within a hot domain is carrying the load.
 `
       },
       {
         icon: Brain,
         color: '#7B2D8B',
-        title: 'Discipline Radar Chart',
-        body: `The **Discipline Radar** visualizes how heavily agents from different **professional disciplines** are weighting five key threat dimensions: **Human, Technical, Physical, Futures, and Economic factors**.
+        title: 'Exposure Radar & Severity Breakdown Views',
+        body: `**Exposure Radar** plots each domain (or discipline) as a spoke; the further the shape extends, the higher that group's **exposure score** (Critical×4 + High×3 + Medium×2 + Low×1). The radar shows the top 12 groups; a ranked list alongside it shows everything, each row with its severity mix bar and agent count. Use it to see, in one shape, which parts of your risk landscape dominate.
 
-Each discipline (e.g., "Cybersecurity," "Supply Chain," "Geopolitics") has its own radar profile — a star-shaped polygon showing where that discipline's attention concentrates.
+**Severity Breakdown** gives you three layers:
+- **Summary cards** — total threats at each severity level with percentages
+- **Stacked bars per group** — each row's threat load split by severity, sorted by exposure score
+- **Group × Category matrix** — a compact grid of colored dots showing the highest severity at each intersection; empty dark cells are intersections with no recorded threats
 
-**What it reveals:**
-- **Spiky profiles** (uneven coverage) show disciplinary blind spots. A purely cybersecurity-focused team will be weak on geopolitical or supply chain angles.
-- **Well-rounded profiles** (balanced coverage) indicate multidisciplinary awareness.
-- **Overlapping radars** highlight where disciplines naturally agree, and **gaps** where they conflict.
+All rows and matrix cells are clickable — everything opens the same drill-down panel as the heatmap.`
+      },
+      {
+        icon: Users,
+        color: '#27AE60',
+        title: 'Panel Coverage — Threat Load vs Agent Bench',
+        body: `The coverage panel at the bottom of every view is the **actionable core of the Threat Map**. For each domain it compares the **threat load** (the weighted exposure score) against the **agent bench** (how many agents cover that domain), and sorts the results into:
 
-**Use cases:**
-- Identify which threat dimensions your agent panel neglects
-- Diagnose why severity estimates diverge (often because different disciplines weight the Human vs. Technical trade-off differently)
-- Validate that you've assembled sufficiently diverse expertise before running a session`,
+- **COVERAGE GAPS** (red) — domains with real threat load but **zero or one agent**. Your panel cannot credibly analyze these. Each gap row has a **⚡SME button** that jumps straight to the Agents page with the AI-generate modal already open and pre-seeded with the domain — see a gap, close a gap in two clicks.
+- **STRETCHED BENCH** (amber) — domains carrying critical or heavy load with below-median staffing. Not empty, but thin.
+- **COVERED** (green) — threat areas with a healthy bench.
+- **IDLE BENCH** — domains where you have agents but zero mapped threats. Either genuinely low-risk, or a sign you haven't catalogued that area's threats yet.
+
+Click any row to open the drill-down panel for that domain.`,
         usage: `
-1. From the Threat Map page, look for the **Discipline Radar** section.
-2. The chart displays a colored polygon for each discipline represented in the current session.
-3. **Each axis** represents a threat dimension (Human, Technical, Physical, Futures, Economic).
-4. **Larger/longer rays** indicate higher emphasis by that discipline on that dimension.
-5. **Compare radars visually** — overlapping areas show shared concern; gaps show disciplinary blind spots.
-6. Hover over lines to see the exact percentages and disciplines.
-7. Use this as input for **future session design**: if your radar is weak on "Futures," consider adding a futurist or strategic foresight specialist.
+1. Scroll to the bottom of any Threat Map view — the coverage panel is always visible.
+2. Start with COVERAGE GAPS: these are threats nobody on your panel can speak to.
+3. Click ⚡SME on a gap to generate a matching expert — the AI modal opens pre-filled with the domain and a suggested expert type.
+4. Review STRETCHED BENCH next: consider generating or cloning a second agent for domains carrying critical load alone.
+5. Treat IDLE BENCH as a prompt: run AI threat generation for those domains, or accept them as low-priority.
 `
       },
       {
-        icon: BarChart2,
+        icon: Search,
         color: '#2E86AB',
-        title: 'Severity Breakdown by Discipline',
-        body: `The **Severity Breakdown** shows how each discipline's agents distribute their severity assessments across the four levels: CRITICAL, HIGH, MEDIUM, and LOW.
+        title: 'Drill-Down Panel & Housekeeping',
+        body: `**Drill-down panel.** Clicking anything on the map opens a side panel listing the actual records behind that slice: every threat (severity-sorted, with category) and every agent (with discipline and default-severity pill) in the selected domain. Two links at the top — **Open in Threats** and **Open in Agents** — jump to those pages with the matching filters already applied, so you can go from "this cell looks bad" to editing the underlying records in one click. A slice with threats but no agents is flagged in red as a coverage gap.
 
-It's a stacked bar chart where each bar represents one discipline, and the colored segments show the proportion of assessments at each severity level.
+**Category merge nudge.** Threat categories are free text, so near-duplicates creep in ("Cyber" vs "Cybers") and fragment the heatmap columns. When the map detects similar category names, a blue banner appears offering a one-click **Merge** — it rewrites the category on the affected threats to the most common variant. You confirm before anything changes.
 
-**What it tells you:**
-- **Red-heavy disciplines** (lots of CRITICAL/HIGH) are naturally pessimistic or focused on high-impact risks
-- **Green-heavy disciplines** (lots of LOW/MEDIUM) tend toward more moderate threat assessment
-- **Even distributions** suggest balanced, nuanced threat modeling
+**Unassigned threats banner.** If any threats lack a domain, an amber banner reports the count with an "Open Threats" button. Assign domains there and the map recalculates immediately.`
+      },
+    ]
+  },
+  {
+    id: 'sme-library',
+    icon: Library,
+    color: '#9B59B6',
+    title: 'SME Library',
+    subsections: [
+      {
+        icon: Library,
+        color: '#9B59B6',
+        title: 'What is the SME Library?',
+        body: `The **SME Library** (sidebar → SME Library) is the management dashboard for your Subject Matter Expert collection — a superset view of your agents focused on **curation, quality, and reuse** rather than running sessions.
 
-**Why it matters:**
-When you see one discipline producing 70% CRITICAL ratings and another producing 70% MEDIUM ratings for the same threat, you've found a genuine analytical disagreement. That gap is often where the richest insights hide.`,
-        usage: `
-1. From the Threat Map page, locate the **Severity Breakdown by Discipline** bar chart.
-2. Each bar represents one discipline with agents in the session.
-3. The bar is divided into **colored segments** (CRITICAL, HIGH, MEDIUM, LOW).
-4. The **width of each segment** shows the percentage of that discipline's assessments at that severity level.
-5. Hover over a segment to see the exact count and percentage.
-6. **Compare bars across disciplines** to spot which ones are pessimistic vs. optimistic.
-7. Use the **domain filter** at the top to drill down or widen your view.
-`
-      }
+It has seven tabs:
+- **Overview** — KPI tiles (total SMEs, average quality score, high-quality count, unscored count) plus quality-distribution and top-by-usage charts
+- **Library** — the curated, shared SME collection: sortable, searchable, with inline Promote / Clone / Archive / Delete actions
+- **Workspace** — the same table scoped to your own workspace's SMEs, with a Promote-to-Library action for your best profiles
+- **Generate** — describe a scenario and AI-generate a panel of matching SME profiles, then promote the keepers
+- **Quality** — a quality monitor: score distribution, low-scoring profiles that need enrichment, and unscored profiles
+- **Tokens** — create and revoke API tokens for programmatic access to your SME collection (the token is shown once at creation — copy it immediately)
+- **Import/Export** — export your collection as JSON or CSV, and import SMEs from a JSON file with a preview step
+
+**Library vs Workspace:** library SMEs are the curated, shared collection; workspace SMEs are your private working set. Clone a library SME into your workspace to customize it without touching the shared version; promote a polished workspace SME into the library to share it.`
+      },
+      {
+        icon: Sparkles,
+        color: '#F0A500',
+        title: 'Quality Scores & Curation Workflow',
+        body: `Each SME can carry a **quality score (0–100)** reflecting how complete, specific, consistent, and distinctive its profile is. Scores come from AI assessment and improve as you fill in the extended persona fields (epistemic style, institutional background, adversary model, and so on).
+
+**A practical curation loop:**
+1. Import or generate SMEs in bulk
+2. Check the **Quality tab** — profiles scoring low usually have empty extended fields
+3. Open a low scorer, use the per-field AI regenerate buttons to enrich it
+4. Promote your best profiles to the library so every scenario can draw on them
+5. Archive (don't delete) SMEs you're not using — archiving is reversible
+
+Usage counts accumulate as SMEs participate in sessions, so over time the Overview tab shows you which experts actually earn their place on panels.`
+      },
     ]
   },
   {
@@ -449,11 +473,19 @@ When you see one discipline producing 70% CRITICAL ratings and another producing
       },
       {
         title: 'Use Live Debate for stakeholder engagement',
-        body: 'Classic Analysis is best for rigorous documented assessment. Live Debate is better when you want to demonstrate the process to stakeholders — the streaming voice output makes the AI reasoning visible and engaging in a way that a written report cannot replicate.'
+        body: 'Classic Analysis is best for rigorous documented assessment. Live Debate is better when you want to demonstrate the process to stakeholders — watching agents challenge each other in real time makes the AI reasoning visible and engaging in a way that a written report cannot replicate.'
+      },
+      {
+        title: 'Assign domains to everything',
+        body: 'Domains are how threats find their agents. A threat without a domain sits in the Threat Map\'s "Unassigned" row; an agent without a domain counts toward no coverage. After any bulk import, run "Sync from Agents" on the Domains page (review the preview before confirming) and sweep the Threats page for missing domain assignments.'
+      },
+      {
+        title: 'Work the coverage gaps, not just the hot cells',
+        body: 'The scariest part of the Threat Map isn\'t the dark red cells — it\'s the red COVERAGE GAPS list: threat areas where nobody on your panel is qualified to push back. Use the ⚡SME button on each gap to generate a matching expert before your next session.'
       },
       {
         title: 'Don\'t just run one session',
-        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change. Use the Threat Heatmap across sessions to spot trends.'
+        body: 'The real power of AgentDebate accumulates over time. Run the same scenario with a different agent mix. Run sessions at different phases of a project. Compare how the severity distribution shifts as circumstances change. Use the Threat Map across sessions to spot trends.'
       },
     ]
   },
