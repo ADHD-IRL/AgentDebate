@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, Target, AlertTriangle,
   Bot, Link2, Swords, BarChart3, Wifi, Map,
-  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library
+  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library, ShieldCheck
 } from 'lucide-react';
 
 // Menu is ordered as the actual workflow: build a reusable library, plan the
@@ -44,6 +44,7 @@ const groups = [
       { path: '/threatmap', icon: Map, label: 'Threat Map' },
       { path: '/chains', icon: Link2, label: 'Chains' },
       { path: '/chain-breaker', icon: Scissors, label: 'Chain Breaker' },
+      { path: '/mitigations', icon: ShieldCheck, label: 'Mitigations' },
       { path: '/reports', icon: BarChart3, label: 'Reports' },
     ],
   },

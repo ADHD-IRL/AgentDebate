@@ -87,5 +87,6 @@ export const localDb = {
     AppConfig:        makeEntity('app_configs'),
     Workspace:        makeEntity('workspaces'),
     WorkspaceMember:  makeEntity('workspace_members'),
+    Mitigation:       makeEntity('mitigations'),
   },
 };
