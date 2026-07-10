@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Plus, LogOut, LayoutDashboard } from 'lucide-react';
+import { Search, Plus, LogOut, LayoutDashboard, Globe, Bot, Target, AlertTriangle, Swords, CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useAuth } from '@/lib/AuthContext';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -53,7 +53,7 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState({
-    sessions: [], sessionAgents: [], syntheses: [], scenarios: [], agents: [],
+    sessions: [], sessionAgents: [], syntheses: [], scenarios: [], agents: [], domains: [], threats: [],
   });
 
   const loadData = useCallback(() => {
@@ -64,8 +64,10 @@ export default function Dashboard() {
       db.SessionSynthesis.list(),
       db.Scenario.list(),
       db.Agent.list(),
-    ]).then(([sessions, sessionAgents, syntheses, scenarios, agents]) => {
-      setData({ sessions, sessionAgents, syntheses, scenarios, agents });
+      db.Domain.list(),
+      db.Threat.list(),
+    ]).then(([sessions, sessionAgents, syntheses, scenarios, agents, domains, threats]) => {
+      setData({ sessions, sessionAgents, syntheses, scenarios, agents, domains, threats });
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [db]);
@@ -217,11 +219,20 @@ export default function Dashboard() {
     activeFilterKey === 'COMPLETE'    ? 'completed'  :
     activeFilterKey === 'IN PROGRESS' ? 'in progress' : 'total';
 
-  // ── Workspace readiness banner ─────────────────────────────────────────────
+  // ── Workflow setup checklist ───────────────────────────────────────────────
+  // Ordered to mirror the sidebar workflow. Shown until every step is done.
 
-  const needsSetup = !loading && (
-    data.sessions.length === 0 && data.agents.length === 0 && data.scenarios.length === 0
-  );
+  const workflowSteps = useMemo(() => [
+    { key: 'domains',   label: 'Add domains',      icon: Globe,         to: '/domains',      done: data.domains.length   > 0, hint: 'Broad categories that link threats to agents' },
+    { key: 'agents',    label: 'Build agents',     icon: Bot,           to: '/agents',       done: data.agents.length    > 0, hint: 'Your panel of expert thinking styles' },
+    { key: 'scenarios', label: 'Define a scenario', icon: Target,       to: '/scenarios',    done: data.scenarios.length > 0, hint: 'The situation you want to stress-test' },
+    { key: 'threats',   label: 'Catalog threats',  icon: AlertTriangle, to: '/threats',      done: data.threats.length   > 0, hint: 'Known risks — optional but sharpens analysis' },
+    { key: 'session',   label: 'Run a session',    icon: Swords,        to: '/sessions/new', done: data.sessions.length  > 0, hint: 'The red-team debate itself' },
+  ], [data.domains.length, data.agents.length, data.scenarios.length, data.threats.length, data.sessions.length]);
+
+  const setupComplete = workflowSteps.every(s => s.done);
+  const nextStep = workflowSteps.find(s => !s.done);
+  const showChecklist = !loading && !setupComplete;
 
   // ── Skeleton ───────────────────────────────────────────────────────────────
 
@@ -356,19 +367,66 @@ export default function Dashboard() {
       {/* Page body */}
       <div style={{ padding: '24px', maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* Setup banner */}
-        {needsSetup && (
+        {/* Workflow setup checklist */}
+        {showChecklist && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 16px', borderRadius: 6,
-            backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)',
+            borderRadius: 8, overflow: 'hidden',
+            backgroundColor: 'var(--wr-bg-card)', border: '1px solid rgba(240,165,0,0.25)',
           }}>
-            <span style={{ fontSize: 12.5, color: 'var(--wr-text-primary)', flex: 1 }}>
-              Your workspace needs setup before running assessments — add domains, agents, and scenarios.
-            </span>
-            <Link to="/guide" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--wr-amber)', textDecoration: 'none' }}>
-              Setup Guide →
-            </Link>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+              padding: '12px 16px', borderBottom: '1px solid var(--wr-border)',
+              backgroundColor: 'rgba(240,165,0,0.06)',
+            }}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--wr-text-primary)' }}>Get set up</p>
+                <p style={{ fontSize: 11.5, color: 'var(--wr-text-muted)', marginTop: 1 }}>
+                  {workflowSteps.filter(s => s.done).length} of {workflowSteps.length} steps done · follow the workflow left to right
+                </p>
+              </div>
+              {nextStep && (
+                <Link to={nextStep.to} style={{ textDecoration: 'none' }}>
+                  <button style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                    backgroundColor: 'var(--wr-amber)', color: '#0D1B2A', fontSize: 13, fontWeight: 600,
+                  }}>
+                    Next: {nextStep.label} <ArrowRight style={{ width: 13, height: 13 }} />
+                  </button>
+                </Link>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${workflowSteps.length}, 1fr)` }}>
+              {workflowSteps.map((step, i) => {
+                const StepIcon = step.icon;
+                const isNext = nextStep?.key === step.key;
+                return (
+                  <Link key={step.key} to={step.to} style={{
+                    textDecoration: 'none',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                    padding: '14px 16px',
+                    borderLeft: i ? '1px solid var(--wr-border)' : 'none',
+                    backgroundColor: isNext ? 'rgba(240,165,0,0.05)' : 'transparent',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      {step.done
+                        ? <CheckCircle2 style={{ width: 15, height: 15, color: '#27AE60', flexShrink: 0 }} />
+                        : <Circle style={{ width: 15, height: 15, color: isNext ? 'var(--wr-amber)' : 'var(--wr-text-muted)', flexShrink: 0 }} />}
+                      <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: 'var(--wr-text-muted)' }}>
+                        STEP {i + 1}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <StepIcon style={{ width: 14, height: 14, flexShrink: 0, color: step.done ? '#27AE60' : isNext ? 'var(--wr-amber)' : 'var(--wr-text-secondary)' }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: step.done ? 'var(--wr-text-secondary)' : 'var(--wr-text-primary)' }}>
+                        {step.label}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 10.5, lineHeight: 1.4, color: 'var(--wr-text-muted)' }}>{step.hint}</p>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
 
