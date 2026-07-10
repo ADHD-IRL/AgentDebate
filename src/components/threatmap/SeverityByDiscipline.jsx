@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Info, TrendingUp, LayoutGrid } from 'lucide-react';
+import { categoriesOf } from './mapUtils';
 
 const SEV_COLORS = { CRITICAL: '#C0392B', HIGH: '#E67E22', MEDIUM: '#2E86AB', LOW: '#27AE60' };
 const SEV_BG     = {
@@ -39,19 +40,12 @@ function InfoTip({ children, align = 'right' }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function SeverityByDiscipline({ threats, agents }) {
+export default function SeverityByDiscipline({ groups, axisLabel, onSelect }) {
   const [hoveredCell, setHoveredCell]       = useState(null);
   const [cellTooltipPos, setCellTooltipPos] = useState({ x: 0, y: 0 });
 
-  const disciplines = useMemo(() => {
-    const set = new Set(agents.map(a => a.discipline).filter(Boolean));
-    return Array.from(set).sort();
-  }, [agents]);
-
-  const categories = useMemo(() => {
-    const set = new Set(threats.map(t => t.category || 'Uncategorized').filter(Boolean));
-    return Array.from(set).sort();
-  }, [threats]);
+  const threats = useMemo(() => groups.flatMap(g => g.threats), [groups]);
+  const categories = useMemo(() => categoriesOf(threats), [threats]);
 
   // Overall severity totals
   const summaryStats = useMemo(() =>
@@ -59,44 +53,34 @@ export default function SeverityByDiscipline({ threats, agents }) {
     [threats]
   );
 
-  // Per-discipline data sorted by exposure score (critical weighted highest)
-  const discData = useMemo(() => {
-    return disciplines.map(disc => {
-      const discAgents = agents.filter(a => a.discipline === disc);
-      const domainIds  = new Set(discAgents.map(a => a.domain_id).filter(Boolean));
-      const rel        = threats.filter(t => !t.domain_id || domainIds.has(t.domain_id));
-      const counts     = Object.fromEntries(SEV_ORDER.map(s => [s, rel.filter(t => t.severity === s).length]));
-      const score      = counts.CRITICAL * 4 + counts.HIGH * 3 + counts.MEDIUM * 2 + counts.LOW * 1;
-      return { disc, counts, score, total: rel.length };
-    }).sort((a, b) => b.score - a.score);
-  }, [threats, agents, disciplines]);
+  // Rows come pre-scored/sorted from buildGroups()
+  const discData = useMemo(() =>
+    groups.map(g => ({ disc: g.name, group: g, counts: g.counts, score: g.score, total: g.total })),
+    [groups]
+  );
 
   const maxTotal = Math.max(...discData.map(d => d.total), 1);
 
-  // Discipline × Category intersection matrix
+  // Group × Category intersection matrix
   const matrixData = useMemo(() => {
-    return discData.map(({ disc }) => ({
+    return discData.map(({ disc, group }) => ({
       disc,
+      group,
       cells: categories.map(cat => {
-        const discAgents = agents.filter(a => a.discipline === disc);
-        const domainIds  = new Set(discAgents.map(a => a.domain_id).filter(Boolean));
-        const rel = threats.filter(t =>
-          (t.category || 'Uncategorized') === cat &&
-          (!t.domain_id || domainIds.has(t.domain_id))
-        );
+        const rel = group.threats.filter(t => (t.category || 'Uncategorized') === cat);
         const counts = Object.fromEntries(SEV_ORDER.map(s => [s, rel.filter(t => t.severity === s).length]));
         const topSev = SEV_ORDER.find(s => counts[s] > 0) || null;
         return { cat, topSev, counts, total: rel.length };
       }),
     }));
-  }, [threats, agents, discData, categories]);
+  }, [discData, categories]);
 
-  if (disciplines.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 rounded"
         style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
         <p className="text-sm" style={{ color: 'var(--wr-text-muted)' }}>
-          No disciplines found. Add agents with discipline fields to see severity data.
+          Nothing to chart yet. Add agents and threats with domain assignments.
         </p>
       </div>
     );
@@ -137,11 +121,11 @@ export default function SeverityByDiscipline({ threats, agents }) {
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }} />
           <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-            SEVERITY BY DISCIPLINE
+            SEVERITY BY {axisLabel.toUpperCase()}
           </h2>
           <InfoTip>
             <span style={{ color: 'var(--wr-amber)', fontWeight: 700 }}>How to read</span><br />
-            Each row is an agent discipline. The bar shows how many threats that discipline faces, split by severity.<br /><br />
+            Each row is one {axisLabel}. The bar shows how many threats it faces, split by severity.<br /><br />
             Rows are sorted by <span style={{ fontWeight: 600 }}>exposure score</span>:<br />
             Critical×4 + High×3 + Medium×2 + Low×1<br /><br />
             Bar length is proportional to the highest-count discipline. Numbers inside segments show the count.
@@ -152,8 +136,9 @@ export default function SeverityByDiscipline({ threats, agents }) {
         </p>
 
         <div className="space-y-2">
-          {discData.map(({ disc, counts, total }) => (
-            <div key={disc} className="flex items-center gap-3">
+          {discData.map(({ disc, group, counts, total }) => (
+            <div key={disc} className="flex items-center gap-3" style={{ cursor: total > 0 ? 'pointer' : 'default' }}
+              onClick={() => total > 0 && onSelect?.({ group, category: null })}>
               {/* Label */}
               <div className="flex-shrink-0 text-right" style={{ width: 148 }}>
                 <span className="text-xs font-mono" style={{ color: 'var(--wr-text-secondary)' }}
@@ -218,11 +203,11 @@ export default function SeverityByDiscipline({ threats, agents }) {
           <div className="flex items-center gap-2 mb-1">
             <LayoutGrid className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }} />
             <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-              DISCIPLINE × CATEGORY MAP
+              {axisLabel.toUpperCase()} × CATEGORY MAP
             </h2>
             <InfoTip>
               <span style={{ color: 'var(--wr-amber)', fontWeight: 700 }}>How to read</span><br />
-              Rows = disciplines · Columns = threat categories.<br />
+              Rows = {axisLabel}s · Columns = threat categories.<br />
               Each cell shows the <span style={{ fontWeight: 600 }}>highest severity</span> at that intersection and the total count.<br /><br />
               <span style={{ color: '#C0392B' }}>■</span> Critical &nbsp;
               <span style={{ color: '#E67E22' }}>■</span> High &nbsp;
@@ -263,7 +248,7 @@ export default function SeverityByDiscipline({ threats, agents }) {
                 </tr>
               </thead>
               <tbody>
-                {matrixData.map(({ disc, cells }) => (
+                {matrixData.map(({ disc, group, cells }) => (
                   <tr key={disc}>
                     {/* Discipline label */}
                     <td style={{ paddingRight: 10, textAlign: 'right', verticalAlign: 'middle' }}>
@@ -288,8 +273,9 @@ export default function SeverityByDiscipline({ threats, agents }) {
                               ? `1px solid ${SEV_COLORS[topSev]}55`
                               : '1px solid rgba(255,255,255,0.06)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: total > 0 ? 'default' : 'default',
+                            cursor: total > 0 ? 'pointer' : 'default',
                           }}
+                          onClick={() => total > 0 && onSelect?.({ group, category: cat })}
                           onMouseEnter={e => {
                             if (total > 0) {
                               setHoveredCell({ disc, cat, counts, total, topSev });

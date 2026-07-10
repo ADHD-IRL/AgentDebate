@@ -92,26 +92,19 @@ function RadarTip({ active, payload }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function DisciplineRadar({ threats, agents, domains }) {
-  // Build sorted discipline data (score desc)
+export default function DisciplineRadar({ groups, axisLabel }) {
+  // groups come pre-scored and pre-sorted from buildGroups()
   const allData = useMemo(() => {
-    const discs = Array.from(new Set(agents.map(a => a.discipline).filter(Boolean))).sort();
-    return discs.map(disc => {
-      const discAgents = agents.filter(a => a.discipline === disc);
-      const domainIds  = new Set(discAgents.map(a => a.domain_id).filter(Boolean));
-      const relevant   = threats.filter(t => !t.domain_id || domainIds.has(t.domain_id));
-      const counts     = Object.fromEntries(SEV_ORDER.map(s => [s, relevant.filter(t => t.severity === s).length]));
-      const score      = counts.CRITICAL * 4 + counts.HIGH * 3 + counts.MEDIUM * 2 + counts.LOW * 1;
-      return {
-        discipline:     disc.length > 18 ? disc.slice(0, 16) + '…' : disc,
-        fullDiscipline: disc,
-        score,
-        agentCount: discAgents.length,
-        total: relevant.length,
-        ...counts,
-      };
-    }).sort((a, b) => b.score - a.score);
-  }, [threats, agents]);
+    return groups.map(g => ({
+      discipline:     g.name.length > 18 ? g.name.slice(0, 16) + '…' : g.name,
+      fullDiscipline: g.name,
+      score: g.score,
+      agentCount: g.agents.length,
+      total: g.total,
+      isUnassigned: g.isUnassigned,
+      ...g.counts,
+    }));
+  }, [groups]);
 
   // Radar only shows top N to stay legible
   const radarData  = allData.slice(0, MAX_RADAR);
@@ -123,7 +116,7 @@ export default function DisciplineRadar({ threats, agents, domains }) {
       <div className="flex items-center justify-center h-48 rounded"
         style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
         <p className="text-sm" style={{ color: 'var(--wr-text-muted)' }}>
-          No disciplines found. Add agents with discipline fields to populate this view.
+          Nothing to chart yet. Add agents and threats with domain assignments.
         </p>
       </div>
     );
@@ -135,12 +128,12 @@ export default function DisciplineRadar({ threats, agents, domains }) {
       {/* Header row */}
       <div className="flex items-center gap-2">
         <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-          DISCIPLINE THREAT EXPOSURE
+          {axisLabel.toUpperCase()} THREAT EXPOSURE
         </h2>
         <InfoTip>
           <span style={{ color: 'var(--wr-amber)', fontWeight: 700 }}>How to read this chart</span>
           <br />
-          Each spoke represents one agent discipline. The further the shape extends along a spoke, the greater that discipline's threat exposure.
+          Each spoke is one {axisLabel}. The further the shape extends along a spoke, the greater its threat exposure.
           <br /><br />
           <span style={{ fontWeight: 600 }}>Exposure Score</span> = Critical×4 + High×3 + Medium×2 + Low×1
           <br /><br />
@@ -152,7 +145,7 @@ export default function DisciplineRadar({ threats, agents, domains }) {
         </InfoTip>
         {hasOverflow && (
           <span className="text-xs ml-auto" style={{ color: 'var(--wr-text-muted)' }}>
-            Radar: top {MAX_RADAR} of {allData.length} disciplines · all shown in ranking
+            Radar: top {MAX_RADAR} of {allData.length} · all shown in ranking
           </span>
         )}
       </div>
@@ -163,7 +156,7 @@ export default function DisciplineRadar({ threats, agents, domains }) {
         {/* ── Left: Radar chart ──────────────────────────────────────────── */}
         <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
           <p className="text-xs mb-1 font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-            {hasOverflow ? `TOP ${MAX_RADAR} DISCIPLINES BY SCORE` : 'ALL DISCIPLINES'}
+            {hasOverflow ? `TOP ${MAX_RADAR} BY SCORE` : `ALL ${axisLabel.toUpperCase()}S`}
           </p>
           <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)', opacity: 0.6 }}>
             Hover a spoke to see the breakdown
@@ -173,7 +166,7 @@ export default function DisciplineRadar({ threats, agents, domains }) {
             <div className="flex items-center justify-center h-64">
               <div className="text-center space-y-1">
                 <p className="text-sm" style={{ color: 'var(--wr-text-secondary)' }}>
-                  Need at least 3 disciplines to render a radar
+                  Need at least 3 rows to render a radar
                 </p>
                 <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
                   {allData.length} found — see the Risk Ranking panel →
@@ -234,7 +227,7 @@ export default function DisciplineRadar({ threats, agents, domains }) {
             <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--wr-text-muted)' }} />
             <span className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>RISK RANKING</span>
             <InfoTip align="left">
-              Disciplines ranked by exposure score (highest risk first).
+              Ranked by exposure score (highest risk first).
               <br /><br />
               The colored bar shows the <span style={{ fontWeight: 600 }}>severity mix</span>:
               <br />
