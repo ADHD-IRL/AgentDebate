@@ -1,4 +1,4 @@
-import SeverityBadge from '@/components/ui/SeverityBadge';
+import SeverityBadge, { agentDefaultSeverityTitle } from '@/components/ui/SeverityBadge';
 import { VectorBars } from '@/components/ui/VectorBar';
 import { Edit2, Copy } from 'lucide-react';
 
@@ -32,7 +32,7 @@ export default function AgentCard({ agent, domain, selected, onClick, onEdit, on
             <h3 className="font-semibold text-sm" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</h3>
             <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
           </div>
-          <SeverityBadge severity={agent.severity_default} size="xs" />
+          <SeverityBadge severity={agent.severity_default} size="xs" title={agentDefaultSeverityTitle(agent.severity_default)} />
         </div>
 
         <div className="mt-3">

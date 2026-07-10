@@ -4,7 +4,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Swords, Plus, X, ChevronRight, Zap, BarChart2, Globe, Link2, Sparkles, Loader2, AlertCircle, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
-import SeverityBadge from '@/components/ui/SeverityBadge';
+import SeverityBadge, { agentDefaultSeverityTitle } from '@/components/ui/SeverityBadge';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import { recommendAgents, generateAgent as generateAgentLLM } from '@/lib/llm';
@@ -459,7 +459,7 @@ export default function NewSession() {
                           <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
                         </div>
                         {dom && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dom.color }} />}
-                        <SeverityBadge severity={agent.severity_default} size="xs" />
+                        <SeverityBadge severity={agent.severity_default} size="xs" title={agentDefaultSeverityTitle(agent.severity_default)} />
                       </button>
                     );
                   })}

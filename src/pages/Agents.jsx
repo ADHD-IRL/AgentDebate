@@ -4,7 +4,7 @@ import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash, Librar
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
-import SeverityBadge from '@/components/ui/SeverityBadge';
+import SeverityBadge, { agentDefaultSeverityTitle } from '@/components/ui/SeverityBadge';
 import { VectorBars } from '@/components/ui/VectorBar';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import AgentImportModal from '@/components/agents/AgentImportModal';
@@ -226,7 +226,7 @@ export default function Agents() {
                           <h3 className="font-semibold text-sm" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</h3>
                           <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
                         </div>
-                        <SeverityBadge severity={agent.severity_default} size="xs" />
+                        <SeverityBadge severity={agent.severity_default} size="xs" title={agentDefaultSeverityTitle(agent.severity_default)} />
                       </div>
 
                       <div className="mt-3">
