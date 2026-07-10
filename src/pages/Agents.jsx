@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash, Library } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
-import SeverityBadge from '@/components/ui/SeverityBadge';
+import SeverityBadge, { agentDefaultSeverityTitle } from '@/components/ui/SeverityBadge';
 import { VectorBars } from '@/components/ui/VectorBar';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import AgentImportModal from '@/components/agents/AgentImportModal';
@@ -23,6 +24,25 @@ export default function Agents() {
   const [selected, setSelected] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [aiSeed, setAiSeed] = useState(null);
+
+  // Deep links from the Threat Map: ?domain=<id> filters, ?q= searches,
+  // ?generate=1&expert_type=&domain_id= opens the AI-generate modal pre-seeded
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const domain = searchParams.get('domain');
+    const q = searchParams.get('q');
+    if (domain) setFilterDomain(domain);
+    if (q) setSearch(q);
+    if (searchParams.get('generate')) {
+      setAiSeed({
+        expert_type: searchParams.get('expert_type') || '',
+        domain_id: searchParams.get('domain_id') || '',
+      });
+      setModal('ai');
+    }
+    if (domain || q || searchParams.get('generate')) setSearchParams({}, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLoadingRef = useRef(false);
   const load = async (retries = 3) => {
@@ -226,7 +246,7 @@ export default function Agents() {
                           <h3 className="font-semibold text-sm" style={{ color: 'var(--wr-text-primary)' }}>{agent.name}</h3>
                           <p className="text-xs truncate" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</p>
                         </div>
-                        <SeverityBadge severity={agent.severity_default} size="xs" />
+                        <SeverityBadge severity={agent.severity_default} size="xs" title={agentDefaultSeverityTitle(agent.severity_default)} />
                       </div>
 
                       <div className="mt-3">
@@ -305,9 +325,10 @@ export default function Agents() {
         <AgentFormModal
           agent={typeof modal === 'object' ? modal : null}
           mode={modal === 'ai' ? 'ai' : 'manual'}
+          aiSeed={modal === 'ai' ? aiSeed : null}
           domains={domains}
           onSave={handleSave}
-          onClose={() => setModal(null)}
+          onClose={() => { setModal(null); setAiSeed(null); }}
         />
       )}
 

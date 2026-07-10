@@ -48,7 +48,7 @@ function RegenField({ label, fieldKey, value, onChange, onRegen, regenning, rows
   );
 }
 
-export default function AgentFormModal({ agent, mode: initialMode, domains, onSave, onClose }) {
+export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domains, onSave, onClose }) {
   const [mode, setMode] = useState(initialMode || 'manual');
   const [form, setForm] = useState({
     name: '', discipline: '', domain_id: '', persona_description: '', cognitive_bias: '',
@@ -61,10 +61,11 @@ export default function AgentFormModal({ agent, mode: initialMode, domains, onSa
     ...agent,
   });
 
-  // AI Generate form (new agents)
+  // AI Generate form (new agents) — aiSeed pre-fills from deep links (Threat Map gaps)
   const [aiForm, setAiForm] = useState({
     domain_id: '', expert_type: '', prior_background: '', key_focus: '',
     bias_toward: '', institutional_hint: '', adversary_hint: '',
+    ...(aiSeed || {}),
   });
   const [generating, setGenerating] = useState(false);
 

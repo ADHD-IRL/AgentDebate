@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { generateThreats as generateThreatsLLM } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { AlertTriangle, Plus, X, Sparkles, Trash2, Edit2 } from 'lucide-react';
@@ -138,6 +139,16 @@ export default function Threats() {
   const [loading, setLoading] = useState(true);
   const [filterSev, setFilterSev] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+
+  // Deep links from the Threat Map: ?category= and ?sev= pre-apply filters
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const cat = searchParams.get('category');
+    const sev = searchParams.get('sev');
+    if (cat) setFilterCategory(cat);
+    if (sev) setFilterSev(sev);
+    if (cat || sev) setSearchParams({}, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
     if (!db) return;

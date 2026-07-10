@@ -1,5 +1,5 @@
 import { X, Edit2, Copy, Trash2 } from 'lucide-react';
-import SeverityBadge from '@/components/ui/SeverityBadge';
+import SeverityBadge, { agentDefaultSeverityTitle } from '@/components/ui/SeverityBadge';
 import { VectorBars } from '@/components/ui/VectorBar';
 import WrButton from '@/components/ui/WrButton';
 
@@ -21,7 +21,7 @@ export default function AgentDetailPanel({ agent, domain, onEdit, onClone, onDel
         </div>
 
         <div className="flex items-center gap-2 mb-4">
-          <SeverityBadge severity={agent.severity_default} />
+          <SeverityBadge severity={agent.severity_default} title={agentDefaultSeverityTitle(agent.severity_default)} />
           {agent.is_ai_generated && (
             <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(123,45,139,0.2)', color: '#9B59B6' }}>AI Generated</span>
           )}
