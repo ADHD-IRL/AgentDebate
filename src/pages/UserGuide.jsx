@@ -29,13 +29,13 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
     content: `
 The sidebar is organized as the workflow, top to bottom. Follow it in order and each step feeds the next:
 
-**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), and the **SME Library** (curate and reuse experts). These persist across every session.
+**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), the **SME Library** (curate and reuse experts), and the **Knowledge Base** (your own documents that ground the analysis). These persist across every session.
 
-**2 · Plan** — Define the specific engagement: a **Scenario** (the situation to stress-test) and, optionally, a **Threats** catalog (known risks). Tag both with domains.
+**2 · Plan** — Define the specific engagement: a **Decision** (the design choice and options you're comparing), a **Scenario** (the situation to stress-test), and, optionally, a **Threats** catalog (known risks). Tag them with domains.
 
 **3 · Run** — Bring a scenario and agents together in a **Session** (structured two-round analysis) or the **What-If Simulator**. This is where the red-teaming happens.
 
-**4 · Act on Findings** — Work the output: the **Threat Map** (coverage gaps), **Chains** (kill chains), **Chain Breaker** (mitigation roadmaps), and **Reports** (executive PDFs).
+**4 · Act on Findings** — Work the output: the **Threat Map** (coverage gaps), **Chains** (kill chains), **Chain Breaker** (mitigation roadmaps), **Mitigations** (the register that tracks them to done), and **Reports** (executive PDFs).
 
 **Insights** — **Agent Analytics** and **Compare** for cross-session trends. **System** holds Settings and this guide.
 
@@ -157,8 +157,8 @@ Sessions track a **status** as they progress: pending → round1 → round2 → 
 1. Sets the agent's status to "generating_r1"
 2. Constructs a detailed prompt using the agent's persona, cognitive bias, red team focus, the scenario context document, phase focus, and any pinned chains
 3. Sends this prompt to Claude (Anthropic's AI model) via streaming
-4. The model responds in character — a structured assessment with findings, assumptions, inline source citations, a severity rating, and a **calibrated confidence score (0–100)**
-5. The assessment, severity, and confidence are saved; status updates to "r1_done"
+4. The model responds in character — a structured assessment with findings, assumptions, inline source citations, a severity rating, a **likelihood and impact band (1–5 each)**, and a **calibrated confidence score (0–100)**. If you've added Knowledge Base documents, the most relevant passages are injected into the prompt first, so the assessment is grounded in your material.
+5. The assessment, severity, likelihood, impact, and confidence are saved; status updates to "r1_done"
 6. When the last agent completes manually (without using Generate All), the session status auto-advances to "round1"
 
 Agents do NOT see each other's assessments in Round 1. This ensures independent thinking before cross-pollination.
@@ -206,6 +206,72 @@ The synthesis is saved as a SessionSynthesis record, the session status moves to
     ]
   },
   {
+    id: 'decision-support',
+    icon: GitBranch,
+    color: '#27AE60',
+    title: 'Decision Support & Quantified Risk',
+    subsections: [
+      {
+        icon: GitBranch,
+        color: '#27AE60',
+        title: 'Framing a Decision & Comparing Options',
+        body: `Analysis is most useful when it's tied to a **decision**, not just a scenario. The **Decisions** page (sidebar → 2 · Plan) frames a design choice: the question, the **options** you're comparing (2–4), the **acceptance criteria**, and the **assumptions** it rests on.
+
+**How it works:**
+- Create a Decision and list the options (e.g. "Option A: managed identity provider" vs "Option B: build in-house").
+- For each option, click **"Run panel for this option"** — it launches a Session pre-scoped to that option. Run your normal two-round analysis.
+- The Decision detail page then shows the options **side by side**, each with its **peak risk (out of 25)**, **average exposure**, and severity mix — aggregated from that option's sessions. The lowest-risk option is auto-flagged.
+- Track **key assumptions** with a criticality and a status (holds / monitoring / **invalidated**). An invalidated assumption is your trigger to re-assess.
+- When you decide, click **Record Decision**: choose the option, capture who decided and the rationale — including what risk is being *knowingly accepted*. That's a durable, auditable decision record.
+
+This is what turns the platform from "threat brainstorming" into defensible decision support: you can show *why* an option was chosen and what was known at the time.`,
+        usage: `
+1. Sidebar → Decisions → New Decision. Name the choice and list 2–4 options.
+2. Add the assumptions the decision depends on.
+3. On each option card, click "Run panel for this option" and complete a session.
+4. Compare the options' peak risk and exposure side by side.
+5. Click Record Decision, pick the option, and capture the rationale.
+`
+      },
+      {
+        icon: BarChart2,
+        color: '#C0392B',
+        title: 'Quantified Risk — Likelihood × Impact',
+        body: `Severity (CRITICAL/HIGH/…) tells you *how bad*, but not *how likely*. Every assessment now also carries a **likelihood (1–5)** and **impact (1–5)** band, giving a **risk score of 1–25** you can sort and compare.
+
+- **Likelihood**: 1 Rare · 2 Unlikely · 3 Possible · 4 Likely · 5 Almost Certain
+- **Impact**: 1 Negligible · 2 Minor · 3 Moderate · 4 Major · 5 Severe
+- **Risk score** = likelihood × impact, mapped to the standard 5-zone matrix (15+ critical, 9+ high, 4+ medium, else low)
+
+Each assessment card shows an **L×I=score** chip. At the top of each round, a **Risk Matrix** plots every SME's top risk on the 5×5 grid, with the **peak risk** and a **confidence-weighted average exposure** — so a high-consequence, high-likelihood, high-confidence risk sorts above a hedged one. Threats in your catalog can carry likelihood/impact too. This is what makes per-option comparison in Decisions a real number, not a label.`,
+        usage: `
+1. Run a session — agents now emit likelihood and impact with their severity.
+2. Read the Risk Matrix at the top of each round: the top-right zone is your worst risk.
+3. Use peak risk and average exposure to compare rounds, options, and sessions.
+`
+      },
+      {
+        icon: BookMarked,
+        color: '#2E86AB',
+        title: 'Knowledge Base — Grounding Analysis in Your Documents',
+        body: `By default, agents reason from their persona and general knowledge — which is why some cite little in the evidence ledger. The **Knowledge Base** (sidebar → 1 · Build) fixes that: add your own **design docs, incident postmortems, standards, and prior assessments**, and the analysis is grounded in *your* material.
+
+**How it works:**
+- Paste or upload (.txt/.md) a document. It's **chunked** and indexed on ingest.
+- At analysis time, the most relevant chunks for the scenario are **automatically retrieved and injected** into every agent's prompt as an "Organizational Knowledge Base" block, with instruction to cite them.
+- Those citations then show up in the **SME Evidence Ledger**, so the analysis is traceable to your documents rather than to general training knowledge.
+- In Live Debate, the agents' knowledge-search tool also checks your Knowledge Base first.
+
+The more you put in, the more grounded — and defensible — the assessments become.`,
+        usage: `
+1. Sidebar → Knowledge Base → Add Document. Paste or upload the text.
+2. Run a session as normal — retrieval happens automatically.
+3. Open the SOURCES tab (By SME) and confirm agents cited your documents.
+`
+      },
+    ]
+  },
+  {
     id: 'chain-breaker',
     icon: Scissors,
     color: '#C0392B',
@@ -246,6 +312,24 @@ For each step it assesses:
 - **Quick wins** are surfaced separately: low-effort, fast countermeasures you can start immediately.
 
 The result is a defender's to-do list you can hand to a team, rather than a flat list of controls with no priority. It's included in the printed report.`
+      },
+      {
+        icon: ShieldCheck,
+        color: '#27AE60',
+        title: 'The Mitigation Register — Closing the Loop',
+        body: `A roadmap is a plan; the **Mitigation Register** (sidebar → 4 · Act on Findings → Mitigations) tracks it to completion and shows your **net** risk.
+
+- On any Chain Breaker roadmap item, click **"+ Register"** to add it as a tracked mitigation. Its inherent risk is seeded from the leverage of the steps it breaks.
+- On the Mitigations page, set an **owner** and move each item through its lifecycle: proposed → accepted → in progress → implemented → verified (or rejected).
+- Re-score **residual risk** (likelihood × impact) once a control is in place. The page then shows **Net Risk Reduction** — summed inherent → residual across all tracked mitigations.
+
+This closes the loop: instead of "here are risks," you can show "here's the risk, here's what we're doing about it, here's who owns it, and here's the residual after mitigation" — which is exactly what governance and audit ask for.`,
+        usage: `
+1. Run Chain Breaker on a chain, then click "+ Register" on the roadmap items you'll act on.
+2. Go to Mitigations, assign owners, and update status as work progresses.
+3. Set residual likelihood/impact once a control is implemented.
+4. Report the Net Risk Reduction figure to stakeholders.
+`
       },
     ]
   },
@@ -572,6 +656,14 @@ Usage counts accumulate as SMEs participate in sessions, so over time the Overvi
       {
         title: 'Assign domains to everything',
         body: 'Domains are how threats find their agents. A threat without a domain sits in the Threat Map\'s "Unassigned" row; an agent without a domain counts toward no coverage. After any bulk import, run "Sync from Agents" on the Domains page (review the preview before confirming) and sweep the Threats page for missing domain assignments.'
+      },
+      {
+        title: 'Tie analysis to a decision and feed the Knowledge Base',
+        body: 'For design decisions, frame a Decision with the real options and run the panel against each — the side-by-side peak risk and exposure make the trade-off concrete. And load your design docs and past incidents into the Knowledge Base first: grounded assessments cite your material in the evidence ledger instead of leaning on general knowledge.'
+      },
+      {
+        title: 'Close the loop in the Mitigation Register',
+        body: 'Don\'t let Chain Breaker roadmaps evaporate. "+ Register" the ones you\'ll act on, assign owners, and re-score residual risk as controls land. The Net Risk Reduction figure — inherent → residual — is the number leadership actually wants.'
       },
       {
         title: 'Work the coverage gaps, not just the hot cells',
