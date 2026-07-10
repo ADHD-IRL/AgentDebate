@@ -49,11 +49,15 @@ function buildReportHtml({ chain, analysis, scenarioName, savedAt }) {
     const rankIdx     = (analysis.priority_steps || []).indexOf(sa.step_number);
     const hasPriority = rankIdx >= 0;
 
-    const cmsHtml = (sa.countermeasures || []).map((cm, i) => `
+    const cmsHtml = (sa.countermeasures || []).map((cm, i) => {
+      const text = typeof cm === 'string' ? cm : (cm.control || '');
+      const meta = typeof cm === 'string' ? '' : [cm.type, cm.effort ? `${cm.effort} EFFORT` : '', cm.time_to_deploy].filter(Boolean).join(' · ');
+      return `
       <div style="display:flex;gap:8px;margin-bottom:6px;align-items:flex-start;">
         <span style="font-family:monospace;font-size:11px;font-weight:700;color:${lev.color};flex-shrink:0;margin-top:1px;">${i + 1}.</span>
-        <span style="font-size:12px;line-height:1.55;color:#333;">${escHtml(cm)}</span>
-      </div>`).join('');
+        <div><span style="font-size:12px;line-height:1.55;color:#333;">${escHtml(text)}</span>${meta ? `<div style="font-family:monospace;font-size:9px;color:#888;margin-top:2px;">${escHtml(meta)}</div>` : ''}</div>
+      </div>`;
+    }).join('');
 
     return `
       <div style="margin-bottom:20px;border:1px solid #ddd;border-radius:6px;overflow:hidden;page-break-inside:avoid;">
@@ -175,6 +179,34 @@ function buildReportHtml({ chain, analysis, scenarioName, savedAt }) {
               border-left:3px solid #1a1a2e;border-radius:0 4px 4px 0;margin-bottom:24px;">
     ${escHtml(analysis.summary || '')}
   </div>
+
+  ${analysis.recommended_cut?.step_number != null ? `
+  <!-- Recommended first cut -->
+  <div style="padding:12px 16px;margin-bottom:20px;background:#eef9f1;border:1px solid #1E8449;border-radius:4px;">
+    <div style="font-family:monospace;font-size:11px;font-weight:700;color:#1E8449;margin-bottom:5px;">CUT HERE FIRST — STEP ${analysis.recommended_cut.step_number}</div>
+    <div style="font-size:12px;line-height:1.6;color:#333;">${escHtml(analysis.recommended_cut.rationale || '')}</div>
+  </div>` : ''}
+
+  ${(analysis.mitigation_roadmap || []).length ? `
+  <!-- Mitigation roadmap -->
+  <div style="font-family:monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#888;
+              margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e0e0e0;">
+    MITIGATION ROADMAP — DO IN ORDER
+  </div>
+  <div style="margin-bottom:24px;">
+    ${[...analysis.mitigation_roadmap].sort((a, b) => (a.priority || 99) - (b.priority || 99)).map((m, i) => `
+      <div style="display:flex;gap:10px;padding:10px 12px;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:8px;page-break-inside:avoid;">
+        <div style="width:22px;height:22px;border-radius:50%;background:#1a1a2e;color:#fff;flex-shrink:0;
+                    display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;font-weight:700;">${m.priority ?? i + 1}</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1a1a2e;">${escHtml(m.action || '')}</div>
+          ${m.effect ? `<div style="font-size:11px;color:#666;margin-top:2px;">${escHtml(m.effect)}</div>` : ''}
+          <div style="font-family:monospace;font-size:9px;color:#888;margin-top:4px;">
+            ${[m.type, m.effort ? `${m.effort} EFFORT` : '', m.time_to_deploy, (m.breaks_steps || []).length ? `breaks steps ${m.breaks_steps.join(', ')}` : ''].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      </div>`).join('')}
+  </div>` : ''}
 
   <!-- Priority break points -->
   <div style="font-family:monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#888;

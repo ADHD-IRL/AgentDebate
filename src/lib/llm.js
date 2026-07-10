@@ -770,12 +770,12 @@ ${agentsText}
 Generate a comprehensive synthesis report with EXACTLY these sections in this order:
 
 ## COMPOUND CHAINS
-List 2-4 multi-step threat sequences that emerged from agents building on each other's work. Format EACH chain EXACTLY as shown:
+List 2-4 multi-step attack chains that emerged from agents building on each other's work. Prefer chains that cross domains — where one discipline's threat becomes the enabling condition for another's. Each chain should read as a kill chain a defender can attack: every step must be an action the adversary takes that DEPENDS on the previous step succeeding, so that breaking any one step stops the chain. Format EACH chain EXACTLY as shown:
 ### [Chain Name]
-Step 1: [description]
-Step 2: [description]
-Step 3: [description]
-(Each chain must have at least 3 steps. If no compound chains exist, write a single chain labeled "No compound chains identified".)
+Step 1: [adversary action] — enabled by: [what must already be true]
+Step 2: [adversary action] — enabled by: [the prior step's result]
+Step 3: [adversary action] — enabled by: [...]
+(Each chain must have at least 3 steps, ordered by dependency. Escalate toward the highest-consequence outcome. If no compound chains exist, write a single chain labeled "No compound chains identified".)
 
 ## CROSS-DOMAIN INTERACTION RISKS
 (The core purpose of this analysis: risks that exist ONLY because two or more domains interact — risks no single-discipline assessment would surface. For each: name the domains involved, the agents who surfaced it, the coupling mechanism, and the combined severity. Prioritize the Round 2 "interaction risk" findings. If none emerged, state that explicitly as a process failure worth noting.)
@@ -930,19 +930,49 @@ Output a clean scenario context document (3-6 paragraphs). No disclaimers.`;
 }
 
 // --- analyzeChainBreaker ---
-const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and identify exactly where defenders should intervene to prevent adversary success.
+const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and tell defenders EXACTLY where to intervene, in what order, and what each intervention costs and buys them.
 
 You will receive a JSON input with two fields:
 - chain: an object with name, description, and steps (array of { step_number, agent_label, step_text })
 - scenarioContext: optional free-text scenario context
 
-For each step assess: adversary objective, dependencies, leverage (HIGH/MEDIUM/LOW), countermeasures (2-4 specific controls), difficulty (EASY/MODERATE/HARD), residual risk.
+Core principle: an attacker must complete EVERY step; a defender only has to break ONE. So find the cheapest, most reliable place to cut. Reward chokepoints (single points of failure the adversary cannot route around) over steps that have alternate paths.
 
-Also provide: summary, priority_steps (array of step numbers), chain_resilience (HIGH/MEDIUM/LOW).
+For EACH step assess:
+- adversary_objective — what the attacker achieves at this step
+- dependencies — what conditions must already hold for this step to succeed
+- leverage — HIGH/MEDIUM/LOW: how much breaking THIS step sets back the whole chain (a step the adversary can bypass is LOW leverage even if important)
+- is_chokepoint — true only if the adversary has no realistic alternate path around this step
+- detectability — OBSERVABLE / PARTIAL / STEALTHY: how visible this step is with typical instrumentation
+- countermeasures — 2-4 specific controls, EACH as an object with:
+    - control: the concrete action ("Enforce phishing-resistant MFA on all privileged accounts")
+    - type: PREVENTIVE / DETECTIVE / RESPONSIVE
+    - effort: LOW / MEDIUM / HIGH (implementation cost and operational burden)
+    - time_to_deploy: DAYS / WEEKS / MONTHS
+- difficulty — EASY/MODERATE/HARD: how hard it is for the defender to break this step overall
+- residual_risk — what still gets through even after the countermeasures above
+
+Then synthesize across steps:
+- recommended_cut — { step_number, rationale }: the single best place to break this chain first (favor a high-leverage chokepoint with LOW-effort, fast countermeasures)
+- mitigation_roadmap — a DEDUPLICATED, PRIORITIZED action plan (3-6 items). Consolidate countermeasures that recur across steps into one action. Each item:
+    - priority: 1 = do first
+    - action: the concrete control
+    - breaks_steps: array of step_numbers this action degrades or blocks
+    - type: PREVENTIVE / DETECTIVE / RESPONSIVE
+    - effort: LOW / MEDIUM / HIGH
+    - time_to_deploy: DAYS / WEEKS / MONTHS
+    - effect: what breaking these steps does to the adversary (e.g. "collapses the chain — no alternate path" or "forces a noisier, slower approach")
+- quick_wins — array of step_numbers whose countermeasures are LOW effort AND fast (the immediate to-do list)
+- summary — 2-3 sentences a decision-maker can act on
+- priority_steps — step numbers ordered by break value (highest first)
+- chain_resilience — HIGH/MEDIUM/LOW: how hard the chain is to break overall
 
 Return ONLY valid JSON matching this schema exactly:
 {
-  "steps": [{ "step_number": 1, "adversary_objective": "", "dependencies": "", "leverage": "HIGH", "countermeasures": [""], "difficulty": "EASY", "residual_risk": "" }],
+  "steps": [{ "step_number": 1, "adversary_objective": "", "dependencies": "", "leverage": "HIGH", "is_chokepoint": true, "detectability": "PARTIAL", "countermeasures": [{ "control": "", "type": "PREVENTIVE", "effort": "LOW", "time_to_deploy": "DAYS" }], "difficulty": "MODERATE", "residual_risk": "" }],
+  "recommended_cut": { "step_number": 1, "rationale": "" },
+  "mitigation_roadmap": [{ "priority": 1, "action": "", "breaks_steps": [1], "type": "PREVENTIVE", "effort": "LOW", "time_to_deploy": "DAYS", "effect": "" }],
+  "quick_wins": [1],
   "summary": "",
   "priority_steps": [1],
   "chain_resilience": "HIGH"
@@ -970,7 +1000,20 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
     throw new Error('Model returned non-JSON response. Try again.');
   }
   if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
+  // Normalize countermeasures to objects so the UI can render one shape
+  // (older models / retries may still emit plain strings)
+  result.steps = result.steps.map(s => ({
+    ...s,
+    countermeasures: (s.countermeasures || []).map(cm =>
+      typeof cm === 'string' ? { control: cm, type: null, effort: null, time_to_deploy: null } : cm
+    ),
+  }));
   return result;
+}
+
+/** Render countermeasures as strings whether stored as objects or legacy strings. */
+export function countermeasureText(cm) {
+  return typeof cm === 'string' ? cm : (cm?.control || '');
 }
 
 // --- analyzeSourceValidity ---

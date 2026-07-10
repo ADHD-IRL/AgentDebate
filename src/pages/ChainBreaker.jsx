@@ -3,7 +3,7 @@ import { analyzeChainBreaker } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
   Scissors, AlertTriangle, Loader2, Save, FileText,
-  CheckCircle2, Trash2, FolderOpen, Zap,
+  CheckCircle2, Trash2, FolderOpen, Zap, Shield,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
@@ -26,6 +26,8 @@ const LEVERAGE = {
   LOW:    { color: '#2E86AB', bg: 'rgba(46,134,171,0.1)', border: 'rgba(46,134,171,0.35)' },
 };
 const RESILIENCE_COLOR = { HIGH: '#C0392B', MEDIUM: '#D68910', LOW: '#27AE60' };
+const MROADMAP_EFFORT = { LOW: '#27AE60', MEDIUM: '#D68910', HIGH: '#C0392B' };
+const MROADMAP_TYPE = { PREVENTIVE: '#2E86AB', DETECTIVE: '#9B59B6', RESPONSIVE: '#D68910' };
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -602,6 +604,80 @@ export default function ChainBreaker() {
                               {sa.leverage}
                             </span>
                           )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended first cut */}
+              {analysis.recommended_cut?.step_number != null && (
+                <div className="rounded-lg px-4 py-3 flex items-start gap-3"
+                  style={{ backgroundColor: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.35)' }}>
+                  <Scissors className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#27AE60' }} />
+                  <div>
+                    <p className="text-xs font-bold font-mono mb-1" style={{ color: '#27AE60' }}>
+                      CUT HERE FIRST — STEP {analysis.recommended_cut.step_number}
+                    </p>
+                    <p className="text-sm leading-relaxed" style={{ color: 'var(--wr-text-secondary)' }}>
+                      {analysis.recommended_cut.rationale}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Mitigation roadmap — deduplicated, prioritized action plan */}
+              {analysis.mitigation_roadmap?.length > 0 && (
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+                  <div className="flex items-center gap-2 px-4 py-2.5" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
+                    <Shield className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />
+                    <p className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                      MITIGATION ROADMAP — DO IN ORDER
+                    </p>
+                  </div>
+                  <div>
+                    {[...analysis.mitigation_roadmap].sort((a, b) => (a.priority || 99) - (b.priority || 99)).map((m, i) => {
+                      const effClr = MROADMAP_EFFORT[m.effort] || 'var(--wr-text-muted)';
+                      const typeClr = MROADMAP_TYPE[m.type] || 'var(--wr-text-muted)';
+                      return (
+                        <div key={i} className="flex items-start gap-3 px-4 py-3"
+                          style={{ borderTop: i ? '1px solid var(--wr-border)' : 'none' }}>
+                          <span className="flex items-center justify-center flex-shrink-0 rounded-full font-mono font-bold text-xs"
+                            style={{ width: 22, height: 22, backgroundColor: 'rgba(240,165,0,0.15)', color: 'var(--wr-amber)' }}>
+                            {m.priority ?? i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium" style={{ color: 'var(--wr-text-primary)' }}>{m.action}</p>
+                            {m.effect && (
+                              <p className="text-xs mt-1" style={{ color: 'var(--wr-text-muted)' }}>{m.effect}</p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {m.type && (
+                                <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: `${typeClr}1f`, color: typeClr, border: `1px solid ${typeClr}55` }}>
+                                  {m.type}
+                                </span>
+                              )}
+                              {m.effort && (
+                                <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: `${effClr}1f`, color: effClr, border: `1px solid ${effClr}55` }}>
+                                  {m.effort} EFFORT
+                                </span>
+                              )}
+                              {m.time_to_deploy && (
+                                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)' }}>
+                                  {m.time_to_deploy}
+                                </span>
+                              )}
+                              {m.breaks_steps?.length > 0 && (
+                                <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+                                  breaks step{m.breaks_steps.length !== 1 ? 's' : ''} {m.breaks_steps.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
