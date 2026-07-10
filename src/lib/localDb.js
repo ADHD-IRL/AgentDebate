@@ -91,5 +91,7 @@ export const localDb = {
     Decision:            makeEntity('decisions'),
     DecisionOption:      makeEntity('decision_options'),
     DecisionAssumption:  makeEntity('decision_assumptions'),
+    KnowledgeDocument:   makeEntity('knowledge_documents'),
+    KnowledgeChunk:      makeEntity('knowledge_chunks'),
   },
 };

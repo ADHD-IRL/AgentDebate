@@ -279,7 +279,7 @@ export function parseMarkers(fullText, fallbackSeverity) {
 }
 
 // --- generateRound1 ---
-export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
+export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '' }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
     : '';
@@ -310,7 +310,7 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}${chainSection}${facilSection}
+${threatSection}${chainSection}${facilSection}${knowledgeContext}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
@@ -333,7 +333,7 @@ Write in first person as the expert. Be specific and opinionated.`;
 }
 
 // --- generateRound2 ---
-export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '' }) {
+export async function generateRound2({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '' }) {
   const chainSection = chainContext
     ? `\nPINNED THREAT CHAINS (reference for compound chain reasoning):\n${chainContext}\n`
     : '';
@@ -358,7 +358,7 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}${knowledgeContext}
 Now write your Round 2 rebuttal (300-450 words) covering:
 1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
 2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
@@ -403,7 +403,7 @@ If no URL is known: [SOURCE: "NIST SP 800-53 Rev 5"]
 Only cite real, specific sources. Do not fabricate citations.`;
 
 // --- streaming variants ---
-export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
+export async function generateRound1Stream({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '', onToken, onDone }) {
   const threatSection = threatCatalog.length
     ? `\nKNOWN THREAT CATALOG (validate, challenge, or build on these — reference by T-number):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.severity} — ${t.name}: ${(t.description || '').slice(0, 120)}`).join('\n')}\n`
     : '';
@@ -429,7 +429,7 @@ SCENARIO CONTEXT:
 ${scenarioContext}
 
 PHASE/FOCUS: ${phaseFocus || 'General analysis'}
-${threatSection}${chainSection}${facilSection}
+${threatSection}${chainSection}${facilSection}${knowledgeContext}
 Write a Round 1 independent threat/scenario assessment (350-500 words) covering:
 1. Opening position — your primary framing from your discipline
 2. Top threat — specific mechanism, what analysts are missing, severity (CRITICAL/HIGH/MEDIUM) with rationale
@@ -450,7 +450,7 @@ Write in first person as the expert. Be specific and opinionated.${CITATION_INST
   return callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1400, onToken, onDone });
 }
 
-export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', onToken, onDone }) {
+export async function generateRound2Stream({ agent, scenarioContext, phaseFocus, othersAssessments, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '', onToken, onDone }) {
   const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
   const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
 
@@ -470,7 +470,7 @@ Your cognitive bias: ${agent.cognitive_bias}
 You have just read all Round 1 assessments from the other experts. Here they are:
 
 ${othersAssessments || '(No other assessments available yet)'}
-${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}
+${threatCatalog.length ? `\nTHREAT CATALOG (for reference):\n${threatCatalog.map((t, i) => `[T${i+1}] ${t.name} (${t.severity})`).join(', ')}\n` : ''}${chainSection}${facilSection}${knowledgeContext}
 Now write your Round 2 rebuttal (300-450 words) covering:
 1. Interaction risk (MOST IMPORTANT) — identify one compound risk that exists ONLY because of the interaction between your domain and another agent's domain — a risk neither of you would have listed alone. Name the other agent, describe the coupling mechanism step by step, and rate the combined severity. If another agent posed a cross-domain handoff question aimed at your discipline, answer it here.
 2. Strongest alliance — which agent's findings amplify yours most, and the compound threat chain that emerges (name them explicitly)
@@ -538,7 +538,21 @@ export const DEBATE_TOOLS = [
   },
 ];
 
+// Optional org knowledge retriever, injected by WorkspaceContext.
+// When set, search_knowledge checks the org knowledge base before Wikipedia.
+let _knowledgeRetriever = null;
+export function setKnowledgeRetriever(fn) { _knowledgeRetriever = fn; }
+
 async function runSearchKnowledge(query) {
+  // Prefer the organization's own knowledge base when available
+  if (_knowledgeRetriever) {
+    try {
+      const chunks = await _knowledgeRetriever(query, 3);
+      if (chunks?.length) {
+        return chunks.map((c, i) => `[Knowledge base${c.title ? `: ${c.title}` : ''}]\n${(c.content || '').slice(0, 1200)}`).join('\n\n');
+      }
+    } catch { /* fall through to public search */ }
+  }
   try {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`;
     const searchRes = await fetch(searchUrl);

@@ -11,6 +11,7 @@ import SeverityBadge from '@/components/ui/SeverityBadge';
 import EvidenceLedger from '@/components/session/EvidenceLedger';
 import { riskScore, riskBandFromScore, likelihoodLabel, impactLabel } from '@/lib/risk';
 import RiskMatrix from '@/components/session/RiskMatrix';
+import { retrieveKnowledge, formatKnowledgeContext } from '@/lib/knowledge';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -1195,6 +1196,9 @@ const briefAllAgents = async () => {
     setProgress({ current: 0, total: agentsToRun.length });
     const others = round === 2 ? sessionAgents.filter(sa => sa.round1_assessment) : [];
     const chainContext = buildChainContext();
+    // Retrieve org knowledge for the scenario once per round run
+    const kChunks = await retrieveKnowledge(db, `${scenario?.context_document || ''} ${session?.phase_focus || ''}`, 5);
+    const knowledgeContext = formatKnowledgeContext(kChunks);
 
     // Save facilitator note to session if changed
     if (facilitatorNote !== (session?.facilitator_note || '')) {
@@ -1238,6 +1242,7 @@ const briefAllAgents = async () => {
           threatCatalog: threats,
           chainContext,
           facilitator_note: facilitatorNote,
+          knowledgeContext,
         });
 
         const updates = round === 1 ? {
@@ -1310,6 +1315,8 @@ const briefAllAgents = async () => {
     }).join('\n\n');
 
     const chainContext = buildChainContext();
+    const kChunks = await retrieveKnowledge(db, `${scenario?.context_document || ''} ${session?.phase_focus || ''}`, 5);
+    const knowledgeContext = formatKnowledgeContext(kChunks);
 
     try {
       const fn2 = round === 1 ? generateRound1 : generateRound2;
@@ -1321,6 +1328,7 @@ const briefAllAgents = async () => {
         threatCatalog: threats,
         chainContext,
         facilitator_note: facilitatorNote,
+        knowledgeContext,
       });
 
       const updates = round === 1 ? {

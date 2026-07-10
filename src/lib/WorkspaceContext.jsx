@@ -2,7 +2,8 @@ import React, { createContext, useState, useContext, useEffect, useMemo } from '
 import { supabase } from '@/lib/supabase';
 import { supabaseDb } from '@/lib/supabaseDb';
 import { useAuth } from '@/lib/AuthContext';
-import { setWorkspaceApiKey } from '@/lib/llm';
+import { setWorkspaceApiKey, setKnowledgeRetriever } from '@/lib/llm';
+import { retrieveKnowledge } from '@/lib/knowledge';
 
 const WorkspaceContext = createContext(null);
 const WORKSPACE_KEY = 'agd_last_workspace';
@@ -144,8 +145,21 @@ export const WorkspaceProvider = ({ children }) => {
       SessionMessage:   scopedEntity(e.SessionMessage, workspace.id, user.id, { noCreatedBy: true }),
       SessionSource:    scopedEntity(e.SessionSource, workspace.id, user.id, { noCreatedBy: true }),
       AppConfig:        scopedEntity(e.AppConfig, workspace.id, user.id),
+      Mitigation:          scopedEntity(e.Mitigation, workspace.id, user.id, { noCreatedBy: true }),
+      Decision:            scopedEntity(e.Decision, workspace.id, user.id, { noCreatedBy: true }),
+      DecisionOption:      scopedEntity(e.DecisionOption, workspace.id, user.id, { noCreatedBy: true }),
+      DecisionAssumption:  scopedEntity(e.DecisionAssumption, workspace.id, user.id, { noCreatedBy: true }),
+      KnowledgeDocument:   scopedEntity(e.KnowledgeDocument, workspace.id, user.id, { noCreatedBy: true }),
+      KnowledgeChunk:      scopedEntity(e.KnowledgeChunk, workspace.id, user.id, { noCreatedBy: true }),
     };
   }, [workspace, user]);
+
+  // Wire the org-knowledge retriever for the live-debate search tool
+  useEffect(() => {
+    if (!db) { setKnowledgeRetriever(null); return; }
+    setKnowledgeRetriever((query, k) => retrieveKnowledge(db, query, k));
+    return () => setKnowledgeRetriever(null);
+  }, [db]);
 
   return (
     <WorkspaceContext.Provider value={{
