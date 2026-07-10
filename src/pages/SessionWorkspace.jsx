@@ -8,6 +8,7 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RefreshCw, ChevronDown, ChevronUp, Sparkles, AlertCircle, Save, BarChart2, ShieldAlert, Check, X, BookOpen, MessageSquare, BellRing, StopCircle, Trash2 } from 'lucide-react';
 import SeverityBadge from '@/components/ui/SeverityBadge';
+import EvidenceLedger from '@/components/session/EvidenceLedger';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -754,6 +755,7 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
   const [validityReport, setValidityReport] = useState(null);
   const [validityError, setValidityError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [view, setView] = useState('sme'); // 'sme' = evidence ledger, 'tier' = by credibility
 
   const agentMap = Object.fromEntries((agents || []).map(a => [a.id, a]));
 
@@ -812,12 +814,27 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>SESSION SOURCES</h2>
+          <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+            {view === 'sme' ? 'SME EVIDENCE LEDGER' : 'SESSION SOURCES'}
+          </h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{sources.length} source{sources.length !== 1 ? 's' : ''} captured</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* View toggle */}
+          <div className="flex rounded overflow-hidden" style={{ border: '1px solid var(--wr-border)' }}>
+            {[{ id: 'sme', label: 'By SME' }, { id: 'tier', label: 'By Tier' }].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)}
+                className="text-xs font-mono font-bold px-3 py-1.5 transition-colors"
+                style={{
+                  backgroundColor: view === v.id ? 'var(--wr-amber)' : 'transparent',
+                  color: view === v.id ? '#0D1B2A' : 'var(--wr-text-muted)',
+                }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setShowAddForm(v => !v)} className="text-xs font-mono font-bold px-3 py-1.5 rounded" style={{ backgroundColor: 'var(--wr-bg-secondary)', color: 'var(--wr-text-muted)', border: '1px solid var(--wr-border)' }}>
             + Add
           </button>
@@ -833,8 +850,11 @@ function SourcesPanel({ sources, agents, session, db, sessionId, onSourceAdded }
       {validityError && <p className="text-xs p-3 rounded" style={{ backgroundColor: 'rgba(192,57,43,0.1)', color: '#C0392B', border: '1px solid rgba(192,57,43,0.2)' }}>{validityError}</p>}
       {validityReport && <ValidityReport report={validityReport} />}
 
-      {/* Sources by tier */}
-      {TIERS.map(tier => {
+      {/* By SME — evidence ledger */}
+      {view === 'sme' && <EvidenceLedger sources={sources} agents={agents || []} />}
+
+      {/* By tier — credibility grouping */}
+      {view === 'tier' && TIERS.map(tier => {
         const list = grouped[tier];
         if (!list.length) return null;
         const c = TIER_COLORS[tier];
