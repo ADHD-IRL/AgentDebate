@@ -48,3 +48,28 @@ export function impactLabel(v)     { return IMPACT_BANDS[v] || '—'; }
 export function matrixCellColor(likelihood, impact) {
   return riskBandFromScore(riskScore(likelihood, impact)).color;
 }
+
+const SEV_TO_LI = { CRITICAL: [4, 5], HIGH: [4, 4], MEDIUM: [3, 3], LOW: [2, 2] };
+
+// Aggregate the quantified risk of a set of session_agents rows (latest round
+// wins). Falls back to mapping severity → L×I when an agent gave no bands.
+// Returns { peak, avgExposure, count, severityCounts } or null.
+export function aggregateSessionRisk(sessionAgents) {
+  const scored = [];
+  const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  for (const sa of sessionAgents || []) {
+    const l = sa.round2_likelihood ?? sa.round1_likelihood;
+    const i = sa.round2_impact ?? sa.round1_impact;
+    const conf = sa.round2_confidence ?? sa.round1_confidence;
+    const sev = sa.round2_revised_severity || sa.round1_severity;
+    if (sev && severityCounts[sev] != null) severityCounts[sev]++;
+    let ll = l, ii = i;
+    if ((!ll || !ii) && sev && SEV_TO_LI[sev]) { [ll, ii] = SEV_TO_LI[sev]; }
+    const s = riskScore(ll, ii);
+    if (s != null) scored.push({ score: s, exposure: expectedExposure(ll, ii, conf) || s });
+  }
+  if (!scored.length) return null;
+  const peak = Math.max(...scored.map(s => s.score));
+  const avgExposure = Math.round((scored.reduce((a, b) => a + b.exposure, 0) / scored.length) * 10) / 10;
+  return { peak, avgExposure, count: scored.length, severityCounts };
+}

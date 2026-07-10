@@ -29,6 +29,8 @@ import SessionResults from '@/pages/SessionResults';
 import Settings from '@/pages/Settings';
 import ChainBreaker from '@/pages/ChainBreaker';
 import Mitigations from '@/pages/Mitigations';
+import Decisions from '@/pages/Decisions';
+import DecisionDetail from '@/pages/DecisionDetail';
 import WhatIfSimulator from '@/pages/WhatIfSimulator';
 import LiveDebateRoom from '@/pages/LiveDebateRoom';
 import SmeLibrary from '@/pages/SmeLibrary';
@@ -74,6 +76,8 @@ const AppRoutes = () => {
       }>
         <Route path="/dashboard"            element={<Dashboard />} />
         <Route path="/domains"              element={<Domains />} />
+        <Route path="/decisions"            element={<Decisions />} />
+        <Route path="/decisions/:id"        element={<DecisionDetail />} />
         <Route path="/scenarios"            element={<Scenarios />} />
         <Route path="/threats"              element={<Threats />} />
         <Route path="/agents"               element={<Agents />} />

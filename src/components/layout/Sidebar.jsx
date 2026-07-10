@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, Target, AlertTriangle,
   Bot, Link2, Swords, BarChart3, Wifi, Map,
-  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library, ShieldCheck
+  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, Library, ShieldCheck, GitBranch
 } from 'lucide-react';
 
 // Menu is ordered as the actual workflow: build a reusable library, plan the
@@ -25,6 +25,7 @@ const groups = [
     title: '2 · Plan',
     hint: 'What you want to stress-test',
     items: [
+      { path: '/decisions', icon: GitBranch, label: 'Decisions' },
       { path: '/scenarios', icon: Target, label: 'Scenarios' },
       { path: '/threats', icon: AlertTriangle, label: 'Threats' },
     ],

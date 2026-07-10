@@ -16,6 +16,9 @@ const TABLE = {
   WorkspaceMember:  'workspace_members',
   SmeToken:         'sme_tokens',
   Mitigation:       'mitigations',
+  Decision:            'decisions',
+  DecisionOption:      'decision_options',
+  DecisionAssumption:  'decision_assumptions',
 };
 
 function applySort(query, sort) {
