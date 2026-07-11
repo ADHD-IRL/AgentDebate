@@ -717,54 +717,92 @@ Return a JSON array only. No preamble.`;
 }
 
 // --- generateSynthesis ---
+// Line-based section extraction — robust to bolded steps/sub-headings inside a
+// section, which a lazy regex + lookahead mishandled. Finds the heading line
+// (## HEADING or **HEADING**), then collects lines until the next TOP-LEVEL
+// section heading (## / # or an ALL-CAPS **BOLD** header). ### sub-headings
+// (e.g. chain names) do NOT end the section.
 function extractSection(text, heading) {
-  // Match heading with 1-4 # marks, or **HEADING**, case-insensitive.
-  // Lookahead uses #{1,2} only — stops at ## section boundaries but NOT at
-  // ### sub-headings inside a section (e.g. chain names inside COMPOUND CHAINS).
-  const regex = new RegExp(
-    `(?:#{1,4}\\s*|\\*{1,2}\\s*)${heading}[\\*]*[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,2}\\s|\\n\\*{1,2}[A-Z]|\\n---\\n|$)`,
-    'i'
-  );
-  const match = text.match(regex);
-  if (!match) return '';
-  return (match[1] || '').trim();
+  const lines = (text || '').split('\n');
+  const norm = (s) => s.replace(/[#*_`\s]/g, '').toUpperCase();
+  const target = norm(heading);
+
+  const isSectionHeader = (line) => {
+    const t = line.trim();
+    if (/^#{1,2}\s+\S/.test(t) && !/^#{3,}/.test(t)) return true;        // # or ## heading
+    if (/^\*{2}[A-Z][A-Z0-9 &/,'’.-]{2,}\*{2}$/.test(t)) return true;    // **ALL-CAPS HEADER**
+    return false;
+  };
+
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    const looksLikeHeader = /^#{1,4}\s+\S/.test(t) || /^\*{1,2}.+\*{1,2}$/.test(t);
+    if (looksLikeHeader && norm(t).includes(target)) { start = i + 1; break; }
+  }
+  if (start === -1) return '';
+
+  const out = [];
+  for (let i = start; i < lines.length; i++) {
+    if (isSectionHeader(lines[i])) break;
+    out.push(lines[i]);
+  }
+  return out.join('\n').trim();
 }
 
 function parseCompoundChains(chainsText) {
   if (!chainsText) return [];
-  if (/unable to generate|no compound|no meaningful/i.test(chainsText)) return [];
+  if (/no compound chains|unable to generate|no meaningful chains|none identified/i.test(chainsText)) return [];
+
+  // A step line: "Step N", "N.", "N)", "→", or a bullet — with an optional
+  // leading bold marker (models frequently emit **Step 1:**).
+  const isStep = (t) => /^\**\s*(step\s*\d+|→|\d+[.):]\s|[-•*]\s)/i.test(t);
+  const cleanStep = (t) => t
+    .replace(/^\**\s*(step\s*\d+\s*[:\-–.)]*\**|→|\d+[.):]\s*|[-•*]\s*)/i, '')
+    .replace(/\*\*/g, '')
+    .trim();
+
+  // A chain title: a #/##/### heading, or a **Bold Title** that is NOT a step.
+  const isChainTitle = (t) =>
+    (/^#{1,4}\s+\S/.test(t) || /^\*{2}[^*]+\*{2}\s*:?$/.test(t)) && !isStep(t);
+  const titleText = (t) => t
+    .replace(/^#{1,4}\s*/, '')
+    .replace(/\*\*/g, '')
+    .replace(/[:\s]+$/, '')
+    .trim();
+
+  const lines = chainsText.split('\n').map(l => l.trim()).filter(Boolean);
   const chains = [];
-  // Split on any heading line (## or ### or **Bold**) — keep steps inside their block
-  const blocks = chainsText.split(/\n(?=#{1,4}\s|\*{1,2}\S)/).filter(b => b.trim());
-  for (const block of blocks) {
-    const lines = block.trim().split('\n').filter(l => l.trim());
-    if (!lines.length) continue;
-    const firstLine = lines[0];
-    // Accept ### heading, **bold heading**, or a short capitalised title line
-    const isHeading = /^#{1,4}\s/.test(firstLine) || /^\*{1,2}[^*]+\*{1,2}/.test(firstLine);
-    if (!isHeading) continue;
-    const rawTitle = firstLine
-      .replace(/^#{1,4}\s*/, '')
-      .replace(/\*{1,2}/g, '')
-      .replace(/[:\s]+$/, '')
-      .trim();
-    if (!rawTitle || rawTitle.length < 4) continue;
-    const bodyText = lines.slice(1).join('\n').trim();
-    if (!bodyText) continue;
-    // Match "Step N:", "→", numbered list, or bullet lines; fall back to any substantial line
-    let stepLines = bodyText.split('\n').filter(l => /^(step\s*\d+|→|\d+[.)]\s|\d+:\s|[-•*])/i.test(l.trim()));
-    if (stepLines.length === 0) {
-      stepLines = bodyText.split('\n').filter(l => l.trim().length > 10);
+  let cur = null;
+  const push = () => {
+    if (!cur) return;
+    // If no explicit step markers were found, treat substantial body lines as steps
+    if (cur.steps.length === 0 && cur.candidates.length) {
+      cur.steps = cur.candidates.map(c => c.replace(/\*\*/g, '').trim());
     }
-    const steps = stepLines.map((line, i) => ({
-      step_number: i + 1,
-      agent_id: '',
-      agent_label: '',
-      step_text: line.replace(/^(step\s*\d+[:\-]?|→|\d+[.):]\s*|[-•*])\s*/i, '').trim(),
-    })).filter(s => s.step_text.length > 0);
-    if (!steps.length) continue;
-    chains.push({ name: rawTitle, description: bodyText.substring(0, 300), steps });
+    if (cur.steps.length) {
+      chains.push({
+        name: cur.name,
+        description: cur.steps.join(' → ').slice(0, 300),
+        steps: cur.steps.map((text, i) => ({ step_number: i + 1, agent_id: '', agent_label: '', step_text: text })),
+      });
+    }
+    cur = null;
+  };
+
+  for (const t of lines) {
+    if (isChainTitle(t)) {
+      push();
+      const name = titleText(t);
+      cur = { name: name.length >= 3 ? name : 'Compound Chain', steps: [], candidates: [] };
+    } else if (cur && isStep(t)) {
+      const s = cleanStep(t);
+      if (s) cur.steps.push(s);
+    } else if (cur && t.length > 10 && !/^[a-z ]+:$/i.test(t)) {
+      cur.candidates.push(t); // possible unmarked step / description line
+    }
   }
+  push();
   return chains;
 }
 
