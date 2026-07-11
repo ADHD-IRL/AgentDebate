@@ -1840,6 +1840,28 @@ const briefAllAgents = async () => {
               </div>
             )}
 
+            {/* Batch action bar — generate every pending assessment at once */}
+            {(() => {
+              const pending = sessionAgents.filter(sa => round === 1 ? !sa.round1_assessment : !sa.round2_rebuttal);
+              if (generatingAll || pending.length === 0) return null;
+              const done = sessionAgents.length - pending.length;
+              return (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-3"
+                  style={{ backgroundColor: 'rgba(240,165,0,0.06)', border: '1px solid rgba(240,165,0,0.3)' }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--wr-amber)' }} />
+                    <span className="text-sm" style={{ color: 'var(--wr-text-secondary)' }}>
+                      <strong style={{ color: 'var(--wr-text-primary)' }}>{pending.length}</strong> agent{pending.length !== 1 ? 's' : ''} awaiting {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}
+                      {done > 0 && <span style={{ color: 'var(--wr-text-muted)' }}> · {done} done</span>}
+                    </span>
+                  </div>
+                  <WrButton size="sm" onClick={() => generateRound(round)}>
+                    <Sparkles className="w-3.5 h-3.5" /> Generate all {pending.length}
+                  </WrButton>
+                </div>
+              );
+            })()}
+
             <DebateTranscript
               sessionAgents={sessionAgents}
               agents={agents}
