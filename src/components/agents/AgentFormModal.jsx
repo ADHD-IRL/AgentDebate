@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, Sparkles, Loader2, SlidersHorizontal, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
+import ProcessingBar from '@/components/ui/ProcessingBar';
+import { useElapsed } from '@/hooks/useElapsed';
 import { generateAgent as generateAgentLLM, regenerateAgentField } from '@/lib/llm';
 
 const SEVERITIES = ['CRITICAL','HIGH','MEDIUM','LOW'];
@@ -68,6 +70,7 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
     ...(aiSeed || {}),
   });
   const [generating, setGenerating] = useState(false);
+  const genElapsed = useElapsed(generating);
 
   // Per-field regen state: { fieldKey: true/false }
   const [regenning, setRegenning] = useState({});
@@ -212,6 +215,10 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
               <WrButton onClick={generateAgent} disabled={!aiForm.expert_type || generating} className="w-full justify-center" size="lg">
                 {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Agent…</> : <><Sparkles className="w-4 h-4" /> Generate Agent</>}
               </WrButton>
+              {generating && (
+                <ProcessingBar label="Building the full expert profile…" elapsedMs={genElapsed}
+                  sublabel="Generating persona, biases, and analytical fields. Usually 10–25 seconds." />
+              )}
             </div>
           ) : (
             /* ── Manual Edit ───────────────────────────────────────────── */

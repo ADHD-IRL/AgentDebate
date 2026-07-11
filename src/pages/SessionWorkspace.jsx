@@ -13,6 +13,8 @@ import { riskScore, riskBandFromScore, likelihoodLabel, impactLabel } from '@/li
 import RiskMatrix from '@/components/session/RiskMatrix';
 import { retrieveKnowledge, formatKnowledgeContext } from '@/lib/knowledge';
 import { buildDecisionFraming } from '@/lib/decisionContext';
+import { useElapsed, fmtDuration } from '@/hooks/useElapsed';
+import ProcessingBar from '@/components/ui/ProcessingBar';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -55,6 +57,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
   const [editText, setEditText] = useState('');
   const [briefExpanded, setBriefExpanded] = useState(false);
   const isGenerating = sa.status === (round === 1 ? 'generating_r1' : 'generating_r2');
+  const cardElapsed = useElapsed(isGenerating);
   const text = round === 1 ? sa.round1_assessment : sa.round2_rebuttal;
   const severity = round === 1 ? sa.round1_severity : sa.round2_revised_severity;
   const confidence = round === 1 ? sa.round1_confidence : sa.round2_confidence;
@@ -135,9 +138,12 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
         )}
 
         {isGenerating ? (
-          <div className="flex items-center gap-2 py-4">
-            <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--wr-amber)' }} />
-            <span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>Generating assessment...</span>
+          <div className="py-3">
+            <ProcessingBar
+              label="Generating assessment…"
+              elapsedMs={cardElapsed}
+              sublabel="The agent is thinking through the scenario. Usually 15–40 seconds."
+            />
           </div>
         ) : text ? (
           <div>
@@ -279,6 +285,7 @@ function extractSynthSection(text, heading) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthStatus, r2Done, synthError, streamText, sessionAgents, agents, session, scenario }) {
+  const synthElapsed = useElapsed(generating);
   const [resolvedText, setResolvedText] = useState('');
 
   useEffect(() => {
@@ -330,11 +337,12 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
   if (generating) {
     return (
       <div className="py-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: 'var(--wr-amber)' }} />
-          <span className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>
-            {synthStatus || 'SYNTHESIS ENGINE RUNNING'}
-          </span>
+        <div className="mb-4">
+          <ProcessingBar
+            label={synthStatus || 'Synthesizing all assessments…'}
+            elapsedMs={synthElapsed}
+            sublabel={streamText ? 'Streaming the report — findings appear below as they generate.' : 'Reading every agent assessment. This usually takes 30–90 seconds.'}
+          />
         </div>
         {streamText ? (
           <div className="rounded p-4 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-y-auto max-h-[60vh]"
@@ -1064,6 +1072,8 @@ export default function SessionWorkspace() {
   const [synthStatus, setSynthStatus] = useState('');
   const [scenarios, setScenarios] = useState([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [genStartedAt, setGenStartedAt] = useState(null);
+  const genElapsed = useElapsed(generatingAll);
   const [genError, setGenError] = useState(null);
   const [synthError, setSynthError] = useState(null);
   const [threats, setThreats] = useState([]);
@@ -1209,6 +1219,7 @@ const briefAllAgents = async () => {
   const generateRound = async (round) => {
     cancelRef.current = false;
     setGeneratingAll(true);
+    setGenStartedAt(Date.now());
     setGenError(null);
     const doneField = round === 1 ? 'round1_assessment' : 'round2_rebuttal';
     const agentsToRun = sessionAgents.filter(sa => !sa[doneField]);
@@ -1802,13 +1813,22 @@ const briefAllAgents = async () => {
             )}
 
             {/* Per-agent progress panel */}
-            {generatingAll && progress.total > 0 && (
-              <div className="mb-4 rounded p-3" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs" style={{ color: 'var(--wr-text-secondary)' }}>Generating {tab}...</span>
-                  <span className="text-xs font-mono" style={{ color: 'var(--wr-amber)' }}>{progress.current}/{progress.total}</span>
-                </div>
-                <div className="flex gap-2 mb-3">
+            {generatingAll && progress.total > 0 && (() => {
+              const completed = Math.max(0, progress.current - 1); // agents fully finished
+              const avgMs = completed > 0 ? genElapsed / completed : null;
+              const remaining = progress.total - completed;
+              const etaMs = avgMs != null ? avgMs * remaining : null;
+              const activeAgent = getAgent(sessionAgents[progress.current - 1]?.agent_id);
+              return (
+              <div className="mb-4 rounded p-3.5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+                <ProcessingBar
+                  label={`Generating ${tab} — agent ${progress.current} of ${progress.total}${activeAgent ? `: ${activeAgent.name}` : ''}`}
+                  value={completed / progress.total}
+                  elapsedMs={genElapsed}
+                  etaMs={etaMs}
+                  sublabel={avgMs != null ? `~${fmtDuration(avgMs)} per agent` : 'Estimating time…'}
+                />
+                <div className="flex gap-2 mt-3">
                   {sessionAgents.map((sa, i) => {
                     const agent = getAgent(sa.agent_id);
                     const isDone = i < progress.current;
@@ -1827,11 +1847,9 @@ const briefAllAgents = async () => {
                     );
                   })}
                 </div>
-                <div className="w-full h-1 rounded-full" style={{ backgroundColor: 'var(--wr-border)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${(progress.current/progress.total)*100}%`, backgroundColor: 'var(--wr-amber)' }} />
-                </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Quantified risk matrix — shown once any assessment carries L×I */}
             {sessionAgents.some(sa => (round === 1 ? sa.round1_likelihood : sa.round2_likelihood)) && (

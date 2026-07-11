@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
+import ProcessingBar from '@/components/ui/ProcessingBar';
+import { useElapsed } from '@/hooks/useElapsed';
 import ChainFlowGraph from '@/components/chainbreaker/ChainFlowGraph';
 import { openChainBreakerReport } from '@/components/chainbreaker/ChainBreakerReport';
 import { toast } from '@/components/ui/use-toast';
@@ -59,6 +61,7 @@ export default function ChainBreaker() {
 
   // Analysis result state
   const [analyzing, setAnalyzing] = useState(false);
+  const analyzeElapsed = useElapsed(analyzing);
   const [analysis,  setAnalysis]  = useState(null);
   const [error,     setError]     = useState(null);
   const [saving,    setSaving]    = useState(false);
@@ -560,6 +563,16 @@ export default function ChainBreaker() {
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Chain…</>
                   : <><Scissors className="w-4 h-4" /> Run Chain Breaker</>}
               </WrButton>
+              {analyzing && (
+                <div className="mt-3">
+                  <ProcessingBar
+                    label="Dissecting the chain and building the mitigation roadmap…"
+                    elapsedMs={analyzeElapsed}
+                    color="#C0392B"
+                    sublabel="Analyzing every step for leverage, chokepoints, and countermeasures. Usually 30–60 seconds."
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
