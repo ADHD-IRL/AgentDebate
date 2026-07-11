@@ -5,29 +5,14 @@ import { useWorkspace } from '@/lib/WorkspaceContext';
 import { useAuth } from '@/lib/AuthContext';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-import PostureRail from '@/components/dashboard/PostureRail';
+import RiskRail    from '@/components/dashboard/RiskRail';
 import EventsList  from '@/components/dashboard/EventsList';
+import { aggregateSessionRisk, riskScore } from '@/lib/risk';
+import { buildGroups } from '@/components/threatmap/mapUtils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const SEV_ORDINAL = { CRITICAL: 3, HIGH: 2, MEDIUM: 1, LOW: 0 };
-const SEV_KEYS    = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-
-function median(arr) {
-  if (!arr.length) return null;
-  const s = [...arr].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
-function startOfISOWeek(d) {
-  const date = new Date(d);
-  const day  = date.getUTCDay(); // 0=Sun
-  const diff = (day === 0 ? -6 : 1) - day;
-  date.setUTCDate(date.getUTCDate() + diff);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-}
+const SEV_KEYS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
 // ── Main export ────────────────────────────────────────────────────────────
 
@@ -54,6 +39,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData]       = useState({
     sessions: [], sessionAgents: [], syntheses: [], scenarios: [], agents: [], domains: [], threats: [],
+    decisions: [], mitigations: [], assumptions: [],
   });
 
   const loadData = useCallback(() => {
@@ -66,8 +52,11 @@ export default function Dashboard() {
       db.Agent.list(),
       db.Domain.list(),
       db.Threat.list(),
-    ]).then(([sessions, sessionAgents, syntheses, scenarios, agents, domains, threats]) => {
-      setData({ sessions, sessionAgents, syntheses, scenarios, agents, domains, threats });
+      db.Decision ? db.Decision.list().catch(() => []) : [],
+      db.Mitigation ? db.Mitigation.list().catch(() => []) : [],
+      db.DecisionAssumption ? db.DecisionAssumption.list().catch(() => []) : [],
+    ]).then(([sessions, sessionAgents, syntheses, scenarios, agents, domains, threats, decisions, mitigations, assumptions]) => {
+      setData({ sessions, sessionAgents, syntheses, scenarios, agents, domains, threats, decisions, mitigations, assumptions });
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [db]);
@@ -130,66 +119,72 @@ export default function Dashboard() {
     });
   }, [data.sessions, data.sessionAgents, scenarioMap, agentMap]);
 
-  // ── KPI calculations ───────────────────────────────────────────────────────
+  // ── Risk posture metrics (the useful cards) ──────────────────────────────────
 
-  const kpis = useMemo(() => {
-    const now          = Date.now();
-    const weekStart    = startOfISOWeek(now).getTime();
-    const prevWeekStart = weekStart - 7 * 86400000;
-    const day7ago      = now - 7 * 86400000;
+  const riskMetrics = useMemo(() => {
+    const saBySession = {};
+    for (const sa of data.sessionAgents) {
+      (saBySession[sa.session_id] = saBySession[sa.session_id] || []).push(sa);
+    }
 
-    const inFlightSAs  = data.sessionAgents.filter(sa => {
-      const s = data.sessions.find(x => x.id === sa.session_id);
-      return s && (s.status === 'round1' || s.status === 'round2') && sa.round1_assessment;
-    });
-    const criticalCount = inFlightSAs.filter(sa =>
-      (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL'
-    ).length;
+    // Per-session quantified risk; find the worst
+    let peak = { score: 0, session: null };
+    let openCriticals = 0;
+    let analyzedSessions = 0;
+    for (const s of data.sessions) {
+      const agg = aggregateSessionRisk(saBySession[s.id] || []);
+      if (!agg) continue;
+      analyzedSessions++;
+      openCriticals += agg.severityCounts.CRITICAL;
+      if (agg.peak > peak.score) peak = { score: agg.peak, session: s };
+    }
 
-    const prevInFlightSAs = data.sessionAgents.filter(sa => {
-      const s = data.sessions.find(x => x.id === sa.session_id);
-      if (!s) return false;
-      const t = new Date(s.created_at || 0).getTime();
-      return t >= prevWeekStart && t < weekStart && sa.round1_assessment &&
-        (s.status === 'round1' || s.status === 'round2');
-    });
-    const prevCritical = prevInFlightSAs.filter(sa =>
-      (sa.round2_revised_severity || sa.round1_severity) === 'CRITICAL'
-    ).length;
+    // Coverage gaps: domains with threat load but no/thin agent bench
+    let gaps = [];
+    try {
+      const { groups } = buildGroups({ axis: 'domain', agents: data.agents, domains: data.domains, threats: data.threats });
+      gaps = groups.filter(g => !g.isUnassigned && g.score > 0 && g.agents.length <= 1);
+    } catch { gaps = []; }
 
-    const recentSyntheses = data.syntheses.filter(sy =>
-      new Date(sy.created_at || 0).getTime() >= day7ago && sy.confidence != null
+    // Mitigation program: net risk reduction + open items
+    const scored = data.mitigations.filter(m =>
+      m.status !== 'rejected' &&
+      riskScore(m.inherent_likelihood, m.inherent_impact) != null &&
+      riskScore(m.residual_likelihood, m.residual_impact) != null
     );
-    const avgConf = recentSyntheses.length
-      ? recentSyntheses.reduce((a, sy) => a + sy.confidence, 0) / recentSyntheses.length
-      : null;
+    const inherentSum = scored.reduce((a, m) => a + riskScore(m.inherent_likelihood, m.inherent_impact), 0);
+    const residualSum = scored.reduce((a, m) => a + riskScore(m.residual_likelihood, m.residual_impact), 0);
+    const openMitigations = data.mitigations.filter(m => ['proposed', 'accepted', 'in_progress'].includes(m.status)).length;
 
-    const thisWeekSessions  = data.sessions.filter(s => new Date(s.created_at || 0).getTime() >= weekStart);
-    const prevWeekSessions  = data.sessions.filter(s => {
-      const t = new Date(s.created_at || 0).getTime();
-      return t >= prevWeekStart && t < weekStart;
-    });
+    // Decisions awaiting a call
+    const pendingDecisions = data.decisions.filter(d => d.status !== 'decided' && d.status !== 'archived');
 
-    const critDelta = criticalCount - prevCritical;
-    const weekDelta = thisWeekSessions.length - prevWeekSessions.length;
+    // Assumptions flagged for re-assessment
+    const invalidatedAssumptions = data.assumptions.filter(a => a.status === 'invalidated');
 
     return {
-      critical: {
-        value:    criticalCount,
-        delta:    critDelta,
-        subLabel: `${critDelta >= 0 ? '+' : ''}${critDelta} / 7d`,
-      },
-      conf: {
-        value:    avgConf,
-        subLabel: avgConf != null ? `${Math.round(avgConf * 100)}% avg` : '—',
-      },
-      week: {
-        value:    thisWeekSessions.length,
-        delta:    weekDelta,
-        subLabel: `${weekDelta >= 0 ? '+' : ''}${weekDelta} / wk`,
-      },
+      peak, openCriticals, analyzedSessions, gaps,
+      netReduction: { inherent: inherentSum, residual: residualSum, delta: inherentSum - residualSum, count: scored.length },
+      openMitigations,
+      pendingDecisions,
+      invalidatedAssumptions,
     };
-  }, [data.sessions, data.sessionAgents, data.syntheses]);
+  }, [data.sessions, data.sessionAgents, data.agents, data.domains, data.threats, data.mitigations, data.decisions, data.assumptions]);
+
+  // Prioritized "needs attention" queue — the actionable exceptions
+  const attention = useMemo(() => {
+    const items = [];
+    for (const a of riskMetrics.invalidatedAssumptions.slice(0, 3)) {
+      items.push({ kind: 'assumption', color: '#C0392B', label: 'Assumption invalidated — re-assess', detail: a.text, to: `/decisions/${a.decision_id}` });
+    }
+    for (const g of riskMetrics.gaps.slice(0, 3)) {
+      items.push({ kind: 'gap', color: '#D68910', label: `Coverage gap: ${g.name}`, detail: `${g.total} threat${g.total !== 1 ? 's' : ''}, ${g.agents.length} agent${g.agents.length !== 1 ? 's' : ''} — no bench to analyze it`, to: '/threatmap' });
+    }
+    for (const d of riskMetrics.pendingDecisions.slice(0, 2)) {
+      items.push({ kind: 'decision', color: '#2E86AB', label: `Decision open: ${d.title}`, detail: 'Compare options and record the call', to: `/decisions/${d.id}` });
+    }
+    return items.slice(0, 6);
+  }, [riskMetrics]);
 
   // ── Filter & search ────────────────────────────────────────────────────────
 
@@ -430,15 +425,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Posture rail */}
+        {/* Risk posture rail */}
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-            <Skeleton h={160} />
-            <Skeleton h={160} />
-            <Skeleton h={160} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            <Skeleton h={128} /><Skeleton h={128} /><Skeleton h={128} /><Skeleton h={128} />
           </div>
         ) : (
-          <PostureRail sessions={data.sessions} kpis={kpis} />
+          <RiskRail metrics={riskMetrics} attention={attention} />
         )}
 
         {/* Events list */}

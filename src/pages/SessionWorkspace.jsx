@@ -12,6 +12,7 @@ import EvidenceLedger from '@/components/session/EvidenceLedger';
 import { riskScore, riskBandFromScore, likelihoodLabel, impactLabel } from '@/lib/risk';
 import RiskMatrix from '@/components/session/RiskMatrix';
 import { retrieveKnowledge, formatKnowledgeContext } from '@/lib/knowledge';
+import { buildDecisionFraming } from '@/lib/decisionContext';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -1072,6 +1073,8 @@ export default function SessionWorkspace() {
   const [selectedThreats, setSelectedThreats] = useState(new Set());
   const [pinnedChains, setPinnedChains] = useState([]);
   const [sessionSources, setSessionSources] = useState([]);
+  const [decisionFraming, setDecisionFraming] = useState(''); // Decision-Focus prompt block
+  const [decisionMeta, setDecisionMeta] = useState(null);      // { decision, option } for the banner
   const [facilitatorNote, setFacilitatorNote] = useState('');
   const [briefingAll, setBriefingAll] = useState(false);
   const [reactions, setReactions] = useState([]);
@@ -1116,6 +1119,22 @@ export default function SessionWorkspace() {
     } else {
       setPinnedChains([]);
     }
+
+    // Decision-Focus session: build the framing block injected into every prompt
+    if (sessionData?.decision_id && sessionData?.decision_option_id && db.Decision) {
+      try {
+        const [decision, option, assumptions] = await Promise.all([
+          db.Decision.get(sessionData.decision_id),
+          db.DecisionOption.get(sessionData.decision_option_id),
+          db.DecisionAssumption.filter({ decision_id: sessionData.decision_id }).catch(() => []),
+        ]);
+        setDecisionFraming(buildDecisionFraming(decision, option, assumptions));
+        setDecisionMeta(decision && option ? { decision, option } : null);
+      } catch { setDecisionFraming(''); setDecisionMeta(null); }
+    } else {
+      setDecisionFraming('');
+      setDecisionMeta(null);
+    }
     } catch (err) {
       console.error('SessionWorkspace load failed:', err);
     }
@@ -1156,7 +1175,7 @@ export default function SessionWorkspace() {
 
 const briefAllAgents = async () => {
     setBriefingAll(true);
-    const scenarioCtx = scenario?.context_document || '';
+    const scenarioCtx = decisionFraming + (scenario?.context_document || '');
     for (const sa of sessionAgents) {
       const agent = getAgent(sa.agent_id);
       if (!agent) continue;
@@ -1236,7 +1255,7 @@ const briefAllAgents = async () => {
         const fn = round === 1 ? generateRound1 : generateRound2;
         const res = await fn({
           agent: { ...agent },
-          scenarioContext: scenario?.context_document || '',
+          scenarioContext: decisionFraming + (scenario?.context_document || ''),
           phaseFocus: session?.phase_focus || '',
           othersAssessments: othersText,
           threatCatalog: threats,
@@ -1322,7 +1341,7 @@ const briefAllAgents = async () => {
       const fn2 = round === 1 ? generateRound1 : generateRound2;
       const res = await fn2({
         agent: { ...agent },
-        scenarioContext: scenario?.context_document || '',
+        scenarioContext: decisionFraming + (scenario?.context_document || ''),
         phaseFocus: session?.phase_focus || '',
         othersAssessments: othersText,
         threatCatalog: threats,
@@ -1381,7 +1400,7 @@ const briefAllAgents = async () => {
     if (r1Done.length < 2) return;
     setLoadingReactions(true);
     setReactions([]);
-    const scenarioCtx = scenario?.context_document || '';
+    const scenarioCtx = decisionFraming + (scenario?.context_document || '');
     const newReactions = [];
 
     for (const sa of r1Done) {
@@ -1498,7 +1517,7 @@ const briefAllAgents = async () => {
           discipline: getAgent(sa.agent_id)?.discipline,
         })),
         scenarioName: scenario?.name || '',
-        scenarioContext: scenario?.context_document || '',
+        scenarioContext: decisionFraming + (scenario?.context_document || ''),
       });
       setExtractedThreats(results);
       setSelectedThreats(new Set(results.map((_, i) => i)));
@@ -1578,6 +1597,11 @@ const briefAllAgents = async () => {
               <span className="text-xs px-2 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(46,134,171,0.15)', color: '#2E86AB' }}>
                 {pinnedChains.length} chain{pinnedChains.length !== 1 ? 's' : ''} pinned
               </span>
+            )}
+            {decisionMeta && (
+              <Link to={`/decisions/${decisionMeta.decision.id}`} className="text-xs px-2 py-0.5 rounded font-mono" style={{ backgroundColor: 'rgba(39,174,96,0.15)', color: '#27AE60', textDecoration: 'none' }}>
+                Decision Focus · {decisionMeta.option.name}
+              </Link>
             )}
           </div>
           {session.phase_focus && <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>}
@@ -1815,6 +1839,28 @@ const briefAllAgents = async () => {
                 <RiskMatrix sessionAgents={sessionAgents} agents={agents} round={round} />
               </div>
             )}
+
+            {/* Batch action bar — generate every pending assessment at once */}
+            {(() => {
+              const pending = sessionAgents.filter(sa => round === 1 ? !sa.round1_assessment : !sa.round2_rebuttal);
+              if (generatingAll || pending.length === 0) return null;
+              const done = sessionAgents.length - pending.length;
+              return (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-3"
+                  style={{ backgroundColor: 'rgba(240,165,0,0.06)', border: '1px solid rgba(240,165,0,0.3)' }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--wr-amber)' }} />
+                    <span className="text-sm" style={{ color: 'var(--wr-text-secondary)' }}>
+                      <strong style={{ color: 'var(--wr-text-primary)' }}>{pending.length}</strong> agent{pending.length !== 1 ? 's' : ''} awaiting {tab === 'ROUND 1' ? 'Round 1' : 'Round 2'}
+                      {done > 0 && <span style={{ color: 'var(--wr-text-muted)' }}> · {done} done</span>}
+                    </span>
+                  </div>
+                  <WrButton size="sm" onClick={() => generateRound(round)}>
+                    <Sparkles className="w-3.5 h-3.5" /> Generate all {pending.length}
+                  </WrButton>
+                </div>
+              );
+            })()}
 
             <DebateTranscript
               sessionAgents={sessionAgents}

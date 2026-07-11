@@ -35,10 +35,16 @@ export default function NewSession() {
   const [scenarios, setScenarios] = useState([]);
   const [agents, setAgents] = useState([]);
   const [chains, setChains] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [decisionOptions, setDecisionOptions] = useState([]);
   const [selectedAgents, setSelectedAgents] = useState([]);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({
     name: `Session ${new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}`,
+    // 'risk' = normal risk debate · 'decision' = evaluate a specific decision option
+    focus: searchParams.get('decision') ? 'decision' : 'risk',
+    decision_id: searchParams.get('decision') || '',
+    decision_option_id: searchParams.get('option') || '',
     domain_id: '',
     scenario_id: searchParams.get('scenario') || '',
     phase_focus: '',
@@ -77,7 +83,12 @@ export default function NewSession() {
       db.Scenario.list(),
       db.Agent.list(),
       db.Chain.list(),
-    ]).then(([d,s,a,ch]) => { setDomains(d); setScenarios(s); setAgents(a); setChains(ch); });
+      db.Decision ? db.Decision.list('-created_at').catch(() => []) : [],
+      db.DecisionOption ? db.DecisionOption.list().catch(() => []) : [],
+    ]).then(([d,s,a,ch,dec,opts]) => {
+      setDomains(d); setScenarios(s); setAgents(a); setChains(ch);
+      setDecisions(dec || []); setDecisionOptions(opts || []);
+    });
   }, [db]);
 
   const togglePinnedChain = (chainId) => {
@@ -178,6 +189,10 @@ export default function NewSession() {
 
   const handleStart = async () => {
     if (!form.name || selectedAgents.length < 1) return;
+    if (form.focus === 'decision' && (!form.decision_id || !form.decision_option_id)) {
+      setSaveError('Decision Focus needs a decision and an option selected — or switch to Risk Debate.');
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -193,8 +208,8 @@ export default function NewSession() {
         source_pins: form.source_pins,
         status: 'pending',
         agent_ids: selectedAgents.map(a => a.id),
-        decision_id: searchParams.get('decision') || null,
-        decision_option_id: searchParams.get('option') || null,
+        decision_id: form.focus === 'decision' ? (form.decision_id || null) : null,
+        decision_option_id: form.focus === 'decision' ? (form.decision_option_id || null) : null,
       };
       const session = await db.Session.create(payload);
       for (const agent of selectedAgents) {
@@ -268,6 +283,46 @@ export default function NewSession() {
         {/* Session Setup */}
         <div className="rounded p-5 mb-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
           <h2 className="text-xs font-bold tracking-widest mb-4 font-mono" style={{ color: 'var(--wr-text-muted)' }}>SESSION SETUP</h2>
+
+          {/* Session focus: normal risk debate vs decision option evaluation */}
+          <div className="mb-4">
+            <label className="block text-xs font-bold tracking-widest font-mono mb-2" style={{ color: 'var(--wr-text-muted)' }}>SESSION FOCUS</label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { id: 'risk', label: 'Risk Debate', desc: 'Open red-team analysis of the scenario' },
+                { id: 'decision', label: 'Decision Focus', desc: 'Assess one option of a decision against the scenario' },
+              ].map(f => {
+                const active = form.focus === f.id;
+                return (
+                  <button key={f.id} type="button" onClick={() => set('focus', f.id)}
+                    className="text-left rounded p-3 transition-all"
+                    style={{ backgroundColor: active ? 'rgba(240,165,0,0.08)' : 'var(--wr-bg-secondary)', border: `1px solid ${active ? 'rgba(240,165,0,0.4)' : 'var(--wr-border)'}` }}>
+                    <span className="text-sm font-semibold" style={{ color: active ? 'var(--wr-amber)' : 'var(--wr-text-primary)' }}>{f.label}</span>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{f.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+            {form.focus === 'decision' && (
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <WrSelect label="DECISION" value={form.decision_id} onChange={v => { set('decision_id', v); set('decision_option_id', ''); }}>
+                  <option value="">Select decision...</option>
+                  {decisions.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                </WrSelect>
+                <WrSelect label="OPTION BEING ASSESSED" value={form.decision_option_id} onChange={v => set('decision_option_id', v)}>
+                  <option value="">Select option...</option>
+                  {decisionOptions.filter(o => o.decision_id === form.decision_id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </WrSelect>
+                {form.decision_id && decisions.length === 0 && (
+                  <p className="col-span-2 text-xs" style={{ color: 'var(--wr-text-muted)' }}>No decisions yet — create one on the Decisions page first.</p>
+                )}
+                <p className="col-span-2 text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                  The decision, its acceptance criteria, the selected option, and its assumptions are injected into every agent prompt so the panel assesses <strong>this option specifically</strong>.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <WrInput label="SESSION NAME" value={form.name} onChange={v => set('name',v)} className="col-span-2" />
             <WrSelect label="DOMAIN" value={form.domain_id} onChange={v => set('domain_id',v)}>
