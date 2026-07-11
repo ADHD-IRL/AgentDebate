@@ -15,6 +15,9 @@ import { retrieveKnowledge, formatKnowledgeContext } from '@/lib/knowledge';
 import { buildDecisionFraming } from '@/lib/decisionContext';
 import { useElapsed, fmtDuration } from '@/hooks/useElapsed';
 import ProcessingBar from '@/components/ui/ProcessingBar';
+import NextSteps from '@/components/session/NextSteps';
+import AnalysisStages from '@/components/session/AnalysisStages';
+import { buildGroups } from '@/components/threatmap/mapUtils';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -1014,12 +1017,14 @@ function SessionSettingsPanel({ session, sessionAgents, getAgent, onSaved }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const [saved, setSaved] = useState(false);
   const handleSave = async () => {
     setSaving(true);
     await db.Session.update(session.id, form);
     setSaving(false);
-    onSaved();
-    navigate('/sessions');
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    onSaved(); // reloads session data; stays on the settings tab
   };
 
   return (
@@ -1034,7 +1039,7 @@ function SessionSettingsPanel({ session, sessionAgents, getAgent, onSaved }) {
         <div className="mt-4">
           <WrButton onClick={handleSave} disabled={saving}>
             <Save className="w-3.5 h-3.5" />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? 'Saving...' : saved ? 'Saved ✓' : 'Save Changes'}
           </WrButton>
         </div>
       </div>
@@ -1060,6 +1065,7 @@ function SessionSettingsPanel({ session, sessionAgents, getAgent, onSaved }) {
 export default function SessionWorkspace() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { db, workspace } = useWorkspace();
   const [session, setSession] = useState(null);
   const [sessionAgents, setSessionAgents] = useState([]);
@@ -1085,6 +1091,9 @@ export default function SessionWorkspace() {
   const [sessionSources, setSessionSources] = useState([]);
   const [decisionFraming, setDecisionFraming] = useState(''); // Decision-Focus prompt block
   const [decisionMeta, setDecisionMeta] = useState(null);      // { decision, option } for the banner
+  const [sessionChains, setSessionChains] = useState([]);      // chains extracted from this session
+  const [sessionMitigations, setSessionMitigations] = useState([]);
+  const [allDomains, setAllDomains] = useState([]);            // for coverage-gap count
   const [facilitatorNote, setFacilitatorNote] = useState('');
   const [briefingAll, setBriefingAll] = useState(false);
   const [reactions, setReactions] = useState([]);
@@ -1121,14 +1130,17 @@ export default function SessionWorkspace() {
       setThreats(t);
     }
 
-    // Load pinned chains
+    // Load pinned chains + this session's extracted chains/mitigations + domains
     const pinnedIds = sessionData?.pinned_chain_ids || [];
-    if (pinnedIds.length > 0) {
-      const allChains = await db.Chain.list();
-      setPinnedChains(allChains.filter(c => pinnedIds.includes(c.id)));
-    } else {
-      setPinnedChains([]);
-    }
+    const [allChains, sessMits, doms] = await Promise.all([
+      db.Chain.list(),
+      db.Mitigation ? db.Mitigation.filter({ session_id: id }).catch(() => []) : [],
+      db.Domain.list().catch(() => []),
+    ]);
+    setPinnedChains(pinnedIds.length ? allChains.filter(c => pinnedIds.includes(c.id)) : []);
+    setSessionChains(allChains.filter(c => c.session_id === id));
+    setSessionMitigations(sessMits || []);
+    setAllDomains(doms || []);
 
     // Decision-Focus session: build the framing block injected into every prompt
     if (sessionData?.decision_id && sessionData?.decision_option_id && db.Decision) {
@@ -1151,6 +1163,14 @@ export default function SessionWorkspace() {
   };
 
   useEffect(() => { load(); }, [id, db]);
+
+  // Open a completed session on the SYNTHESIS tab (where results + Next Steps live)
+  const initialTabRef = useRef(false);
+  useEffect(() => {
+    if (initialTabRef.current || !session) return;
+    initialTabRef.current = true;
+    if (session.status === 'complete' && !searchParams.get('autoSynth')) setTab('SYNTHESIS');
+  }, [session, searchParams]);
 
   // Auto-trigger synthesis when navigated from LiveDebateRoom with ?autoSynth=1
   const autoSynthFiredRef = useRef(false);
@@ -1616,6 +1636,27 @@ const briefAllAgents = async () => {
             )}
           </div>
           {session.phase_focus && <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>{session.phase_focus}</p>}
+          {(() => {
+            const done = new Set(['setup']);
+            const sas = sessionAgents;
+            if (sas.length && sas.every(sa => sa.round1_assessment)) done.add('round1');
+            if (sas.length && sas.every(sa => sa.round2_rebuttal)) done.add('round2');
+            if (synthesis?.raw_text) done.add('synthesis');
+            if (sessionChains.length || threats.length) done.add('findings');
+            if (sessionMitigations.length) done.add('act');
+            if (decisionMeta?.decision?.status === 'decided') done.add('decide');
+            const current = tab === 'ROUND 1' ? 'round1' : tab === 'ROUND 2' ? 'round2'
+              : tab === 'SYNTHESIS' ? 'synthesis' : tab === 'THREATS' ? 'findings' : 'setup';
+            const go = (stage) => {
+              if (stage === 'round1') setTab('ROUND 1');
+              else if (stage === 'round2') setTab('ROUND 2');
+              else if (stage === 'synthesis') setTab('SYNTHESIS');
+              else if (stage === 'findings') setTab('THREATS');
+              else if (stage === 'act') navigate(`/mitigations?session=${id}`);
+              else if (stage === 'decide' && session?.decision_id) navigate(`/decisions/${session.decision_id}`);
+            };
+            return <div className="mt-2"><AnalysisStages current={current} done={done} onNavigate={go} /></div>;
+          })()}
         </div>
         <div className="flex items-center gap-2">
           {session.mode === 'live' && (
@@ -1970,6 +2011,28 @@ const briefAllAgents = async () => {
               session={session}
               scenario={scenarios.find(s => s.id === session?.scenario_id) || null}
             />
+            {synthesis?.raw_text && (() => {
+              // Coverage gaps for the participating panel against this scenario's threats
+              let gaps = null;
+              try {
+                const participants = agents.filter(a => sessionAgents.some(sa => sa.agent_id === a.id));
+                const { groups } = buildGroups({ axis: 'domain', agents: participants, domains: allDomains, threats });
+                gaps = groups.filter(g => !g.isUnassigned && g.score > 0 && g.agents.length <= 1).length;
+              } catch { gaps = null; }
+              return (
+                <div className="mt-6">
+                  <NextSteps
+                    sessionId={id}
+                    decisionId={session?.decision_id || null}
+                    threatsCount={threats.length}
+                    chainsCount={sessionChains.length}
+                    mitigationsCount={sessionMitigations.length}
+                    coverageGaps={gaps}
+                    onCatalogThreats={() => setTab('THREATS')}
+                  />
+                </div>
+              );
+            })()}
           </SynthesisErrorBoundary>
         )}
 

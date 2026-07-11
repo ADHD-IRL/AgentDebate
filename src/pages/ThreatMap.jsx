@@ -133,6 +133,15 @@ export default function ThreatMap() {
         subtitle="Coverage gaps · Threat concentration · Panel alignment"
       />
 
+      {filterSession && (
+        <div className="px-6 pt-4">
+          <button onClick={() => navigate(`/sessions/${filterSession}`)} className="text-xs font-mono inline-flex items-center gap-1 px-2 py-1 rounded"
+            style={{ color: 'var(--wr-amber)', backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', cursor: 'pointer' }}>
+            ← Back to session · filtered to this session
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div
         className="flex items-center gap-4 px-6 py-2 border-b flex-wrap"

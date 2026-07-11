@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { BarChart3, Download, FileText, Target, Link2, Bot } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -52,18 +53,20 @@ const SECTIONS = [
 
 export default function Reports() {
   const { db } = useWorkspace();
+  const [searchParams] = useSearchParams();
+  const sessionParam = searchParams.get('session') || '';
   const [sessions, setSessions] = useState([]);
   const [agents, setAgents] = useState([]);
   const [scenarios, setScenarios] = useState([]);
   const [domains, setDomains] = useState([]);
   const [chains, setChains] = useState([]);
-  const [selectedSession, setSelectedSession] = useState('');
+  const [selectedSession, setSelectedSession] = useState(sessionParam);
   const [selectedSections, setSelectedSections] = useState(new Set(SECTIONS.map(s => s.key)));
   const [sessionAgents, setSessionAgents] = useState([]);
   const [synthesis, setSynthesis] = useState(null);
   const [selectedScenario, setSelectedScenario] = useState('');
   const [selectedChain, setSelectedChain] = useState('');
-  const [selectedExecSession, setSelectedExecSession] = useState('');
+  const [selectedExecSession, setSelectedExecSession] = useState(sessionParam);
   const [execSessionAgents, setExecSessionAgents] = useState([]);
   const [execSynthesis, setExecSynthesis] = useState(null);
 
@@ -925,6 +928,15 @@ export default function Reports() {
         title="REPORTS"
         subtitle="Export and share session outputs and scenario briefs"
       />
+
+      {sessionParam && (
+        <div className="px-6 pt-4">
+          <Link to={`/sessions/${sessionParam}`} className="text-xs font-mono inline-flex items-center gap-1 px-2 py-1 rounded"
+            style={{ color: 'var(--wr-amber)', backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', textDecoration: 'none' }}>
+            ← Back to session · pre-selected below
+          </Link>
+        </div>
+      )}
 
       <div className="p-6 max-w-3xl space-y-6">
 

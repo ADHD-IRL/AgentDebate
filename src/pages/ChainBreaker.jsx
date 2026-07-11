@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { analyzeChainBreaker } from '@/lib/llm';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import {
@@ -40,6 +41,8 @@ function fmtDate(iso) {
 
 export default function ChainBreaker() {
   const { db } = useWorkspace();
+  const [searchParams] = useSearchParams();
+  const sessionParam = searchParams.get('session') || '';
 
   // Entity data
   const [chains,    setChains]    = useState([]);
@@ -89,12 +92,31 @@ export default function ChainBreaker() {
     }).catch(() => setLoading(false));
   }, [db]);
 
+  // Deep-link: ?session=<id> → select that session's synthesis (first with chains)
+  useEffect(() => {
+    if (!sessionParam || loading) return;
+    const synth = syntheses.find(s => s.session_id === sessionParam && s.compound_chains?.length > 0);
+    if (synth) {
+      setSource('session');
+      setSelectedSynthId(synth.id);
+      setCompoundIdx(0);
+    }
+  }, [sessionParam, loading, syntheses]);
+
   // ── Derived data ─────────────────────────────────────────────────────────────
 
   const synthesesWithChains = useMemo(
     () => syntheses.filter(s => s.compound_chains?.length > 0),
     [syntheses]
   );
+
+  // Session behind the currently selected synthesis (for stamping & back-link)
+  const activeSessionId = useMemo(() => {
+    if (source === 'session' && selectedSynthId) {
+      return syntheses.find(s => s.id === selectedSynthId)?.session_id || null;
+    }
+    return sessionParam || null;
+  }, [source, selectedSynthId, syntheses, sessionParam]);
 
   const sessionById = useMemo(
     () => Object.fromEntries(sessions.map(s => [s.id, s])),
@@ -372,6 +394,7 @@ export default function ChainBreaker() {
         source: 'chain_breaker',
         chain_id: source === 'library' ? selectedChainId : null,
         scenario_id: selectedScenarioId || null,
+        session_id: activeSessionId || null,
         inherent_likelihood: inherent[0],
         inherent_impact: inherent[1],
       });
@@ -391,6 +414,15 @@ export default function ChainBreaker() {
         title="CHAIN BREAKER"
         subtitle="Map adversary dependencies across compound attack chains and identify the highest-leverage points to break them"
       />
+
+      {activeSessionId && (
+        <div className="px-6 pt-4">
+          <Link to={`/sessions/${activeSessionId}`} className="text-xs font-mono inline-flex items-center gap-1 px-2 py-1 rounded"
+            style={{ color: 'var(--wr-amber)', backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', textDecoration: 'none' }}>
+            ← Back to session
+          </Link>
+        </div>
+      )}
 
       <div className="p-6 space-y-6">
 

@@ -430,9 +430,9 @@ export default function WhatIfSimulator() {
                 </div>
               )}
 
-              {/* Generate brief */}
+              {/* Generate brief — routes to Reports pre-scoped to this session */}
               {sessionId && (
-                <Link to={`/brief/${sessionId}`}
+                <Link to={`/reports?session=${sessionId}`}
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded text-sm font-semibold transition-all hover:opacity-90"
                   style={{ backgroundColor: 'rgba(240,165,0,0.1)', color: 'var(--wr-amber)',
                     border: '1px solid rgba(240,165,0,0.3)' }}>
