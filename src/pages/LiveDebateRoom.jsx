@@ -9,6 +9,7 @@ import {
   parseMarkers,
 } from '@/lib/llm';
 import { saveTurnSources } from '@/lib/sources';
+import { buildDecisionFraming } from '@/lib/decisionContext';
 import SpeakerStage      from '@/components/debate/SpeakerStage';
 import AddressChips      from '@/components/debate/AddressChips';
 import AgentAvatar       from '@/components/debate/AgentAvatar';
@@ -183,6 +184,7 @@ export default function LiveDebateRoom() {
   // ── Core state ──────────────────────────────────────────────────────────────
   const [session, setSession]             = useState(null);
   const [scenario, setScenario]           = useState(null);
+  const [decisionFraming, setDecisionFraming] = useState('');
   const [sourcePins, setSourcePins]       = useState([]);
   const [sessionAgents, setSessionAgents] = useState([]);
   const [profiles, setProfiles]           = useState({});  // agent_id → agent row
@@ -241,6 +243,18 @@ const streamControllerRef = useRef(null);
         setScenario(await db.Scenario.get(sess.scenario_id));
         const t = await db.Threat.filter({ scenario_id: sess.scenario_id });
         setThreats(t);
+      }
+
+      // Decision-Focus session: build the framing block injected into prompts
+      if (sess?.decision_id && sess?.decision_option_id && db.Decision) {
+        try {
+          const [decision, option, assumptions] = await Promise.all([
+            db.Decision.get(sess.decision_id),
+            db.DecisionOption.get(sess.decision_option_id),
+            db.DecisionAssumption.filter({ decision_id: sess.decision_id }).catch(() => []),
+          ]);
+          setDecisionFraming(buildDecisionFraming(decision, option, assumptions));
+        } catch { setDecisionFraming(''); }
       }
 
       setMessages(msgs.map(m => ({
@@ -305,7 +319,7 @@ const streamControllerRef = useRef(null);
     setPhase(round === 1 ? 'idle' : 'r1done');
   }, [sessionAgents, resetAgent]);
 
-const scenarioCtx = scenario?.context_document || session?.context_override || '';
+const scenarioCtx = decisionFraming + (scenario?.context_document || session?.context_override || '');
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
 
