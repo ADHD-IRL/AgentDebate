@@ -1,8 +1,22 @@
 # AgentDebate
 
-Structured multi-agent risk assessment platform. Build expert agent panels, run two-round red team sessions, and produce decision briefs — or drop into the **Live Debate Room** for a real-time streaming debate with voice narration you can facilitate on the fly.
+Structured multi-agent risk assessment and decision-support platform. Frame a design decision, assemble a panel of expert agents, run two-round red-team sessions, and turn what they surface into quantified risk, kill chains, and a tracked mitigation plan — or drop into the **Live Debate Room** for a real-time streaming debate you can facilitate on the fly.
 
-Multi-user, workspace-aware deployment backed by Supabase. All AI calls go directly from your browser to the Anthropic API using your own key. Voice features use the OpenAI API directly from the browser.
+Multi-user, workspace-aware deployment backed by Supabase. All AI calls go directly from your browser to the Anthropic API using your own key.
+
+---
+
+## What it does
+
+- **Multidisciplinary panels** — build expert agents (or generate them with AI), each a distinct discipline, cognitive bias, and risk posture. The debate is engineered to surface **cross-domain interaction risks** that no single-discipline review would find.
+- **Two-round analysis** — independent Round 1 assessments, then cross-examination in Round 2, then an AI synthesis with consensus, contested findings, blind spots, and priority mitigations.
+- **Quantified risk** — every assessment carries a **likelihood × impact** band (1–5 each) and a calibrated **confidence** score, plotted on a per-round risk matrix.
+- **Decisions** — frame a design choice, compare 2–4 options by risk side by side, track key assumptions, and record an auditable decision.
+- **Threat Map** — coverage analysis of your threat landscape against your agent bench, with drill-down and Generate-SME gap closing.
+- **Chain Breaker & Mitigation Register** — dissect kill chains into a prioritized mitigation roadmap, then track each mitigation through its lifecycle and re-score residual risk.
+- **Evidence ledger** — every source an agent cites is captured per-SME with a credibility tier, so findings are traceable.
+- **Knowledge Base** — ingest your own design docs, incidents, and standards; the most relevant passages are retrieved and injected into each agent's prompt to ground the analysis.
+- **SME Library** — curate, quality-score, and reuse experts across sessions.
 
 ---
 
@@ -11,7 +25,6 @@ Multi-user, workspace-aware deployment backed by Supabase. All AI calls go direc
 - [Node.js](https://nodejs.org/) v18 or higher
 - A [Supabase](https://supabase.com/) project (free tier is sufficient)
 - An [Anthropic API key](https://console.anthropic.com/) with Messages API access
-- An [OpenAI API key](https://platform.openai.com/) *(optional — required only for voice TTS and push-to-talk)*
 
 ---
 
@@ -19,48 +32,21 @@ Multi-user, workspace-aware deployment backed by Supabase. All AI calls go direc
 
 ### 1. Create a Supabase project
 
-Go to [supabase.com/dashboard](https://supabase.com/dashboard) and create a new project. Note down your **Project URL** and **anon public key** from **Project Settings → API**.
+Go to [supabase.com/dashboard](https://supabase.com/dashboard) and create a new project. Note your **Project URL** and **anon public key** from **Project Settings → API**.
 
 ### 2. Run the database migrations
 
-Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) for your project and run the migration files in order:
+Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run the migrations. The fastest path is the consolidated base schema followed by the newer feature migrations:
 
-1. [`supabase/migrations/001_schema.sql`](supabase/migrations/001_schema.sql) — tables, triggers, Realtime config
-2. [`supabase/migrations/002_rls.sql`](supabase/migrations/002_rls.sql) — Row Level Security with workspace-scoped policies
-3. [`supabase/migrations/003_debate.sql`](supabase/migrations/003_debate.sql) — Live Debate session mode and transcript storage
-4. [`supabase/migrations/004_source_urls.sql`](supabase/migrations/004_source_urls.sql) — pinned source document support
+1. [`supabase/migrations/000_full_schema.sql`](supabase/migrations/000_full_schema.sql) — consolidated base schema, RLS, Realtime, and everything through migration 010 (workspaces, agents, sessions, sources, SME library, extended personas)
+2. [`supabase/migrations/011_quantified_risk.sql`](supabase/migrations/011_quantified_risk.sql) — likelihood/impact bands on assessments and threats
+3. [`supabase/migrations/012_mitigation_register.sql`](supabase/migrations/012_mitigation_register.sql) — mitigation register with residual re-scoring
+4. [`supabase/migrations/013_decisions.sql`](supabase/migrations/013_decisions.sql) — decisions, options, assumptions
+5. [`supabase/migrations/014_knowledge_base.sql`](supabase/migrations/014_knowledge_base.sql) — knowledge documents and chunks
 
-### 3. Apply post-migration patches
+> The individual incremental migrations `001`–`010` are also kept in the folder as history; running `000_full_schema.sql` is equivalent to running them in order. All migrations are idempotent (`if not exists` / `drop policy if exists`), so re-running is safe.
 
-Run the following SQL in the editor. This fixes workspace bootstrap for new users and adds the `voice_id` column used by the Live Debate Room:
-
-```sql
--- Allow workspace owners to bootstrap their own member record on first login
-create policy "workspaces_read_owner" on public.workspaces
-  for select using (auth.uid() = owner_id);
-
-create or replace function public.owns_workspace(ws_id uuid)
-returns boolean as $$
-  select exists (
-    select 1 from public.workspaces
-    where id = ws_id and owner_id = auth.uid()
-  );
-$$ language sql security definer stable;
-
-drop policy if exists "members_insert" on public.workspace_members;
-create policy "members_insert" on public.workspace_members for insert with check (
-  is_admin(workspace_id)
-  or (
-    auth.uid() = user_id
-    and owns_workspace(workspace_id)
-  )
-);
-
--- Voice ID for agents (OpenAI TTS voice assigned per analyst)
-alter table public.agents add column if not exists voice_id text;
-```
-
-### 4. Configure authentication
+### 3. Configure authentication
 
 In your Supabase dashboard go to **Authentication → URL Configuration** and add your app's URL (e.g. `http://localhost:5173`) to **Redirect URLs**.
 
@@ -85,24 +71,15 @@ Create a `.env.local` file in the project root:
 ```bash
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
-
-# Optional: set OpenAI key via env instead of Settings UI
-# VITE_OPENAI_KEY=sk-...
 ```
 
-Both Supabase values are found under **Project Settings → API**.
+Both values are found under **Project Settings → API**.
 
-> If `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` are missing the app shows a **Setup Required** screen with instructions rather than a blank page.
+> If `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` are missing, the app shows a **Setup Required** screen with instructions rather than a blank page.
 
-### 3. Add the splash page hero image
+### 3. Add the splash page hero image (optional)
 
-Place your hero image at:
-
-```
-public/splash-hero.jpg
-```
-
-This is displayed as the full-bleed background on the login/splash page. The app works without it (dark fallback background), but the image completes the visual identity.
+Place your hero image at `public/splash-hero.jpg`. It's the full-bleed background on the login/splash page. The app works without it (dark fallback background).
 
 ### 4. Start the development server
 
@@ -119,80 +96,45 @@ The app is available at `http://localhost:5173`.
 1. Open the app — the splash page is always shown first
 2. Click **Request access** to create an account, or sign in with Google
 3. A workspace is automatically created and you are added as admin
-4. Go to **Settings** and configure your API keys:
-   - **Anthropic API key** — required for all AI analysis (stored in your workspace record, shared with members)
-   - **OpenAI API key** — required for voice TTS narration and push-to-talk transcription (stored in browser `localStorage`, per-device)
+4. Go to **Settings** and add your **Anthropic API key** — required for all AI analysis (stored in your workspace record, shared with members)
+5. The **Dashboard** shows a getting-started checklist that tracks your setup and points to the next step
 
 ---
 
 ## Workflow
 
-### Classic session
+The sidebar is organized as the workflow, top to bottom.
 
-1. **Domains** — define the subject areas relevant to your assessment (e.g. *Cybersecurity*, *Supply Chain*)
-2. **Agents** — build your expert panel; use **AI Generate** or **Import** from Markdown; assign each analyst a TTS voice
-3. **Scenarios** — create a scenario with a context document describing the system or threat environment
-4. **Sessions → New Session → Classic Analysis** — choose agents and scenario, click **Create Session**
-5. From the session workspace, run **Round 1**, then **Round 2**, then **Synthesize**
-6. **Results** — view synthesis, consensus findings, SCRS scores, threat chains, and chain-breaker analysis
+### 1 · Build
 
-### Live Debate Room
+- **Domains** — broad categories that link threats to the agents who can analyze them
+- **Agents** — your expert panel; build manually, **AI Generate**, or **Import** from Markdown
+- **SME Library** — curate, quality-score, and reuse experts
+- **Knowledge Base** — add your own documents so analysis is grounded in your material
 
-1. **Sessions → New Session → Live Debate** — configure agents, scenario, and optional pinned source URLs
-2. Click **Create Session** to land on the session workspace
-3. Click **Enter Debate Room** to open the live room
-4. Click **Round 1** — agent responses stream in with real-time voice narration (if OpenAI key is set)
-5. Ask questions at any time; use **Address** chips to direct a question at a specific agent
-6. Hold **Space** (or click the mic button) to speak a question via push-to-talk
-7. Click **Round 2** after Round 1 completes, then **Synthesize** when done
+### 2 · Plan
 
----
+- **Decisions** — frame the design choice and the options you're comparing
+- **Scenarios** — describe the system or threat environment to stress-test
+- **Threats** — optionally catalog known risks (with likelihood/impact)
 
-## Voice features
+### 3 · Run
 
-Voice requires an **OpenAI API key** added in Settings. All TTS and transcription calls are made directly from the browser to `api.openai.com` — no server required.
+- **Sessions → New Session → Classic Analysis** — pick agents and a scenario, then run **Round 1 → Round 2 → Synthesize**. Each assessment carries severity, likelihood × impact, and confidence; a risk matrix plots the panel's ratings.
+- **Live Debate Room** — a real-time streaming alternative where agents respond turn by turn and you facilitate: interject with notes, direct a question at a specific agent, and steer the debate.
+- **What-If Simulator** — explore how changes shift the risk picture.
 
-### Text-to-speech (TTS)
+### 4 · Act on Findings
 
-Each agent speaks in a distinct OpenAI TTS voice assigned when the agent is created. Available voices:
-
-| Voice | Character |
-|---|---|
-| `alloy` | Neutral · balanced |
-| `echo` | Male · measured |
-| `nova` | Female · energetic |
-| `onyx` | Male · deep |
-| `fable` | British · expressive |
-| `shimmer` | Female · soft |
-
-Voices are assigned per agent in the **Agent** form and persisted to the database. If no voice is explicitly set, voices are auto-assigned by roster position using the list above.
-
-To set a voice: open **Agents**, click an agent to edit, scroll to the **VOICE** section, and select a voice — you can click **Preview** to hear it before saving.
-
-### Push-to-talk (PTT)
-
-In the Live Debate Room, hold **Space** (or the mic button) to record a question. On release, the recording is sent to OpenAI Whisper for transcription and inserted as your message. The transcript appears immediately in the conversation for full accessibility.
-
-### Muting
-
-Each agent in the roster has a mute toggle. Muted agents do not produce audio. A global **Auto-play TTS** toggle in the voice settings panel disables all voice output while keeping the text transcript.
-
-### Keyboard shortcuts
-
-| Key | Action |
-|---|---|
-| `Space` (hold, no input focused) | Push-to-talk |
-| `⌘1` … `⌘6` | Address agent by roster index |
-| `⌘0` | Address the room (clear target) |
-| `H` | Raise hand / interrupt current speaker |
-| `⌘↵` | Send message |
-| `Esc` | Cancel recording, clear target |
+- **Threat Map** — where threats concentrate vs. where your agent bench actually covers them; drill into any slice, close gaps with Generate-SME
+- **Chains** — kill chains auto-extracted from synthesis
+- **Chain Breaker** — turn a chain into a prioritized **Mitigation Roadmap** (where to cut first, control type, effort, residual risk)
+- **Mitigations** — the register: track each mitigation through its lifecycle and re-score net residual risk
+- **Reports** — print-ready executive PDF
 
 ---
 
 ## Session states
-
-Sessions move through four states visible on the Sessions page and dashboard:
 
 | State | Meaning |
 |---|---|
@@ -201,20 +143,16 @@ Sessions move through four states visible on the Sessions page and dashboard:
 | **ROUND 2** | Rebuttal round in progress or complete |
 | **COMPLETE** | Both rounds done and synthesis generated |
 
-Findings (severity counts) only appear once agents have actually produced assessments — draft sessions show no findings.
+Findings (severity counts) only appear once agents have produced assessments — draft sessions show none.
 
 ---
 
-## Dashboard
+## Evidence & sources
 
-The analyst dashboard (`/dashboard`) gives a workspace-wide view:
+Every source an agent references — a tool-fetched URL, an inline `[SOURCE: "…"]` citation, or a facilitator entry — is captured on the session with a credibility tier (Authoritative / Credible / Speculative / Unverified). The session **SOURCES** tab shows this two ways:
 
-- **KPI strip** — critical findings, open findings (active sessions only), total sessions, average confidence, median severity drift — all scoped to a configurable time window (7 / 14 / 30 / 90 days)
-- **Priority queue** — unresolved criticals, high-drift sessions, coverage gaps, stale scenarios, low-confidence results
-- **Findings matrix** — per-domain severity breakdown for the last 14 days with sparkline trend bars
-- **Session feed** — filterable table of all sessions with status, findings, confidence, drift, and agent count
-- **Coverage panel** — domain × agent coverage heat map
-- **Quick actions** — one-click shortcuts to common tasks
+- **By SME** (the evidence ledger) — what each expert relied on, with an evidence-quality score and an *Unsupported Assessments* flag for agents that cited nothing
+- **By Tier** — grouped by credibility, with a **Run Validity Analysis** button that cross-checks sources for contradictions and unsupported claims
 
 ---
 
@@ -233,8 +171,6 @@ Agents can be bulk-imported from a `.md` file. Each block starts with an `##` he
 
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
 
-**Voice:** alloy | echo | nova | onyx | fable | shimmer
-
 **Vectors:**
 - Human: 85
 - Technical: 40
@@ -246,18 +182,7 @@ Agents can be bulk-imported from a `.md` file. Each block starts with an `##` he
 **Domain Tags:** Domain Name, Another Domain
 ```
 
-The `Voice` field is optional. Domains are matched by name (case-insensitive) or auto-created if they don't exist.
-
----
-
-## Splash page / login
-
-`/` always displays the splash page regardless of authentication state:
-
-- **Not signed in** — shows email/password form and Google SSO button
-- **Signed in** — shows your email address, an **Enter Workspace** button (→ Sessions), a **Go to Dashboard** button, and a sign-out link
-
-To replace the default dark background with the branded hero image, place your image at `public/splash-hero.jpg`. Any standard JPEG or PNG works; the image is displayed with `object-fit: contain` so the full graphic is always visible.
+Domains are matched by name (case-insensitive) or auto-created if they don't exist.
 
 ---
 
@@ -274,7 +199,7 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
 ```
 
-The OpenAI API key is entered by each user in Settings and stored in their browser — it does not need to be set at build time.
+The Anthropic API key is entered by each workspace in Settings and stored in the workspace record — it does not need to be set at build time.
 
 ---
 
@@ -288,8 +213,6 @@ The OpenAI API key is entered by each user in Settings and stored in their brows
 | Auth & database | Supabase (PostgreSQL + Row Level Security) |
 | Realtime | Supabase Realtime (sessions, session agents, live transcripts) |
 | AI — analysis | Anthropic API — `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-haiku-4-5` |
-| AI — voice TTS | OpenAI `tts-1` (`alloy`, `echo`, `nova`, `onyx`, `fable`, `shimmer`) |
-| AI — transcription | OpenAI Whisper (`whisper-1`) |
-| Knowledge search | Wikipedia API (CORS-friendly, used by agent tool calls) |
+| Knowledge retrieval | Organizational Knowledge Base (Postgres full-text); Wikipedia API fallback for agent tool calls |
 | Charts | Recharts |
 | Icons | Lucide React |
