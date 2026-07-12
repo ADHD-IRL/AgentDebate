@@ -10,7 +10,7 @@ function Popover({ title, show, children }) {
   if (!show) return null;
   return (
     <div
-      className="absolute z-30 left-0 bottom-full mb-2 w-64 rounded-lg p-3 text-left pointer-events-none"
+      className="absolute z-30 left-0 top-full mt-2 w-64 rounded-lg p-3 text-left pointer-events-none"
       style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', boxShadow: '0 8px 28px rgba(0,0,0,0.45)' }}
     >
       <p className="text-[11px] font-bold font-mono tracking-wider mb-1.5" style={{ color: 'var(--wr-amber)' }}>{title}</p>
