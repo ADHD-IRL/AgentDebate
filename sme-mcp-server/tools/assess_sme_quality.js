@@ -45,9 +45,19 @@ Decision Style: ${agent.decision_style || '(missing)'}
 Adversary Model: ${agent.adversary_model || '(missing)'}
 Institutional Incentives: ${agent.institutional_incentives || '(missing)'}
 Analytical Framework: ${agent.analytical_framework || '(missing)'}
+Source Preferences: ${agent.source_preferences || '(missing)'}
 Tags: ${(agent.tags || []).join(', ') || '(none)'}
 
-Score on 0-100 based on completeness, specificity, consistency, and distinctiveness.
+— Human-matching dimensions (weight these HIGHEST; they most separate a bona fide expert from a confident generalist) —
+Domain Fluency: ${JSON.stringify(agent.domain_expertise || {})}
+Expertise Boundaries (strong/weak/defer_to/forbidden_overreach): ${JSON.stringify(agent.expertise_boundaries || {})}
+Debiasing Instruction (should pair with the cognitive bias): ${agent.debiasing_instruction || '(missing)'}
+Tradecraft (indicators/false_positives/failure_modes): ${JSON.stringify(agent.tradecraft || {})}
+Risk Posture (FP/FN asymmetry): ${JSON.stringify(agent.risk_posture || {})}
+Debate Behavior: ${JSON.stringify(agent.debate_behavior || {})}
+Belief-Update Rules: ${JSON.stringify(agent.update_triggers || {})}
+
+Score on 0-100 based on completeness, specificity, consistency, distinctiveness, and — weighted HIGHEST — human-matching depth: does it declare competence boundaries and defer outside them, pair its bias with a debiasing habit, express a false-negative/false-positive asymmetry, and give concrete belief-update rules? A profile missing these should not score above 70 however polished its prose.
 
 Return ONLY this JSON:
 {
