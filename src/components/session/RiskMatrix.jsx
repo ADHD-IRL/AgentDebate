@@ -1,14 +1,16 @@
 import { useMemo, useState, Fragment } from 'react';
-import { ChevronDown, ChevronUp, Grid3x3 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Grid3x3, HelpCircle } from 'lucide-react';
 import { matrixCellColor, riskScore, riskBandFromScore, likelihoodLabel, impactLabel, expectedExposure } from '@/lib/risk';
 
 const BANDS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const BAND_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
 
-function Stat({ label, value, sub, color }) {
+function Stat({ label, value, sub, color, tip }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[10px] font-mono tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>{label}</span>
+    <div className="flex flex-col" title={tip} style={{ cursor: tip ? 'help' : 'default' }}>
+      <span className="text-[10px] font-mono tracking-wider flex items-center gap-0.5" style={{ color: 'var(--wr-text-muted)' }}>
+        {label}{tip && <HelpCircle className="w-2.5 h-2.5 opacity-50" />}
+      </span>
       <span className="text-base font-bold font-mono leading-tight" style={{ color: color || 'var(--wr-text-primary)' }}>{value}</span>
       {sub && <span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>{sub}</span>}
     </div>
@@ -75,17 +77,38 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
     <div className="rounded-lg" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
       {/* Compact strip */}
       <div className="flex items-center gap-4 px-3 py-2 flex-wrap">
-        <Stat label="PEAK" value={<>{summary.peak}<span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>/25</span></>} sub={peakBand.label} color={peakBand.color} />
+        <Stat
+          label="PEAK"
+          value={<>{summary.peak}<span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>/25</span></>}
+          sub={peakBand.label}
+          color={peakBand.color}
+          tip={`Highest risk score any single SME assigned this round: likelihood × impact (each 1–5), so 1–25. Currently ${summary.peak}/25 (${peakBand.label}). This is the worst-case read, not an average.`}
+        />
         <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
-        <Stat label="EXPOSURE" value={summary.avgExposure} sub="conf-weighted" />
+        <Stat
+          label="EXPOSURE"
+          value={summary.avgExposure}
+          sub="conf-weighted"
+          tip={`Average of every SME's risk score, each scaled by how confident they were (score × confidence%). Lower than Peak because it accounts for uncertainty and the full panel — a hedged CRITICAL counts for less than a confident one.`}
+        />
         <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
-        <Stat label="CONSENSUS" value={consensus.label} sub={summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'} color={consensus.color} />
+        <Stat
+          label="CONSENSUS"
+          value={consensus.label}
+          sub={summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'}
+          color={consensus.color}
+          tip={`How much the SMEs disagree on risk, measured as the gap between the highest and lowest scores (${summary.low}–${summary.peak}, spread ${summary.spread}). Aligned = identical, Close < 5, Mixed 5–9, Divergent ≥ 10. A wide spread flags a disagreement worth resolving before you trust the number.`}
+        />
 
         {/* Band distribution bar */}
-        <div className="flex-1 min-w-[140px]">
+        <div
+          className="flex-1 min-w-[140px]"
+          title={`Where the ${summary.count} SME rating${summary.count !== 1 ? 's' : ''} fall across the risk bands (CRITICAL ≥ 15, HIGH 9–14, MEDIUM 4–8, LOW < 4). Segment width is proportional to the SME count in each band.`}
+          style={{ cursor: 'help' }}
+        >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>
-              {summary.count} SME{summary.count !== 1 ? 's' : ''} RATED
+            <span className="text-[10px] font-mono tracking-wider flex items-center gap-0.5" style={{ color: 'var(--wr-text-muted)' }}>
+              {summary.count} SME{summary.count !== 1 ? 's' : ''} RATED <HelpCircle className="w-2.5 h-2.5 opacity-50" />
             </span>
           </div>
           <div className="flex h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
