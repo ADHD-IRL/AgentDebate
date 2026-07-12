@@ -5,11 +5,41 @@ import { matrixCellColor, riskScore, riskBandFromScore, likelihoodLabel, impactL
 const BANDS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const BAND_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
 
-function Stat({ label, value, sub, color, tip }) {
+// Styled hover popover — richer than a native title tooltip.
+function Popover({ title, show, children }) {
+  if (!show) return null;
   return (
-    <div className="flex flex-col" title={tip} style={{ cursor: tip ? 'help' : 'default' }}>
+    <div
+      className="absolute z-30 left-0 bottom-full mb-2 w-64 rounded-lg p-3 text-left pointer-events-none"
+      style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', boxShadow: '0 8px 28px rgba(0,0,0,0.45)' }}
+    >
+      <p className="text-[11px] font-bold font-mono tracking-wider mb-1.5" style={{ color: 'var(--wr-amber)' }}>{title}</p>
+      <div className="text-[11px] leading-relaxed space-y-1.5" style={{ color: 'var(--wr-text-secondary)' }}>{children}</div>
+    </div>
+  );
+}
+
+// Wraps any trigger with a hover popover.
+function WithPopover({ title, body, className, style, children }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      className={`relative ${className || ''}`}
+      style={{ cursor: 'help', ...style }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      <Popover title={title} show={show}>{body}</Popover>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, color }) {
+  return (
+    <div className="flex flex-col">
       <span className="text-[10px] font-mono tracking-wider flex items-center gap-0.5" style={{ color: 'var(--wr-text-muted)' }}>
-        {label}{tip && <HelpCircle className="w-2.5 h-2.5 opacity-50" />}
+        {label}<HelpCircle className="w-2.5 h-2.5 opacity-50" />
       </span>
       <span className="text-base font-bold font-mono leading-tight" style={{ color: color || 'var(--wr-text-primary)' }}>{value}</span>
       {sub && <span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>{sub}</span>}
@@ -60,13 +90,16 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
 
   const peakBand = riskBandFromScore(summary.peak);
   // Divergence read: a wide spread of scores means the SMEs disagree on risk.
-  const consensus = summary.spread === 0
-    ? { label: 'Aligned', color: '#27AE60' }
-    : summary.spread >= 10
-      ? { label: 'Divergent', color: '#C0392B' }
-      : summary.spread >= 5
-        ? { label: 'Mixed', color: '#D68910' }
-        : { label: 'Close', color: '#2E86AB' };
+  // Undefined with a single rating — there's nothing to agree or disagree on yet.
+  const consensus = summary.count < 2
+    ? { label: '—', color: 'var(--wr-text-muted)' }
+    : summary.spread === 0
+      ? { label: 'Aligned', color: '#27AE60' }
+      : summary.spread >= 10
+        ? { label: 'Divergent', color: '#C0392B' }
+        : summary.spread >= 5
+          ? { label: 'Mixed', color: '#D68910' }
+          : { label: 'Close', color: '#2E86AB' };
 
   const cellPoints = {};
   points.forEach(p => { const key = `${p.l}-${p.i}`; (cellPoints[key] = cellPoints[key] || []).push(p); });
@@ -77,34 +110,62 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
     <div className="rounded-lg" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
       {/* Compact strip */}
       <div className="flex items-center gap-4 px-3 py-2 flex-wrap">
-        <Stat
-          label="PEAK"
-          value={<>{summary.peak}<span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>/25</span></>}
-          sub={peakBand.label}
-          color={peakBand.color}
-          tip={`Highest risk score any single SME assigned this round: likelihood × impact (each 1–5), so 1–25. Currently ${summary.peak}/25 (${peakBand.label}). This is the worst-case read, not an average.`}
-        />
+        <WithPopover
+          title="Peak risk"
+          body={<>
+            <p>The single riskiest call on the table right now — the highest score any one SME gave.</p>
+            <p>Each SME rates <strong style={{ color: 'var(--wr-text-primary)' }}>likelihood</strong> and <strong style={{ color: 'var(--wr-text-primary)' }}>impact</strong> from 1 to 5; we multiply them, so scores run 1–25. Right now that's <strong style={{ color: peakBand.color }}>{summary.peak}/25 ({peakBand.label})</strong>.</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>It's the worst case, not an average — one alarmed SME is enough to raise it.</p>
+          </>}
+        >
+          <Stat
+            label="PEAK"
+            value={<>{summary.peak}<span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>/25</span></>}
+            sub={peakBand.label}
+            color={peakBand.color}
+          />
+        </WithPopover>
         <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
-        <Stat
-          label="EXPOSURE"
-          value={summary.avgExposure}
-          sub="conf-weighted"
-          tip={`Average of every SME's risk score, each scaled by how confident they were (score × confidence%). Lower than Peak because it accounts for uncertainty and the full panel — a hedged CRITICAL counts for less than a confident one.`}
-        />
+        <WithPopover
+          title="Exposure"
+          body={<>
+            <p>The panel's overall risk level, in one number.</p>
+            <p>We average every SME's score, but first shrink each one by how sure that SME was. A confident severe call pulls it up; a hedged one barely moves it.</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>It usually sits below Peak because it reflects the whole panel and their uncertainty — not just the loudest alarm.</p>
+          </>}
+        >
+          <Stat label="EXPOSURE" value={summary.avgExposure} sub="confidence-weighted" />
+        </WithPopover>
         <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
-        <Stat
-          label="CONSENSUS"
-          value={consensus.label}
-          sub={summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'}
-          color={consensus.color}
-          tip={`How much the SMEs disagree on risk, measured as the gap between the highest and lowest scores (${summary.low}–${summary.peak}, spread ${summary.spread}). Aligned = identical, Close < 5, Mixed 5–9, Divergent ≥ 10. A wide spread flags a disagreement worth resolving before you trust the number.`}
-        />
+        <WithPopover
+          title="Consensus"
+          body={summary.count < 2 ? <>
+            <p>Whether the SMEs agree on the risk — <strong style={{ color: 'var(--wr-text-primary)' }}>not available yet</strong>.</p>
+            <p>Only one SME has put a number on it so far. There's nothing to agree or disagree on until a second SME rates.</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>Once ≥ 2 have rated, this shows how far apart their scores are: Aligned · Close · Mixed · Divergent.</p>
+          </> : <>
+            <p>Whether the SMEs actually agree on the risk.</p>
+            <p>We look at the gap between the highest and lowest scores — here <strong style={{ color: 'var(--wr-text-primary)' }}>{summary.low} to {summary.peak}</strong> (gap of {summary.spread}).</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>Aligned = everyone matches · Close = gap under 5 · Mixed = 5–9 · Divergent = 10+. A big gap means they don't agree — worth resolving before you trust the number.</p>
+          </>}
+        >
+          <Stat
+            label="CONSENSUS"
+            value={consensus.label}
+            sub={summary.count < 2 ? 'needs 2+ SMEs' : summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'}
+            color={consensus.color}
+          />
+        </WithPopover>
 
         {/* Band distribution bar */}
-        <div
+        <WithPopover
           className="flex-1 min-w-[140px]"
-          title={`Where the ${summary.count} SME rating${summary.count !== 1 ? 's' : ''} fall across the risk bands (CRITICAL ≥ 15, HIGH 9–14, MEDIUM 4–8, LOW < 4). Segment width is proportional to the SME count in each band.`}
-          style={{ cursor: 'help' }}
+          title="How the SMEs split"
+          body={<>
+            <p>Where the {summary.count} SME rating{summary.count !== 1 ? 's' : ''} land across the four risk levels.</p>
+            <p>Each colored segment is one level; its width is how many SMEs put the risk there.</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>Levels by score: <span style={{ color: BAND_COLOR.CRITICAL }}>Critical 15–25</span> · <span style={{ color: BAND_COLOR.HIGH }}>High 9–14</span> · <span style={{ color: BAND_COLOR.MEDIUM }}>Medium 4–8</span> · <span style={{ color: BAND_COLOR.LOW }}>Low 1–3</span>.</p>
+          </>}
         >
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-mono tracking-wider flex items-center gap-0.5" style={{ color: 'var(--wr-text-muted)' }}>
@@ -126,7 +187,7 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
               </span>
             ))}
           </div>
-        </div>
+        </WithPopover>
 
         <button
           onClick={() => setShowGrid(v => !v)}
