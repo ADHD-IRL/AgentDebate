@@ -90,13 +90,16 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
 
   const peakBand = riskBandFromScore(summary.peak);
   // Divergence read: a wide spread of scores means the SMEs disagree on risk.
-  const consensus = summary.spread === 0
-    ? { label: 'Aligned', color: '#27AE60' }
-    : summary.spread >= 10
-      ? { label: 'Divergent', color: '#C0392B' }
-      : summary.spread >= 5
-        ? { label: 'Mixed', color: '#D68910' }
-        : { label: 'Close', color: '#2E86AB' };
+  // Undefined with a single rating — there's nothing to agree or disagree on yet.
+  const consensus = summary.count < 2
+    ? { label: '—', color: 'var(--wr-text-muted)' }
+    : summary.spread === 0
+      ? { label: 'Aligned', color: '#27AE60' }
+      : summary.spread >= 10
+        ? { label: 'Divergent', color: '#C0392B' }
+        : summary.spread >= 5
+          ? { label: 'Mixed', color: '#D68910' }
+          : { label: 'Close', color: '#2E86AB' };
 
   const cellPoints = {};
   points.forEach(p => { const key = `${p.l}-${p.i}`; (cellPoints[key] = cellPoints[key] || []).push(p); });
@@ -136,16 +139,20 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
         <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
         <WithPopover
           title="Consensus"
-          body={<>
+          body={summary.count < 2 ? <>
+            <p>Whether the SMEs agree on the risk — <strong style={{ color: 'var(--wr-text-primary)' }}>not available yet</strong>.</p>
+            <p>Only one SME has put a number on it so far. There's nothing to agree or disagree on until a second SME rates.</p>
+            <p style={{ color: 'var(--wr-text-muted)' }}>Once ≥ 2 have rated, this shows how far apart their scores are: Aligned · Close · Mixed · Divergent.</p>
+          </> : <>
             <p>Whether the SMEs actually agree on the risk.</p>
-            <p>We look at the gap between the highest and lowest scores{summary.count > 1 ? <> — here <strong style={{ color: 'var(--wr-text-primary)' }}>{summary.low} to {summary.peak}</strong> (gap of {summary.spread})</> : ' (only one SME so far)'}.</p>
+            <p>We look at the gap between the highest and lowest scores — here <strong style={{ color: 'var(--wr-text-primary)' }}>{summary.low} to {summary.peak}</strong> (gap of {summary.spread}).</p>
             <p style={{ color: 'var(--wr-text-muted)' }}>Aligned = everyone matches · Close = gap under 5 · Mixed = 5–9 · Divergent = 10+. A big gap means they don't agree — worth resolving before you trust the number.</p>
           </>}
         >
           <Stat
             label="CONSENSUS"
             value={consensus.label}
-            sub={summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'}
+            sub={summary.count < 2 ? 'needs 2+ SMEs' : summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'}
             color={consensus.color}
           />
         </WithPopover>
