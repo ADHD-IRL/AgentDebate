@@ -154,9 +154,15 @@ export default function SynthesisSummary({ synthesis, sessionAgents, agents, thr
               ))}
             </div>
           )}
-          <p className="text-xs mt-2 font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-            {totalThreats} threat{totalThreats !== 1 ? 's' : ''} in scenario
-          </p>
+          {totalThreats === 0 && onGoToThreats ? (
+            <button onClick={onGoToThreats} className="text-xs mt-2 font-mono font-bold" style={{ color: 'var(--wr-amber)' }}>
+              Extract from synthesis →
+            </button>
+          ) : (
+            <p className="text-xs mt-2 font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+              {totalThreats} threat{totalThreats !== 1 ? 's' : ''} in scenario
+            </p>
+          )}
         </TileCard>
 
         {/* Sources tile */}

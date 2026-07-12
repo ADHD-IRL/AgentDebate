@@ -82,8 +82,24 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
 
   const [tagInput, setTagInput] = useState('');
 
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setAi = (k, v) => setAiForm(f => ({ ...f, [k]: v }));
+
+  // Nested jsonb setters (expertise_boundaries, tradecraft, risk_posture, debate_behavior, update_triggers)
+  const setNested = (objKey, subKey, v) => setForm(f => ({ ...f, [objKey]: { ...(f[objKey] || {}), [subKey]: v } }));
+  const setNestedList = (objKey, subKey, v) => setNested(objKey, subKey, v.split(',').map(s => s.trim()).filter(Boolean));
+  const listVal = (objKey, subKey) => { const x = form[objKey]?.[subKey]; return Array.isArray(x) ? x.join(', ') : (x || ''); };
+  const fluencyVal = () => Object.entries(form.domain_expertise || {}).map(([k, v]) => `${k}: ${v}`).join(', ');
+  const setFluency = (str) => {
+    const obj = {};
+    str.split(',').forEach(pair => {
+      const m = pair.match(/(.+?):\s*(\d+)/);
+      if (m) obj[m[1].trim()] = Math.min(10, Math.max(0, parseInt(m[2], 10)));
+    });
+    set('domain_expertise', obj);
+  };
 
   // Generate full new agent
   const generateAgent = async () => {
@@ -264,6 +280,9 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
                   <RegenField label="COGNITIVE BIAS" fieldKey="cognitive_bias" value={form.cognitive_bias} onChange={v => set('cognitive_bias', v)}
                     onRegen={() => regenField('cognitive_bias')} regenning={!!regenning.cognitive_bias} rows={2}
                     placeholder="What this expert systematically underweights or misses..." />
+                  <RegenField label="DEBIASING INSTRUCTION" fieldKey="debiasing_instruction" value={form.debiasing_instruction} onChange={v => set('debiasing_instruction', v)}
+                    onRegen={() => regenField('debiasing_instruction')} regenning={!!regenning.debiasing_instruction} rows={2} optional
+                    placeholder="The self-correction habit that counters the bias above (paired with it in every prompt)..." />
                   <RegenField label="RED-TEAM FOCUS" fieldKey="red_team_focus" value={form.red_team_focus} onChange={v => set('red_team_focus', v)}
                     onRegen={() => regenField('red_team_focus')} regenning={!!regenning.red_team_focus} rows={2}
                     placeholder="What this agent hunts for in any scenario..." />
@@ -278,6 +297,12 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
                   <RegenField label="EPISTEMIC STYLE" fieldKey="epistemic_style" value={form.epistemic_style} onChange={v => set('epistemic_style', v)}
                     onRegen={() => regenField('epistemic_style')} regenning={!!regenning.epistemic_style} rows={2} optional
                     placeholder="Evidence threshold, preferred collection types, tolerance for ambiguity..." />
+                  <RegenField label="SOURCE PREFERENCES" fieldKey="source_preferences" value={form.source_preferences} onChange={v => set('source_preferences', v)}
+                    onRegen={() => regenField('source_preferences')} regenning={!!regenning.source_preferences} rows={2} optional
+                    placeholder="Evidence/collection types this expert weights most: HUMINT / OSINT / telemetry / financial / academic..." />
+                  <RegenField label="ANALYTICAL FRAMEWORK" fieldKey="analytical_framework" value={form.analytical_framework} onChange={v => set('analytical_framework', v)}
+                    onRegen={() => regenField('analytical_framework')} regenning={!!regenning.analytical_framework} rows={2} optional
+                    placeholder="Named methods this expert applies: ACH, MITRE ATT&CK, kill-chain, Bayesian updating..." />
                   <RegenField label="CONFLICT TRIGGERS" fieldKey="conflict_triggers" value={form.conflict_triggers} onChange={v => set('conflict_triggers', v)}
                     onRegen={() => regenField('conflict_triggers')} regenning={!!regenning.conflict_triggers} rows={2} optional
                     placeholder="What arguments or sources this expert distrusts or dismisses..." />
@@ -302,6 +327,109 @@ export default function AgentFormModal({ agent, mode: initialMode, aiSeed, domai
                     onRegen={() => regenField('institutional_incentives')} regenning={!!regenning.institutional_incentives} rows={2} optional
                     placeholder="Career, organizational, and political incentives shaping assessments..." />
                 </div>
+              </div>
+
+              {/* OPTIMAL SME — competence map, tradecraft, risk posture, debate behavior */}
+              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(240,165,0,0.2)' }}>
+                <button type="button" onClick={() => setShowAdvanced(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                  style={{ backgroundColor: 'rgba(240,165,0,0.06)' }}>
+                  <span className="flex items-center gap-2 text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-amber)' }}>
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> OPTIMAL SME — COMPETENCE, TRADECRAFT & DEBATE
+                  </span>
+                  {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} /> : <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--wr-amber)' }} />}
+                </button>
+                {showAdvanced && (
+                  <div className="px-4 pb-4 pt-3 space-y-4" style={{ borderTop: '1px solid var(--wr-border)' }}>
+                    <p className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>
+                      These fields most separate a bona fide expert from a confident generalist — they keep the SME in its lane, guard against its discipline's blind spots, and make Round 2 belief-updates real. All optional; all injected into the debate prompt.
+                    </p>
+
+                    {/* Competence map */}
+                    <div>
+                      <p className="text-[11px] font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-secondary)' }}>COMPETENCE MAP</p>
+                      <div className="space-y-2">
+                        <WrInput label="DOMAIN FLUENCY (label: 0-10, comma-separated)" value={fluencyVal()} onChange={setFluency}
+                          placeholder="intelligence tradecraft: 9, cyber technical: 5, insider threat: 8" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <WrInput label="STRONG IN" value={listVal('expertise_boundaries','strong')} onChange={v => setNestedList('expertise_boundaries','strong', v)} placeholder="comma-separated" />
+                          <WrInput label="WEAK IN" value={listVal('expertise_boundaries','weak')} onChange={v => setNestedList('expertise_boundaries','weak', v)} placeholder="comma-separated" />
+                          <WrInput label="DEFER TO" value={listVal('expertise_boundaries','defer_to')} onChange={v => setNestedList('expertise_boundaries','defer_to', v)} placeholder="disciplines this SME yields to" />
+                          <WrInput label="FORBIDDEN OVERREACH" value={listVal('expertise_boundaries','forbidden_overreach')} onChange={v => setNested('expertise_boundaries','forbidden_overreach', v)} placeholder="what it must never claim as fact" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Analytic tradecraft */}
+                    <div>
+                      <p className="text-[11px] font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-secondary)' }}>ANALYTIC TRADECRAFT</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        <WrInput label="COMMON INDICATORS" value={listVal('tradecraft','common_indicators')} onChange={v => setNestedList('tradecraft','common_indicators', v)} placeholder="what it actively looks for (comma-separated)" />
+                        <WrInput label="COMMON FALSE POSITIVES" value={listVal('tradecraft','common_false_positives')} onChange={v => setNestedList('tradecraft','common_false_positives', v)} placeholder="what tends to fool this discipline" />
+                        <WrInput label="FAILURE MODES" value={listVal('tradecraft','failure_modes')} onChange={v => setNestedList('tradecraft','failure_modes', v)} placeholder="how this discipline characteristically errs" />
+                      </div>
+                    </div>
+
+                    {/* Risk posture */}
+                    <div>
+                      <p className="text-[11px] font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-secondary)' }}>RISK POSTURE (FP/FN ASYMMETRY)</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[['risk_sensitivity','RISK SENSITIVITY'],['false_negative_tolerance','FALSE-NEG TOLERANCE'],['false_positive_tolerance','FALSE-POS TOLERANCE']].map(([key, label]) => (
+                          <div key={key}>
+                            <label className="block text-[10px] font-medium mb-1 tracking-wide" style={{ color: 'var(--wr-text-secondary)' }}>{label}</label>
+                            <div className="flex gap-1">
+                              {['low','medium','high'].map(opt => (
+                                <button key={opt} type="button" onClick={() => setNested('risk_posture', key, form.risk_posture?.[key] === opt ? '' : opt)}
+                                  className="flex-1 px-1 py-1 rounded text-[10px] font-medium capitalize transition-all"
+                                  style={{
+                                    backgroundColor: form.risk_posture?.[key] === opt ? 'var(--wr-amber)' : 'var(--wr-bg-primary)',
+                                    color: form.risk_posture?.[key] === opt ? '#0D1B2A' : 'var(--wr-text-secondary)',
+                                    border: `1px solid ${form.risk_posture?.[key] === opt ? 'var(--wr-amber)' : 'var(--wr-border)'}`,
+                                  }}>
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2">
+                        <WrInput label="ESCALATION BIAS" value={form.risk_posture?.escalation_bias || ''} onChange={v => setNested('risk_posture','escalation_bias', v)} placeholder="short phrase, e.g. escalates early on ambiguous OT anomalies" />
+                      </div>
+                    </div>
+
+                    {/* Debate behavior + belief-update rules */}
+                    <div>
+                      <p className="text-[11px] font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-secondary)' }}>DEBATE BEHAVIOR &amp; BELIEF-UPDATE RULES</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <WrInput label="DEBATE ROLE" value={form.debate_behavior?.debate_role || ''} onChange={v => setNested('debate_behavior','debate_role', v)} placeholder="e.g. domain challenger, coalition builder" />
+                        <WrInput label="REBUTTAL STYLE" value={form.debate_behavior?.rebuttal_style || ''} onChange={v => setNested('debate_behavior','rebuttal_style', v)} placeholder="how they argue and concede" />
+                        <WrInput label="WHAT CHANGES MIND" value={form.debate_behavior?.what_changes_mind || ''} onChange={v => setNested('debate_behavior','what_changes_mind', v)} placeholder="the evidence that moves them" className="col-span-2" />
+                        <WrInput label="UPDATES FAST WHEN" value={form.update_triggers?.fast_when || ''} onChange={v => setNested('update_triggers','fast_when', v)} placeholder="revises quickly when..." />
+                        <WrInput label="UPDATES SLOW WHEN" value={form.update_triggers?.slow_when || ''} onChange={v => setNested('update_triggers','slow_when', v)} placeholder="revises cautiously when..." />
+                        <WrInput label="RESISTANT WHEN" value={form.update_triggers?.resistant_when || ''} onChange={v => setNested('update_triggers','resistant_when', v)} placeholder="digs in when..." className="col-span-2" />
+                      </div>
+                    </div>
+
+                    {/* Role type */}
+                    <div>
+                      <label className="block text-[11px] font-bold tracking-widest mb-2 font-mono" style={{ color: 'var(--wr-text-secondary)' }}>ROLE TYPE</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {['sme','red-team',"devil's-advocate",'facilitator'].map(rt => (
+                          <button key={rt} type="button" onClick={() => set('role_type', rt)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all capitalize"
+                            style={{
+                              backgroundColor: (form.role_type || 'sme') === rt ? '#2E86AB' : 'var(--wr-bg-primary)',
+                              color: (form.role_type || 'sme') === rt ? '#fff' : 'var(--wr-text-secondary)',
+                              border: `1px solid ${(form.role_type || 'sme') === rt ? '#2E86AB' : 'var(--wr-border)'}`,
+                            }}>
+                            {rt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* PERSONA TUNING */}

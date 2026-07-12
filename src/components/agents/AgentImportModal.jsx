@@ -37,6 +37,39 @@ const FORMAT_EXAMPLE = `## Counterintelligence / HUMINT Officer
 
 **Incentives:** Career shaped by avoiding false positives; institutional reputation depends on accuracy over speed.
 
+**Professional Background:** 22 years in DIA counterintelligence, including field elicitation and insider-threat investigations.
+**Expertise Level:** Principal
+**Reasoning Style:** Analytical
+
+### Domain Fluency
+* **intelligence tradecraft:** 9/10
+* **cyber technical:** 5/10
+* **insider threat:** 8/10
+
+### Expertise Boundaries
+**Strong:** foreign elicitation, insider-threat indicators, source validation
+**Weak:** ICS/OT internals, cryptographic implementation
+**Defer To:** Cyber on intrusion attribution; OT Engineer on control-system pathways
+**Forbidden Overreach:** never assert a specific malware family or exploit chain as fact
+
+### Analytic Tradecraft
+**Analytical Framework:** ACH; structured source validation
+**Common False Positives:** benign anomalous behavior read as hostile elicitation
+**Failure Modes:** overweighting human vectors when the pathway is technical
+
+### Bias Model
+**Debiasing Instruction:** before finalizing, ask what non-human explanation fits the same evidence.
+
+### Risk Posture
+**Risk Sensitivity:** high
+**False Negative Tolerance:** low
+**False Positive Tolerance:** medium
+
+### Debate Behavior
+**Debate Role:** domain challenger
+**What Changes Mind:** corroborating technical telemetry from a second collection domain
+**Updates Slow When:** the only evidence is single-source HUMINT
+
 ---
 
 ## All-Source Intelligence Analyst
@@ -91,6 +124,26 @@ function getSection(lines, startIdx, label) {
   return result.join(' ') || null;
 }
 
+const splitList = (s) => (s || '').split(/[,;]/).map(t => t.trim()).filter(Boolean);
+
+// Collect the lines under a `### Heading` sub-block, up to the next heading or ---.
+function getSubBlockLines(lines, heading) {
+  const norm = (s) => s.replace(/[#*\s]/g, '').toLowerCase();
+  const target = norm(heading);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{2,4}\s/.test(lines[i].trim()) && norm(lines[i]).includes(target)) { start = i + 1; break; }
+  }
+  if (start === -1) return [];
+  const out = [];
+  for (let i = start; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^#{1,4}\s/.test(t) || /^---/.test(t)) break;
+    out.push(lines[i]);
+  }
+  return out;
+}
+
 function parseAgentBlock(blockLines) {
   const agent = {
     name: '', discipline: '', persona_description: '', cognitive_bias: '',
@@ -99,6 +152,12 @@ function parseAgentBlock(blockLines) {
     tags: [], is_ai_generated: false, domain_tags: [],
     epistemic_style: '', institutional_background: '', conflict_triggers: '',
     decision_style: '', adversary_model: '', institutional_incentives: '',
+    // Optimal-SME extended fields (all optional, backwards compatible)
+    professional_background: '', expertise_level: '', role_type: 'sme',
+    reasoning_style: '', source_preferences: '', analytical_framework: '',
+    debiasing_instruction: '',
+    domain_expertise: {}, expertise_boundaries: {}, tradecraft: {},
+    risk_posture: {}, debate_behavior: {}, update_triggers: {},
   };
 
   // Name from ## heading: "## LIB-IC01 — Some Name" → "Some Name"
@@ -188,6 +247,61 @@ function parseAgentBlock(blockLines) {
 
   const incentives = findAndGet('Incentives') || findAndGet('Institutional Incentives') || findAndGet('Career Incentives');
   if (incentives) agent.institutional_incentives = incentives;
+
+  // ── Optimal-SME extended fields ──────────────────────────────────────────────
+  // Flat identity / epistemics / tradecraft fields
+  const set = (label, key) => { const v = findAndGet(label); if (v) agent[key] = v; };
+  set('Professional Background', 'professional_background');
+  set('Expertise Level', 'expertise_level');
+  set('Role Type', 'role_type');
+  set('Reasoning Style', 'reasoning_style');
+  set('Source Preferences', 'source_preferences');
+  set('Analytical Framework', 'analytical_framework');
+  set('Debiasing Instruction', 'debiasing_instruction');
+
+  // Severity may be written as "Severity Default:" in the template
+  const sevDef = findAndGet('Severity Default');
+  if (sevDef) {
+    const s = sevDef.toUpperCase();
+    if (['CRITICAL','HIGH','MEDIUM','LOW'].includes(s)) agent.severity_default = s;
+  }
+
+  // Domain Fluency → domain_expertise { label: 0-10 }
+  for (const l of getSubBlockLines(lines, 'Domain Fluency')) {
+    const m = l.match(/\*\*(.+?):\*\*\s*(\d+)\s*\/\s*10/) || l.match(/[-*]\s*(.+?):\s*(\d+)\s*\/\s*10/);
+    if (m) agent.domain_expertise[m[1].replace(/\*/g, '').trim()] = parseInt(m[2], 10);
+  }
+
+  // Expertise Boundaries → jsonb
+  const eb = agent.expertise_boundaries;
+  const strong = findAndGet('Strong');   if (strong) eb.strong = splitList(strong);
+  const moderate = findAndGet('Moderate'); if (moderate) eb.moderate = splitList(moderate);
+  const weak = findAndGet('Weak');       if (weak) eb.weak = splitList(weak);
+  const deferTo = findAndGet('Defer To'); if (deferTo) eb.defer_to = splitList(deferTo);
+  const forbidden = findAndGet('Forbidden Overreach'); if (forbidden) eb.forbidden_overreach = forbidden;
+
+  // Analytic Tradecraft → jsonb
+  const tc = agent.tradecraft;
+  const ci = findAndGet('Common Indicators');       if (ci) tc.common_indicators = splitList(ci);
+  const cfp = findAndGet('Common False Positives');  if (cfp) tc.common_false_positives = splitList(cfp);
+  const fm = findAndGet('Failure Modes');            if (fm) tc.failure_modes = splitList(fm);
+
+  // Risk Posture → jsonb (adversary_model / red_team_focus / decision_style already flat above)
+  const rp = agent.risk_posture;
+  const rSens = findAndGet('Risk Sensitivity');          if (rSens) rp.risk_sensitivity = rSens.toLowerCase();
+  const fnt = findAndGet('False Negative Tolerance');    if (fnt) rp.false_negative_tolerance = fnt.toLowerCase();
+  const fpt = findAndGet('False Positive Tolerance');    if (fpt) rp.false_positive_tolerance = fpt.toLowerCase();
+  const eBias = findAndGet('Escalation Bias');           if (eBias) rp.escalation_bias = eBias;
+
+  // Debate Behavior + belief-update rules → jsonb
+  const db = agent.debate_behavior;
+  const dRole = findAndGet('Debate Role');       if (dRole) db.debate_role = dRole;
+  const rebut = findAndGet('Rebuttal Style');    if (rebut) db.rebuttal_style = rebut;
+  const wcm = findAndGet('What Changes Mind');   if (wcm) db.what_changes_mind = wcm;
+  const ut = agent.update_triggers;
+  const fast = findAndGet('Updates Fast When');            if (fast) ut.fast_when = fast;
+  const slow = findAndGet('Updates Slow When');            if (slow) ut.slow_when = slow;
+  const resist = findAndGet('Resistant To Update When');   if (resist) ut.resistant_when = resist;
 
   return agent;
 }
@@ -337,8 +451,18 @@ export default function AgentImportModal({ existingDomains, onClose, onDone }) {
                     <li><span style={{ color: 'var(--wr-amber)' }}>**Tags:**</span> — comma-separated keyword tags</li>
                     <li><span style={{ color: 'var(--wr-amber)' }}>**Domain Tags:**</span> — comma-separated domain names to assign agents <span style={{ color: '#C0392B' }}>(required)</span></li>
                   </ul>
+                  <p className="text-xs pt-1" style={{ color: 'var(--wr-text-primary)' }}><strong>Optimal-SME blocks (optional, all improve reasoning quality):</strong></p>
+                  <ul className="space-y-1.5 ml-2">
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Domain Fluency</span> — <code>* **label:** N/10</code> bullets scoring depth per sub-dimension</li>
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Expertise Boundaries</span> — Strong / Moderate / Weak / Defer To / Forbidden Overreach (keeps the SME in its lane)</li>
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Analytic Tradecraft</span> — Analytical Framework / Common Indicators / Common False Positives / Failure Modes</li>
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Bias Model</span> — Cognitive Bias + Debiasing Instruction (the habit that counters it)</li>
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Risk Posture</span> — Severity Default / Risk Sensitivity / False Negative &amp; Positive Tolerance (FP/FN asymmetry)</li>
+                    <li><span style={{ color: 'var(--wr-amber)' }}>### Debate Behavior</span> — Debate Role / What Changes Mind / Updates Fast/Slow/Resistant When</li>
+                    <li>Plus flat fields: <span style={{ color: 'var(--wr-amber)' }}>Professional Background, Expertise Level, Reasoning Style, Source Preferences</span></li>
+                  </ul>
                   <p className="text-xs pt-1" style={{ color: 'var(--wr-text-muted)' }}>
-                   Domains are matched by name (case-insensitive) or auto-created if they don't exist. If an agent has multiple domain tags, the first one will be used. Other fields are safely ignored.
+                   Domains are matched by name (case-insensitive) or auto-created if they don't exist. If an agent has multiple domain tags, the first one will be used. Fields not recognized are safely ignored.
                   </p>
                 </div>
                 <pre className="text-xs rounded p-3 overflow-x-auto" style={{ backgroundColor: 'var(--wr-bg-primary)', color: 'var(--wr-text-secondary)', border: '1px solid var(--wr-border)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}>

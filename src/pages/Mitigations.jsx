@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
 import { Shield, Trash2, Search, TrendingDown } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -46,6 +47,8 @@ function RiskChip({ l, i }) {
 
 export default function Mitigations() {
   const { db } = useWorkspace();
+  const [searchParams] = useSearchParams();
+  const sessionParam = searchParams.get('session') || '';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -71,9 +74,10 @@ export default function Mitigations() {
   };
 
   const filtered = useMemo(() => items.filter(m =>
+    (!sessionParam || m.session_id === sessionParam) &&
     (!statusFilter || m.status === statusFilter) &&
     (!search || m.title?.toLowerCase().includes(search.toLowerCase()) || m.owner?.toLowerCase().includes(search.toLowerCase()))
-  ), [items, statusFilter, search]);
+  ), [items, statusFilter, search, sessionParam]);
 
   // Net risk reduction across mitigations that carry both inherent and residual scores
   const summary = useMemo(() => {
@@ -88,6 +92,15 @@ export default function Mitigations() {
   return (
     <div style={{ backgroundColor: 'var(--wr-bg-primary)', minHeight: '100vh' }}>
       <PageHeader icon={Shield} title="MITIGATIONS" subtitle="Track countermeasures and re-score residual risk after adoption" />
+
+      {sessionParam && (
+        <div className="px-6 pt-4">
+          <Link to={`/sessions/${sessionParam}`} className="text-xs font-mono inline-flex items-center gap-1 px-2 py-1 rounded"
+            style={{ color: 'var(--wr-amber)', backgroundColor: 'rgba(240,165,0,0.08)', border: '1px solid rgba(240,165,0,0.25)', textDecoration: 'none' }}>
+            ← Back to session · showing this session's mitigations
+          </Link>
+        </div>
+      )}
 
       {/* Summary */}
       {!loading && items.length > 0 && (

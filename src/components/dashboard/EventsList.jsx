@@ -95,6 +95,11 @@ function EventRow({ event }) {
           </div>
         )}
         <StatusPill status={event.status} live={event.live} />
+        {isPast && (
+          <span className="text-[10px] font-mono font-bold whitespace-nowrap" style={{ color: 'var(--wr-amber)' }}>
+            Next steps →
+          </span>
+        )}
       </div>
     </Link>
   );

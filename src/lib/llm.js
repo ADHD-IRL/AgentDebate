@@ -124,6 +124,9 @@ const FIELD_DESCRIPTIONS = {
   decision_style:           '1 sentence on escalation threshold, speed-vs-accuracy orientation, and crisis response posture',
   adversary_model:          '1 sentence on assumed adversary sophistication, motivations, and the primary threat lens applied',
   institutional_incentives: '1 sentence on career, organizational, and political incentives that shape how this expert frames assessments',
+  source_preferences:       '1 sentence on the evidence/collection types this expert weights most (HUMINT / OSINT / technical telemetry / financial / academic ...)',
+  analytical_framework:     '1-2 sentences naming the specific methods this expert applies (ACH, MITRE ATT&CK, kill-chain, Bayesian updating ...)',
+  debiasing_instruction:    '1 sentence on the concrete self-correction habit this expert uses to counter their cognitive bias',
 };
 
 export async function regenerateAgentField({ field, agent }) {
@@ -163,12 +166,17 @@ Known bias toward: ${bias_toward || 'none'}
 Institutional background hint: ${institutional_hint || 'none'}
 Adversary lens hint: ${adversary_hint || 'none'}
 
-Return a JSON object with exactly these fields:
+Return a JSON object with exactly these fields. Make every field specific to THIS expert — a bona fide human SME knows the edge of their competence, applies named methods, has a characteristic bias AND a habit to counter it, and treats false-negatives vs false-positives asymmetrically:
 {
   "name": "short descriptive name",
   "discipline": "2-4 word discipline label",
+  "expertise_level": "Junior | Mid-Level | Senior | Principal | World-Class",
+  "role_type": "sme | red-team | devil's-advocate | facilitator",
+  "reasoning_style": "Analytical | Intuitive | Contrarian | Systematic | Probabilistic",
   "persona_description": "3-4 sentence description of who this expert is, how they think, what they prioritize",
+  "professional_background": "2-3 sentences of career history and formative roles",
   "cognitive_bias": "1-2 sentences describing what this expert systematically underweights or misses",
+  "debiasing_instruction": "1 sentence: the self-correction habit this expert uses to counter that bias",
   "red_team_focus": "2-3 sentences on what this agent hunts for when analyzing any scenario",
   "severity_default": "CRITICAL or HIGH or MEDIUM",
   "vector_human": 50,
@@ -177,16 +185,47 @@ Return a JSON object with exactly these fields:
   "vector_futures": 40,
   "tags": ["array", "of", "3-5", "relevant", "tags"],
   "epistemic_style": "1-2 sentences: evidence threshold, preferred collection types, tolerance for ambiguity",
+  "source_preferences": "1 sentence: preferred evidence/collection types (HUMINT / OSINT / telemetry / financial / academic ...)",
+  "analytical_framework": "1-2 sentences: named methods this expert applies (ACH, MITRE ATT&CK, kill-chain, Bayesian ...)",
   "institutional_background": "1-2 sentences: former agency or sector and organizational culture imprint",
   "conflict_triggers": "1 sentence: what arguments or sources this expert distrusts or dismisses",
   "decision_style": "1 sentence: escalation threshold and response posture under uncertainty",
   "adversary_model": "1 sentence: assumed adversary sophistication and primary threat lens",
-  "institutional_incentives": "1 sentence: career or organizational incentives shaping this expert's assessments"
+  "institutional_incentives": "1 sentence: career or organizational incentives shaping this expert's assessments",
+  "domain_expertise": { "sub-dimension label": 8, "another sub-dimension": 5 },
+  "expertise_boundaries": {
+    "strong": ["areas of genuine depth"],
+    "moderate": ["working knowledge"],
+    "weak": ["shallow or dated knowledge"],
+    "defer_to": ["disciplines this SME yields to"],
+    "forbidden_overreach": "what this SME must never claim as fact outside its competence"
+  },
+  "tradecraft": {
+    "common_indicators": ["what this discipline actively looks for"],
+    "common_false_positives": ["what tends to fool this discipline"],
+    "failure_modes": ["how this discipline characteristically gets it wrong"]
+  },
+  "risk_posture": {
+    "risk_sensitivity": "low | medium | high",
+    "false_negative_tolerance": "low | medium | high",
+    "false_positive_tolerance": "low | medium | high",
+    "escalation_bias": "one short phrase"
+  },
+  "debate_behavior": {
+    "debate_role": "e.g. domain challenger, coalition builder, contrarian",
+    "rebuttal_style": "how they argue and concede",
+    "what_changes_mind": "the evidence or argument that moves them"
+  },
+  "update_triggers": {
+    "fast_when": "conditions under which they revise quickly",
+    "slow_when": "conditions under which they revise cautiously",
+    "resistant_when": "conditions under which they dig in"
+  }
 }
 
 Return ONLY the JSON object.`;
 
-  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 1800 });
+  const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2800 });
   const match = text.match(/\{[\s\S]*\}/);
   return JSON.parse(match ? match[0] : text);
 }
@@ -278,6 +317,87 @@ export function parseMarkers(fullText, fallbackSeverity) {
   return { assessment, severity, confidence, likelihood, impact, compound_chain_text };
 }
 
+// Render a stored list value (jsonb array or comma-string) as a clean comma list.
+function fmtList(v) {
+  if (Array.isArray(v)) return v.filter(Boolean).join(', ');
+  return (v || '').toString().trim();
+}
+
+// Shared persona header injected into every debate prompt (R1, R2, and their
+// stream twins) so the four bodies never drift. `round` = 1 | 2. Every line is
+// conditional so partially-filled SMEs degrade gracefully. This is where the
+// "optimal SME" fields actually shape reasoning: competence boundaries, the
+// bias+debiasing pair, FP/FN risk posture, tradecraft self-checks, and — in
+// Round 2 — the belief-update rules that make rebuttals move honestly.
+export function buildPersonaHeader(agent, { round } = {}) {
+  const lines = [`You are ${agent.name}, ${agent.persona_description}`];
+  if (agent.discipline) lines.push(`Discipline: ${agent.discipline} — reason from this discipline's methods and priorities.`);
+  if (agent.professional_background) lines.push(`Professional background: ${agent.professional_background}`);
+  if (agent.expertise_level) lines.push(`Expertise level: ${agent.expertise_level}`);
+  if (agent.reasoning_style) lines.push(`Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.`);
+
+  // Competence map — the human-matching core: know your depth, defer, never overreach.
+  const fluency = agent.domain_expertise || {};
+  const fluencyStr = Object.keys(fluency).length
+    ? Object.entries(fluency).map(([k, v]) => `${k} ${v}/10`).join(', ')
+    : '';
+  if (fluencyStr) lines.push(`Domain fluency (self-rated depth): ${fluencyStr}. Reason with confidence only where your fluency is high.`);
+  const eb = agent.expertise_boundaries || {};
+  const boundaryParts = [];
+  if (fmtList(eb.strong)) boundaryParts.push(`Strong in: ${fmtList(eb.strong)}.`);
+  if (fmtList(eb.weak)) boundaryParts.push(`Weak in: ${fmtList(eb.weak)} — hedge or flag rather than assert here.`);
+  if (fmtList(eb.defer_to)) boundaryParts.push(`Defer to other disciplines on: ${fmtList(eb.defer_to)}.`);
+  if (eb.forbidden_overreach) boundaryParts.push(`NEVER claim as fact: ${eb.forbidden_overreach} — instead name the gap and hand it to the relevant expert.`);
+  if (boundaryParts.length) lines.push(`Competence boundaries — ${boundaryParts.join(' ')}`);
+
+  // Epistemics & analytic tradecraft.
+  if (agent.epistemic_style) lines.push(`Epistemic style: ${agent.epistemic_style}`);
+  if (agent.source_preferences) lines.push(`Preferred sources/evidence: ${agent.source_preferences} — weight these; note when your read leans on weaker source types.`);
+  if (agent.analytical_framework) lines.push(`Analytical framework: ${agent.analytical_framework} — apply this method explicitly.`);
+  const tc = agent.tradecraft || {};
+  if (fmtList(tc.common_false_positives)) lines.push(`Guard against your discipline's common false positives: ${fmtList(tc.common_false_positives)} — self-check against these before rating severity.`);
+  if (fmtList(tc.failure_modes)) lines.push(`Your discipline characteristically errs by: ${fmtList(tc.failure_modes)}.`);
+
+  // Risk posture & adversary — calibrates the numeric markers.
+  if (agent.adversary_model) lines.push(`Adversary model assumed: ${agent.adversary_model}`);
+  if (agent.severity_default) lines.push(`Your default severity prior is ${agent.severity_default}; move off it only when the evidence warrants.`);
+  const rp = agent.risk_posture || {};
+  const rpParts = [];
+  if (rp.risk_sensitivity) rpParts.push(`risk sensitivity ${rp.risk_sensitivity}`);
+  if (rp.false_negative_tolerance) rpParts.push(`false-negative tolerance ${rp.false_negative_tolerance}`);
+  if (rp.false_positive_tolerance) rpParts.push(`false-positive tolerance ${rp.false_positive_tolerance}`);
+  if (rp.escalation_bias) rpParts.push(`escalation bias ${rp.escalation_bias}`);
+  if (rpParts.length) lines.push(`Risk posture (calibrate your CONFIDENCE / LIKELIHOOD / IMPACT accordingly): ${rpParts.join(', ')}.`);
+  if (agent.decision_style) lines.push(`Decision style: ${agent.decision_style}`);
+  if (agent.institutional_background) lines.push(`Institutional background: ${agent.institutional_background}`);
+  if (agent.institutional_incentives) lines.push(`Institutional incentives: ${agent.institutional_incentives}`);
+  if (agent.conflict_triggers) lines.push(`Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}`);
+
+  // Bias + its debiasing countermeasure, as a pair.
+  lines.push('');
+  lines.push(`Your cognitive bias: ${agent.cognitive_bias}`);
+  if (agent.debiasing_instruction) lines.push(`Your debiasing habit (apply it deliberately): ${agent.debiasing_instruction}`);
+  if (agent.red_team_focus) lines.push(`Your red-team focus: ${agent.red_team_focus}`);
+
+  // Debate behavior + belief-update rules — the friction that makes Round 2 real.
+  if (round === 2) {
+    const db = agent.debate_behavior || {};
+    const dbParts = [];
+    if (db.debate_role) dbParts.push(`Debate role: ${db.debate_role}.`);
+    if (db.rebuttal_style) dbParts.push(`Rebuttal style: ${db.rebuttal_style}.`);
+    if (db.what_changes_mind) dbParts.push(`What changes your mind: ${db.what_changes_mind}.`);
+    if (dbParts.length) lines.push(dbParts.join(' '));
+    const ut = agent.update_triggers || {};
+    const utParts = [];
+    if (ut.fast_when) utParts.push(`update FAST when ${ut.fast_when}`);
+    if (ut.slow_when) utParts.push(`update SLOWLY when ${ut.slow_when}`);
+    if (ut.resistant_when) utParts.push(`resist updating when ${ut.resistant_when}`);
+    if (utParts.length) lines.push(`Belief-update rules — ${utParts.join('; ')}. Apply these honestly: move if genuinely persuaded, hold if not.`);
+  }
+
+  return lines.join('\n');
+}
+
 // --- generateRound1 ---
 export async function generateRound1({ agent, scenarioContext, phaseFocus, threatCatalog = [], chainContext = '', facilitator_note = '', knowledgeContext = '' }) {
   const threatSection = threatCatalog.length
@@ -292,19 +412,7 @@ export async function generateRound1({ agent, scenarioContext, phaseFocus, threa
     ? `\nFACILITATOR NOTE: ${facilitator_note}\n`
     : '';
 
-  const prompt = `You are ${agent.name}, ${agent.persona_description}
-${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
-${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
-${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
-${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
-${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
-${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
-${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
-${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
-${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
-
-Your cognitive bias: ${agent.cognitive_bias}
-Your red-team focus: ${agent.red_team_focus}
+  const prompt = `${buildPersonaHeader(agent, { round: 1 })}
 
 SCENARIO CONTEXT:
 ${scenarioContext}
@@ -342,18 +450,7 @@ export async function generateRound2({ agent, scenarioContext, phaseFocus, other
     ? `\nFACILITATOR NOTE: ${facilitator_note}\n`
     : '';
 
-  const prompt = `You are ${agent.name}, ${agent.persona_description}
-${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
-${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
-${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
-${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
-${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
-${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
-${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
-${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
-${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
-
-Your cognitive bias: ${agent.cognitive_bias}
+  const prompt = `${buildPersonaHeader(agent, { round: 2 })}
 
 You have just read all Round 1 assessments from the other experts. Here they are:
 
@@ -411,19 +508,7 @@ export async function generateRound1Stream({ agent, scenarioContext, phaseFocus,
   const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
   const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
 
-  const prompt = `You are ${agent.name}, ${agent.persona_description}
-${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
-${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
-${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
-${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
-${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
-${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
-${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
-${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
-${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
-
-Your cognitive bias: ${agent.cognitive_bias}
-Your red-team focus: ${agent.red_team_focus}
+  const prompt = `${buildPersonaHeader(agent, { round: 1 })}
 
 SCENARIO CONTEXT:
 ${scenarioContext}
@@ -454,18 +539,7 @@ export async function generateRound2Stream({ agent, scenarioContext, phaseFocus,
   const chainSection = chainContext ? `\nPINNED THREAT CHAINS:\n${chainContext}\n` : '';
   const facilSection = facilitator_note ? `\nFACILITATOR NOTE: ${facilitator_note}\n` : '';
 
-  const prompt = `You are ${agent.name}, ${agent.persona_description}
-${agent.professional_background ? `Professional background: ${agent.professional_background}` : ''}
-${agent.expertise_level ? `Expertise level: ${agent.expertise_level}` : ''}
-${agent.reasoning_style ? `Reasoning style: ${agent.reasoning_style} — let this shape your argumentation and tone.` : ''}
-${agent.epistemic_style ? `Epistemic style: ${agent.epistemic_style}` : ''}
-${agent.adversary_model ? `Adversary model assumed: ${agent.adversary_model}` : ''}
-${agent.institutional_background ? `Institutional background: ${agent.institutional_background}` : ''}
-${agent.conflict_triggers ? `Conflict triggers (what you push back on hardest): ${agent.conflict_triggers}` : ''}
-${agent.decision_style ? `Decision style: ${agent.decision_style}` : ''}
-${agent.institutional_incentives ? `Institutional incentives: ${agent.institutional_incentives}` : ''}
-
-Your cognitive bias: ${agent.cognitive_bias}
+  const prompt = `${buildPersonaHeader(agent, { round: 2 })}
 
 You have just read all Round 1 assessments from the other experts. Here they are:
 
