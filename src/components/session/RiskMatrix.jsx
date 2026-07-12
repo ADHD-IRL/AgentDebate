@@ -1,10 +1,26 @@
 import { useMemo, useState, Fragment } from 'react';
-import { matrixCellColor, riskScore, likelihoodLabel, impactLabel, expectedExposure } from '@/lib/risk';
+import { ChevronDown, ChevronUp, Grid3x3 } from 'lucide-react';
+import { matrixCellColor, riskScore, riskBandFromScore, likelihoodLabel, impactLabel, expectedExposure } from '@/lib/risk';
 
-// 5×5 likelihood × impact risk matrix plotting each agent's assessment for a
-// round. Likelihood on Y (5 at top), Impact on X (5 at right).
+const BANDS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+const BAND_COLOR = { CRITICAL: '#C0392B', HIGH: '#D68910', MEDIUM: '#2E86AB', LOW: '#27AE60' };
+
+function Stat({ label, value, sub, color }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-mono tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>{label}</span>
+      <span className="text-base font-bold font-mono leading-tight" style={{ color: color || 'var(--wr-text-primary)' }}>{value}</span>
+      {sub && <span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>{sub}</span>}
+    </div>
+  );
+}
+
+// Quantified risk for a round, distilled to a compact strip. The full 5×5
+// likelihood × impact matrix is available on demand but collapsed by default
+// so it doesn't dominate the debate flow.
 export default function RiskMatrix({ sessionAgents, agents, round }) {
   const [hover, setHover] = useState(null);
+  const [showGrid, setShowGrid] = useState(false);
 
   const agentMap = useMemo(() => Object.fromEntries((agents || []).map(a => [a.id, a])), [agents]);
 
@@ -15,126 +31,155 @@ export default function RiskMatrix({ sessionAgents, agents, round }) {
       const conf = round === 1 ? sa.round1_confidence : sa.round2_confidence;
       if (!l || !i) return null;
       const agent = agentMap[sa.agent_id];
-      return { l, i, conf, name: agent?.name || 'SME', discipline: agent?.discipline || '' };
+      return { l, i, conf, score: riskScore(l, i), name: agent?.name || 'SME', discipline: agent?.discipline || '' };
     }).filter(Boolean);
   }, [sessionAgents, agentMap, round]);
 
-  // Aggregate exposure: confidence-weighted sum, and the single highest cell
   const summary = useMemo(() => {
     if (!points.length) return null;
+    const scores = points.map(p => p.score);
     const exposures = points.map(p => expectedExposure(p.l, p.i, p.conf) || 0);
-    const peak = Math.max(...points.map(p => riskScore(p.l, p.i)));
+    const peak = Math.max(...scores);
+    const low = Math.min(...scores);
     const avgExposure = Math.round((exposures.reduce((a, b) => a + b, 0) / points.length) * 10) / 10;
-    return { peak, avgExposure, count: points.length };
+    // Band distribution across SMEs
+    const bandCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    points.forEach(p => { const b = riskBandFromScore(p.score).label; if (b) bandCounts[b]++; });
+    return { peak, low, spread: peak - low, avgExposure, count: points.length, bandCounts };
   }, [points]);
 
   if (!points.length) {
     return (
-      <div className="rounded p-4 text-center text-xs" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
-        No quantified likelihood × impact yet for this round. Generate assessments to populate the risk matrix.
+      <div className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-muted)' }}>
+        No quantified likelihood × impact yet for this round.
       </div>
     );
   }
 
-  // Bucket agents per cell
-  const cellPoints = {};
-  points.forEach(p => {
-    const key = `${p.l}-${p.i}`;
-    (cellPoints[key] = cellPoints[key] || []).push(p);
-  });
+  const peakBand = riskBandFromScore(summary.peak);
+  // Divergence read: a wide spread of scores means the SMEs disagree on risk.
+  const consensus = summary.spread === 0
+    ? { label: 'Aligned', color: '#27AE60' }
+    : summary.spread >= 10
+      ? { label: 'Divergent', color: '#C0392B' }
+      : summary.spread >= 5
+        ? { label: 'Mixed', color: '#D68910' }
+        : { label: 'Close', color: '#2E86AB' };
 
-  const rows = [5, 4, 3, 2, 1]; // likelihood, top-down
-  const cols = [1, 2, 3, 4, 5]; // impact, left-right
+  const cellPoints = {};
+  points.forEach(p => { const key = `${p.l}-${p.i}`; (cellPoints[key] = cellPoints[key] || []).push(p); });
+  const rows = [5, 4, 3, 2, 1];
+  const cols = [1, 2, 3, 4, 5];
 
   return (
-    <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div>
-          <h3 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-            RISK MATRIX — LIKELIHOOD × IMPACT
-          </h3>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--wr-text-muted)' }}>
-            Each dot is an SME's rating for their top {round === 1 ? 'Round 1' : 'Round 2'} risk
+    <div className="rounded-lg" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
+      {/* Compact strip */}
+      <div className="flex items-center gap-4 px-3 py-2 flex-wrap">
+        <Stat label="PEAK" value={<>{summary.peak}<span className="text-[10px]" style={{ color: 'var(--wr-text-muted)' }}>/25</span></>} sub={peakBand.label} color={peakBand.color} />
+        <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
+        <Stat label="EXPOSURE" value={summary.avgExposure} sub="conf-weighted" />
+        <div className="w-px self-stretch" style={{ backgroundColor: 'var(--wr-border)' }} />
+        <Stat label="CONSENSUS" value={consensus.label} sub={summary.spread > 0 ? `${summary.low}–${summary.peak} spread` : 'all agree'} color={consensus.color} />
+
+        {/* Band distribution bar */}
+        <div className="flex-1 min-w-[140px]">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>
+              {summary.count} SME{summary.count !== 1 ? 's' : ''} RATED
+            </span>
+          </div>
+          <div className="flex h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--wr-bg-secondary)' }}>
+            {BANDS.map(b => {
+              const n = summary.bandCounts[b];
+              if (!n) return null;
+              return <div key={b} title={`${n} ${b}`} style={{ flex: n, backgroundColor: BAND_COLOR[b] }} />;
+            })}
+          </div>
+          <div className="flex gap-2 mt-1 flex-wrap">
+            {BANDS.filter(b => summary.bandCounts[b] > 0).map(b => (
+              <span key={b} className="text-[10px] font-mono flex items-center gap-1" style={{ color: 'var(--wr-text-muted)' }}>
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: BAND_COLOR[b] }} />
+                {summary.bandCounts[b]} {b.toLowerCase()}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowGrid(v => !v)}
+          className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded transition-colors self-start"
+          style={{ color: 'var(--wr-text-secondary)', backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}
+          title="Show the full likelihood × impact matrix"
+        >
+          <Grid3x3 className="w-3 h-3" /> Matrix {showGrid ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+      </div>
+
+      {/* Full 5×5 matrix — collapsed by default */}
+      {showGrid && (
+        <div className="px-3 pb-3 pt-1 border-t" style={{ borderColor: 'var(--wr-border)' }}>
+          <p className="text-[10px] mt-2 mb-2 font-mono" style={{ color: 'var(--wr-text-muted)' }}>
+            Each cell counts the SMEs whose top {round === 1 ? 'Round 1' : 'Round 2'} risk lands there. Likelihood (rows) × Impact (cols).
           </p>
-        </div>
-        {summary && (
-          <div className="flex gap-4">
-            <div className="text-right">
-              <p className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>PEAK RISK</p>
-              <p className="text-lg font-bold font-mono" style={{ color: 'var(--wr-text-primary)' }}>{summary.peak}<span className="text-xs" style={{ color: 'var(--wr-text-muted)' }}>/25</span></p>
+          <div className="flex gap-2">
+            <div className="flex items-center">
+              <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>LIKELIHOOD →</span>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>AVG EXPOSURE</p>
-              <p className="text-lg font-bold font-mono" style={{ color: 'var(--wr-text-primary)' }} title="Confidence-weighted average risk score">{summary.avgExposure}</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-2">
-        {/* Y axis label */}
-        <div className="flex items-center">
-          <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-            LIKELIHOOD →
-          </span>
-        </div>
-
-        <div className="flex-1">
-          <div className="grid" style={{ gridTemplateColumns: 'auto repeat(5, 1fr)', gap: 3 }}>
-            {rows.map(l => (
-              <Fragment key={`row-${l}`}>
-                <div className="flex items-center justify-end pr-1">
-                  <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>{l}</span>
-                </div>
-                {cols.map(i => {
-                  const key = `${l}-${i}`;
-                  const pts = cellPoints[key] || [];
-                  const bg = matrixCellColor(l, i);
-                  const isHover = hover === key;
-                  return (
-                    <div
-                      key={key}
-                      onMouseEnter={() => pts.length && setHover(key)}
-                      onMouseLeave={() => setHover(null)}
-                      className="relative rounded flex items-center justify-center"
-                      style={{
-                        aspectRatio: '1.6', backgroundColor: `${bg}22`,
-                        border: `1px solid ${bg}${pts.length ? '99' : '33'}`,
-                        outline: isHover ? `2px solid ${bg}` : 'none',
-                      }}
-                    >
-                      {pts.length > 0 && (
-                        <span className="text-sm font-bold font-mono" style={{ color: bg }}>{pts.length}</span>
-                      )}
-                      {isHover && (
-                        <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-1 rounded p-2 w-48 pointer-events-none"
-                          style={{ backgroundColor: 'var(--wr-bg-card)', border: `1px solid ${bg}`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}>
-                          <p className="text-xs font-mono mb-1" style={{ color: bg }}>
-                            {likelihoodLabel(l)} × {impactLabel(i)} = {riskScore(l, i)}
-                          </p>
-                          {pts.map((p, idx) => (
-                            <p key={idx} className="text-xs truncate" style={{ color: 'var(--wr-text-secondary)' }}>
-                              {p.name}{p.conf != null ? ` · ${p.conf}%` : ''}
-                            </p>
-                          ))}
-                        </div>
-                      )}
+            <div className="flex-1 max-w-md">
+              <div className="grid" style={{ gridTemplateColumns: 'auto repeat(5, 1fr)', gap: 3 }}>
+                {rows.map(l => (
+                  <Fragment key={`row-${l}`}>
+                    <div className="flex items-center justify-end pr-1">
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>{l}</span>
                     </div>
-                  );
-                })}
-              </Fragment>
-            ))}
-            {/* X axis numbers */}
-            <div />
-            {cols.map(i => (
-              <div key={`xnum-${i}`} className="text-center">
-                <span className="text-xs font-mono" style={{ color: 'var(--wr-text-muted)' }}>{i}</span>
+                    {cols.map(i => {
+                      const key = `${l}-${i}`;
+                      const pts = cellPoints[key] || [];
+                      const bg = matrixCellColor(l, i);
+                      const isHover = hover === key;
+                      return (
+                        <div
+                          key={key}
+                          onMouseEnter={() => pts.length && setHover(key)}
+                          onMouseLeave={() => setHover(null)}
+                          className="relative rounded flex items-center justify-center"
+                          style={{
+                            aspectRatio: '1.8', backgroundColor: `${bg}22`,
+                            border: `1px solid ${bg}${pts.length ? '99' : '33'}`,
+                            outline: isHover ? `2px solid ${bg}` : 'none',
+                          }}
+                        >
+                          {pts.length > 0 && <span className="text-xs font-bold font-mono" style={{ color: bg }}>{pts.length}</span>}
+                          {isHover && (
+                            <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-1 rounded p-2 w-48 pointer-events-none"
+                              style={{ backgroundColor: 'var(--wr-bg-card)', border: `1px solid ${bg}`, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}>
+                              <p className="text-xs font-mono mb-1" style={{ color: bg }}>
+                                {likelihoodLabel(l)} × {impactLabel(i)} = {riskScore(l, i)}
+                              </p>
+                              {pts.map((p, idx) => (
+                                <p key={idx} className="text-xs truncate" style={{ color: 'var(--wr-text-secondary)' }}>
+                                  {p.name}{p.conf != null ? ` · ${p.conf}%` : ''}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+                <div />
+                {cols.map(i => (
+                  <div key={`xnum-${i}`} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--wr-text-muted)' }}>{i}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+              <p className="text-center text-[10px] font-mono mt-1" style={{ color: 'var(--wr-text-muted)' }}>IMPACT →</p>
+            </div>
           </div>
-          <p className="text-center text-xs font-mono mt-1" style={{ color: 'var(--wr-text-muted)' }}>IMPACT →</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
