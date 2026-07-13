@@ -9,6 +9,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import SynthesisDocument from '@/components/session/SynthesisDocument';
 
 const STATUS_COLOR = { draft: '#546E7A', active: '#27AE60', archived: '#C0392B' };
 
@@ -347,9 +348,7 @@ export default function Scenarios() {
               {selected.context_document && (
                 <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
                   <h3 className="text-xs font-bold tracking-widest mb-3 font-mono" style={{ color: 'var(--wr-text-muted)' }}>CONTEXT DOCUMENT</h3>
-                  <pre className="text-sm whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)', fontFamily: 'Inter, sans-serif', lineHeight: '1.6' }}>
-                    {selected.context_document}
-                  </pre>
+                  <SynthesisDocument text={selected.context_document} />
                 </div>
               )}
             </div>
