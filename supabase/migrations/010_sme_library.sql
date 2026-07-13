@@ -27,8 +27,11 @@ CREATE TABLE IF NOT EXISTS public.sme_tokens (
 
 ALTER TABLE public.sme_tokens ENABLE ROW LEVEL SECURITY;
 
+drop policy if exists "sme_tokens_read" on public.sme_tokens;
 CREATE POLICY "sme_tokens_read"   ON public.sme_tokens FOR SELECT USING (is_admin(workspace_id));
+drop policy if exists "sme_tokens_insert" on public.sme_tokens;
 CREATE POLICY "sme_tokens_insert" ON public.sme_tokens FOR INSERT WITH CHECK (is_admin(workspace_id));
+drop policy if exists "sme_tokens_delete" on public.sme_tokens;
 CREATE POLICY "sme_tokens_delete" ON public.sme_tokens FOR DELETE USING (is_admin(workspace_id));
 
 -- Library workspace (run once; note returned id as LIBRARY_WORKSPACE_ID in MCP .env)
