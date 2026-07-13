@@ -36,15 +36,26 @@ Go to [supabase.com/dashboard](https://supabase.com/dashboard) and create a new 
 
 ### 2. Run the database migrations
 
-Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run the migrations. The fastest path is the consolidated base schema followed by the newer feature migrations:
+The schema lives in [`supabase/migrations/`](supabase/migrations). Every migration is idempotent (`create table if not exists`, `drop policy if exists` before each `create policy`, guarded realtime/publication adds), so applying them is safe and repeatable. Pick **one** of the two paths below — don't mix them (see the warning).
 
-1. [`supabase/migrations/000_full_schema.sql`](supabase/migrations/000_full_schema.sql) — consolidated base schema, RLS, Realtime, and everything through migration 010 (workspaces, agents, sessions, sources, SME library, extended personas)
-2. [`supabase/migrations/011_quantified_risk.sql`](supabase/migrations/011_quantified_risk.sql) — likelihood/impact bands on assessments and threats
-3. [`supabase/migrations/012_mitigation_register.sql`](supabase/migrations/012_mitigation_register.sql) — mitigation register with residual re-scoring
-4. [`supabase/migrations/013_decisions.sql`](supabase/migrations/013_decisions.sql) — decisions, options, assumptions
-5. [`supabase/migrations/014_knowledge_base.sql`](supabase/migrations/014_knowledge_base.sql) — knowledge documents and chunks
+**Path A — Supabase GitHub integration (recommended for any deployed/CI setup).**
+Connect the repo in **Supabase dashboard → Integrations → GitHub** and point it at your deploy branch. The integration applies the files in `supabase/migrations/` in order and records them in `supabase_migrations.schema_migrations`. Let the pipeline own the schema — **do not also paste SQL into the editor**, or the tracking table drifts out of sync with the actual schema and the next deploy fails with `relation "…" already exists`.
 
-> The individual incremental migrations `001`–`010` are also kept in the folder as history; running `000_full_schema.sql` is equivalent to running them in order. All migrations are idempotent (`if not exists` / `drop policy if exists`), so re-running is safe.
+- The incremental files `001`–`016` are the source of truth for this path.
+- `000_full_schema.sql` is a manual convenience only (see Path B). Because it duplicates `001`–`010`, the integration applies it too — harmless since everything is idempotent, but redundant. If you never run Path B you can ignore it.
+
+**Path B — Manual, in the SQL editor (quick local / one-off project).**
+Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run:
+
+1. [`supabase/migrations/000_full_schema.sql`](supabase/migrations/000_full_schema.sql) — consolidated base: schema, RLS, Realtime, and everything through migration `010` (workspaces, agents, sessions, sources, SME library, extended personas). Equivalent to running `001`–`010` in order.
+2. [`011_quantified_risk.sql`](supabase/migrations/011_quantified_risk.sql) — likelihood/impact bands on assessments and threats
+3. [`012_mitigation_register.sql`](supabase/migrations/012_mitigation_register.sql) — mitigation register with residual re-scoring
+4. [`013_decisions.sql`](supabase/migrations/013_decisions.sql) — decisions, options, assumptions
+5. [`014_knowledge_base.sql`](supabase/migrations/014_knowledge_base.sql) — knowledge documents and chunks
+6. [`015_mitigation_session_link.sql`](supabase/migrations/015_mitigation_session_link.sql) — links mitigations to their originating session
+7. [`016_optimal_sme.sql`](supabase/migrations/016_optimal_sme.sql) — optimal-SME reasoning fields (competence boundaries, tradecraft, risk posture, debate behavior)
+
+> ⚠️ **Don't run Path B on a project managed by the GitHub integration.** Pasting SQL by hand creates objects the integration hasn't recorded, so its next run tries to re-create them and fails. If that already happened, the migrations are idempotent — re-running through the integration now reconciles it (it applies them as no-ops and records them).
 
 ### 3. Configure authentication
 

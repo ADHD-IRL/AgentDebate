@@ -6,6 +6,7 @@ import WrButton from '@/components/ui/WrButton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { setModelPref, setWorkspaceApiKey } from '@/lib/llm';
 import { supabase } from '@/lib/supabase';
+import DangerZone from '@/components/settings/DangerZone';
 
 const MODELS = [
   {
@@ -360,6 +361,9 @@ const [saveError, setSaveError] = useState('');
             <p className="text-xs" style={{ color: '#C0392B' }}>Save error: {saveError}</p>
           )}
         </div>
+
+        {/* Danger Zone — archive + reset */}
+        <DangerZone />
 
       </div>
     </div>
