@@ -6,7 +6,7 @@ create extension if not exists "uuid-ossp";
 
 -- ── Profiles ──────────────────────────────────────────────────────────────────
 -- Auto-created when a user signs up via the trigger below
-create table public.profiles (
+create table if not exists public.profiles (
   id          uuid references auth.users(id) on delete cascade primary key,
   display_name text,
   avatar_url  text,
@@ -14,7 +14,7 @@ create table public.profiles (
 );
 
 -- ── Workspaces ────────────────────────────────────────────────────────────────
-create table public.workspaces (
+create table if not exists public.workspaces (
   id                 uuid primary key default gen_random_uuid(),
   name               text not null,
   owner_id           uuid references public.profiles(id) on delete set null,
@@ -24,7 +24,7 @@ create table public.workspaces (
 );
 
 -- ── Workspace members ─────────────────────────────────────────────────────────
-create table public.workspace_members (
+create table if not exists public.workspace_members (
   id           uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade not null,
   user_id      uuid references public.profiles(id) on delete cascade not null,
@@ -36,7 +36,7 @@ create table public.workspace_members (
 );
 
 -- ── Domains ───────────────────────────────────────────────────────────────────
-create table public.domains (
+create table if not exists public.domains (
   id           uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade not null,
   name         text not null,
@@ -48,7 +48,7 @@ create table public.domains (
 );
 
 -- ── Agents ────────────────────────────────────────────────────────────────────
-create table public.agents (
+create table if not exists public.agents (
   id                      uuid primary key default gen_random_uuid(),
   workspace_id            uuid references public.workspaces(id) on delete cascade not null,
   domain_id               uuid,
@@ -75,7 +75,7 @@ create table public.agents (
 );
 
 -- ── Scenarios ─────────────────────────────────────────────────────────────────
-create table public.scenarios (
+create table if not exists public.scenarios (
   id               uuid primary key default gen_random_uuid(),
   workspace_id     uuid references public.workspaces(id) on delete cascade not null,
   domain_id        uuid,
@@ -90,7 +90,7 @@ create table public.scenarios (
 );
 
 -- ── Threats ───────────────────────────────────────────────────────────────────
-create table public.threats (
+create table if not exists public.threats (
   id           uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade not null,
   domain_id    uuid,
@@ -105,7 +105,7 @@ create table public.threats (
 );
 
 -- ── Chains ────────────────────────────────────────────────────────────────────
-create table public.chains (
+create table if not exists public.chains (
   id               uuid primary key default gen_random_uuid(),
   workspace_id     uuid references public.workspaces(id) on delete cascade not null,
   domain_id        uuid,
@@ -123,7 +123,7 @@ create table public.chains (
 );
 
 -- ── Sessions ──────────────────────────────────────────────────────────────────
-create table public.sessions (
+create table if not exists public.sessions (
   id               uuid primary key default gen_random_uuid(),
   workspace_id     uuid references public.workspaces(id) on delete cascade not null,
   scenario_id      uuid,
@@ -139,7 +139,7 @@ create table public.sessions (
 );
 
 -- ── Session agents ────────────────────────────────────────────────────────────
-create table public.session_agents (
+create table if not exists public.session_agents (
   id                               uuid primary key default gen_random_uuid(),
   workspace_id                     uuid references public.workspaces(id) on delete cascade not null,
   session_id                       uuid references public.sessions(id) on delete cascade not null,
@@ -157,7 +157,7 @@ create table public.session_agents (
 );
 
 -- ── Session syntheses ─────────────────────────────────────────────────────────
-create table public.session_syntheses (
+create table if not exists public.session_syntheses (
   id                   uuid primary key default gen_random_uuid(),
   workspace_id         uuid references public.workspaces(id) on delete cascade not null,
   session_id           uuid references public.sessions(id) on delete cascade not null,
@@ -173,7 +173,7 @@ create table public.session_syntheses (
 
 -- ── App configs ───────────────────────────────────────────────────────────────
 -- Generic KV store for workspace settings, chain analyses, risk snapshots
-create table public.app_configs (
+create table if not exists public.app_configs (
   id           uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade not null,
   key          text not null,
@@ -204,6 +204,18 @@ create or replace trigger on_auth_user_created
 
 -- ── Realtime ──────────────────────────────────────────────────────────────────
 -- Enable realtime for live session updates
-alter publication supabase_realtime add table public.session_agents;
-alter publication supabase_realtime add table public.sessions;
-alter publication supabase_realtime add table public.session_syntheses;
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'session_agents') then
+    alter publication supabase_realtime add table public.session_agents;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'sessions') then
+    alter publication supabase_realtime add table public.sessions;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'session_syntheses') then
+    alter publication supabase_realtime add table public.session_syntheses;
+  end if;
+end $$;

@@ -21,8 +21,15 @@ create table if not exists public.session_messages (
 
 alter table public.session_messages enable row level security;
 
+drop policy if exists "messages_read" on public.session_messages;
 create policy "messages_read"   on public.session_messages for select using (is_member(workspace_id));
+drop policy if exists "messages_insert" on public.session_messages;
 create policy "messages_insert" on public.session_messages for insert with check (can_write(workspace_id));
+drop policy if exists "messages_delete" on public.session_messages;
 create policy "messages_delete" on public.session_messages for delete using (is_admin(workspace_id));
 
-alter publication supabase_realtime add table public.session_messages;
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'session_messages') then
+    alter publication supabase_realtime add table public.session_messages;
+  end if;
+end $$;
