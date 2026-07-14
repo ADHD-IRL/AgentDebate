@@ -35,10 +35,10 @@ export default function DomainAssignModal({ agents, domains, onClose, onDone }) 
     if (!targets.length) { setError('No agents to assign.'); return; }
     setPhase('running');
     try {
+      // Results are aligned to input order — suggestions[k] is for targets[k].
       const suggestions = await assignDomainsToAgents({ agents: targets, domains });
-      const byId = Object.fromEntries(suggestions.map(s => [s.id, s]));
-      const built = targets.map(a => {
-        const s = byId[a.id];
+      const built = targets.map((a, k) => {
+        const s = suggestions[k];
         const choice = (s?.domain || '').trim();
         const existing = domainByName[choice.toLowerCase()];
         const current = a.domain_id ? (domains.find(d => d.id === a.domain_id)?.name || '—') : null;
@@ -95,7 +95,12 @@ export default function DomainAssignModal({ agents, domains, onClose, onDone }) 
         if (!r.include || !r.choice) continue;
         const domainId = await resolve(r.choice);
         if (r.agent.domain_id !== domainId) {
-          await db.Agent.update(r.agent.id, { domain_id: domainId });
+          const saved = await db.Agent.update(r.agent.id, { domain_id: domainId });
+          // Verify the write actually stuck (a silent no-op would otherwise
+          // look like success and vanish on the next load).
+          if (!saved || saved.domain_id !== domainId) {
+            throw new Error(`Could not save the domain for "${r.agent.name}". Check your permissions and try again.`);
+          }
         }
         count++;
       }
