@@ -270,21 +270,25 @@ Return ONLY the JSON array.`;
 // --- assignDomainsToAgents ---
 // Reviews each agent's persona/discipline and assigns the best-fit domain,
 // reusing existing domains where possible and proposing BROAD new ones only when
-// nothing fits. Returns [{ id, domain, is_new, why }]. Chunks large panels.
+// nothing fits. Returns an array ALIGNED TO THE INPUT ORDER — result[k] is
+// { domain, is_new, why } for agents[k], or null if the model gave nothing for
+// that slot. Experts are numbered so matching never depends on echoing UUIDs.
 export async function assignDomainsToAgents({ agents = [], domains = [] }) {
   const domainList = domains.length
     ? domains.map(d => `- ${d.name}${d.description ? `: ${d.description}` : ''}`).join('\n')
     : '(none yet — propose broad domains)';
+  const existingNames = new Set(domains.map(d => d.name.toLowerCase().trim()));
 
   const CHUNK = 40;
-  const results = [];
+  const out = new Array(agents.length).fill(null);
+
   for (let start = 0; start < agents.length; start += CHUNK) {
     const batch = agents.slice(start, start + CHUNK);
-    const expertLines = batch.map(a => {
+    const expertLines = batch.map((a, i) => {
       const persona = (a.persona_description || '').slice(0, 240);
       const focus = (a.red_team_focus || '').slice(0, 160);
       const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
-      return `[${a.id}] ${a.name} — ${a.discipline || 'unknown discipline'}. Persona: ${persona}${focus ? ` Focus: ${focus}` : ''}${tags ? ` Tags: ${tags}` : ''}`;
+      return `${i + 1}. ${a.name} — ${a.discipline || 'unknown discipline'}. Persona: ${persona}${focus ? ` Focus: ${focus}` : ''}${tags ? ` Tags: ${tags}` : ''}`;
     }).join('\n');
 
     const prompt = `You are organizing a panel of subject-matter experts into broad, groupable domains.
@@ -292,26 +296,36 @@ export async function assignDomainsToAgents({ agents = [], domains = [] }) {
 EXISTING DOMAINS (reuse one of these whenever it reasonably fits — do not invent a near-duplicate):
 ${domainList}
 
-EXPERTS TO CLASSIFY:
+EXPERTS TO CLASSIFY (numbered):
 ${expertLines}
 
 For each expert, assign the single best-fit domain.
 - Strongly prefer an existing domain when one reasonably fits.
 - Only propose a NEW domain when no existing one fits, and make new domains BROAD enough to group several experts (e.g. "National Security", "Cybersecurity", "Economics & Finance", "Public Health") — never a narrow specialty.
 
-Return a JSON array with one object per expert, in the same order:
-{ "id": "<expert id>", "domain": "<domain name>", "is_new": true or false, "why": "<5-10 word rationale>" }
+Return a JSON array with EXACTLY ${batch.length} objects, one per expert, in the SAME numbered order:
+{ "n": <expert number>, "domain": "<domain name>", "why": "<5-10 word rationale>" }
 
 Return ONLY the JSON array.`;
 
     const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
     const match = text.match(/\[[\s\S]*\]/);
-    try {
-      const parsed = JSON.parse(match ? match[0] : '[]');
-      if (Array.isArray(parsed)) results.push(...parsed);
-    } catch { /* skip malformed batch */ }
+    let parsed = [];
+    try { parsed = JSON.parse(match ? match[0] : '[]'); } catch { parsed = []; }
+    if (!Array.isArray(parsed)) parsed = [];
+
+    // Prefer matching by the returned "n"; fall back to positional order.
+    const byN = {};
+    for (const r of parsed) if (r && r.n != null) byN[Number(r.n)] = r;
+    batch.forEach((_, i) => {
+      const r = byN[i + 1] || parsed[i];
+      const domain = (r?.domain || '').trim();
+      if (domain) {
+        out[start + i] = { domain, is_new: !existingNames.has(domain.toLowerCase()), why: r?.why || '' };
+      }
+    });
   }
-  return results;
+  return out;
 }
 
 // --- generateRound0 ---
