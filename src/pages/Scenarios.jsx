@@ -9,8 +9,49 @@ import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import SynthesisDocument from '@/components/session/SynthesisDocument';
 
 const STATUS_COLOR = { draft: '#546E7A', active: '#27AE60', archived: '#C0392B' };
+
+// Minimal, self-contained markdown → HTML for the print/PDF export window
+// (the in-app view uses the SynthesisDocument renderer; this standalone HTML
+// document can't use React components).
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function inlineMd(s) {
+  let t = escapeHtml(s);
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/`([^`]+?)`/g, '<code>$1</code>');
+  t = t.replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return t;
+}
+function mdToHtml(md) {
+  const lines = String(md || '').split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^###\s+/.test(line))      { out.push(`<h3>${inlineMd(line.replace(/^###\s+/, ''))}</h3>`); i++; continue; }
+    if (/^##\s+/.test(line))       { out.push(`<h2>${inlineMd(line.replace(/^##\s+/, ''))}</h2>`); i++; continue; }
+    if (/^#\s+/.test(line))        { out.push(`<h1>${inlineMd(line.replace(/^#\s+/, ''))}</h1>`); i++; continue; }
+    if (/^---+$/.test(line.trim())) { out.push('<hr/>'); i++; continue; }
+    if (/^>\s?/.test(line))        { out.push(`<blockquote>${inlineMd(line.replace(/^>\s?/, ''))}</blockquote>`); i++; continue; }
+    if (/^[-*]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i])) { items.push(`<li>${inlineMd(lines[i].replace(/^[-*]\s+/, ''))}</li>`); i++; }
+      out.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    if (/^\d+\.\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i])) { items.push(`<li>${inlineMd(lines[i].replace(/^\d+\.\s+/, ''))}</li>`); i++; }
+      out.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+    if (line.trim() === '') { i++; continue; }
+    out.push(`<p>${inlineMd(line)}</p>`); i++;
+  }
+  return out.join('\n');
+}
 
 function ScenarioModal({ scenario, domains, onSave, onClose }) {
   const [form, setForm] = useState({ name: '', description: '', domain_id: '', context_document: '', status: 'draft', tags: [], ...scenario });
@@ -227,21 +268,30 @@ export default function Scenarios() {
         body { font-family: Georgia, serif; max-width: 800px; margin: 60px auto; color: #1a1a1a; line-height: 1.7; }
         h1 { font-size: 28px; border-bottom: 3px solid #F0A500; padding-bottom: 10px; margin-bottom: 4px; }
         h2 { font-size: 20px; color: #444; margin-top: 0; }
-        h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        h3.section { font-size: 15px; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
         .meta { font-size: 13px; color: #666; margin-bottom: 32px; display: flex; gap: 24px; }
         .badge { background: #f5f5f5; border: 1px solid #ddd; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; }
-        pre { white-space: pre-wrap; font-family: Georgia, serif; font-size: 14px; line-height: 1.8; }
+        .doc { font-size: 14px; line-height: 1.8; }
+        .doc h1 { font-size: 20px; border: none; padding: 0; margin: 24px 0 8px; }
+        .doc h2 { font-size: 17px; color: #333; margin: 20px 0 6px; }
+        .doc h3 { font-size: 15px; color: #444; text-transform: none; letter-spacing: 0; border: none; padding: 0; margin: 16px 0 4px; }
+        .doc p { margin: 8px 0; }
+        .doc ul, .doc ol { margin: 8px 0; padding-left: 24px; }
+        .doc li { margin: 3px 0; }
+        .doc blockquote { border-left: 3px solid #F0A500; margin: 12px 0; padding: 4px 0 4px 14px; color: #555; font-style: italic; }
+        .doc code { background: #f5f5f5; border-radius: 3px; padding: 1px 5px; font-size: 13px; }
+        .doc hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
         .footer { margin-top: 60px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
       </style></head><body>
-      <h1>${scen.name}</h1>
+      <h1>${escapeHtml(scen.name)}</h1>
       <h2>Operational Brief</h2>
       <div class="meta">
-        ${domain ? `<span>Domain: <span class="badge">${domain.name}</span></span>` : ''}
-        <span>Status: <span class="badge">${scen.status?.toUpperCase()}</span></span>
+        ${domain ? `<span>Domain: <span class="badge">${escapeHtml(domain.name)}</span></span>` : ''}
+        <span>Status: <span class="badge">${escapeHtml(scen.status?.toUpperCase())}</span></span>
         <span>Exported: ${new Date().toLocaleDateString()}</span>
       </div>
-      ${scen.description ? `<h3>Overview</h3><p>${scen.description}</p>` : ''}
-      ${scen.context_document ? `<h3>Context Document</h3><pre>${scen.context_document}</pre>` : ''}
+      ${scen.description ? `<h3 class="section">Overview</h3><div class="doc">${mdToHtml(scen.description)}</div>` : ''}
+      ${scen.context_document ? `<h3 class="section">Context Document</h3><div class="doc">${mdToHtml(scen.context_document)}</div>` : ''}
       <div class="footer">Generated by AgentDebate — Structured Red Team Intelligence Platform</div>
       </body></html>
     `);
@@ -347,9 +397,7 @@ export default function Scenarios() {
               {selected.context_document && (
                 <div className="rounded p-4" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
                   <h3 className="text-xs font-bold tracking-widest mb-3 font-mono" style={{ color: 'var(--wr-text-muted)' }}>CONTEXT DOCUMENT</h3>
-                  <pre className="text-sm whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)', fontFamily: 'Inter, sans-serif', lineHeight: '1.6' }}>
-                    {selected.context_document}
-                  </pre>
+                  <SynthesisDocument text={selected.context_document} />
                 </div>
               )}
             </div>
