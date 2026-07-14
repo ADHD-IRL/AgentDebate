@@ -22,6 +22,7 @@ import NewSession from '@/pages/NewSession';
 import SessionWorkspace from '@/pages/SessionWorkspace';
 import Reports from '@/pages/Reports';
 import UserGuide from '@/pages/UserGuide';
+import PromptLibrary from '@/pages/PromptLibrary';
 import ThreatMap from '@/pages/ThreatMap';
 import AgentAnalytics from '@/pages/AgentAnalytics';
 import SessionComparison from '@/pages/SessionComparison';
@@ -98,6 +99,7 @@ const AppRoutes = () => {
         <Route path="/knowledge"            element={<KnowledgeBase />} />
         <Route path="/settings"             element={<Settings />} />
         <Route path="/guide"                element={<UserGuide />} />
+        <Route path="/prompts"              element={<PromptLibrary />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, Target, AlertTriangle,
   Bot, Link2, Swords, BarChart3, Wifi, Map,
-  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, ShieldCheck, GitBranch, BookMarked
+  Shield, BookOpen, Brain, GitCompare, Settings2, Scissors, FlaskConical, ShieldCheck, GitBranch, BookMarked, Braces
 } from 'lucide-react';
 
 // Menu is ordered as the actual workflow: build a reusable library, plan the
@@ -61,6 +61,7 @@ const groups = [
     items: [
       { path: '/settings', icon: Settings2, label: 'Settings' },
       { path: '/guide', icon: BookOpen, label: 'User Guide' },
+      { path: '/prompts', icon: Braces, label: 'Prompt Library' },
     ],
   },
 ];
