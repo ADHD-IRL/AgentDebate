@@ -171,7 +171,7 @@ export default function Agents() {
                 className="w-full text-left text-xs px-2 py-1 rounded transition-colors"
                 style={{ color: !filterDomain ? 'var(--wr-amber)' : 'var(--wr-text-secondary)', backgroundColor: !filterDomain ? 'rgba(240,165,0,0.08)' : 'transparent' }}
               >
-                All Domains
+                All Domains <span style={{ color: 'var(--wr-text-muted)' }}>({agents.filter(a => a.domain_id).length})</span>
               </button>
               {filterDomains.map(d => (
                 <button
