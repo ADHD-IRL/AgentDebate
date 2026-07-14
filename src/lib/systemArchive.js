@@ -131,7 +131,7 @@ export function buildArchiveMarkdown(data, workspace) {
       ['Domain fluency', a.domain_expertise], ['Expertise boundaries', a.expertise_boundaries],
       ['Tradecraft', a.tradecraft], ['Risk posture', a.risk_posture],
       ['Debate behavior', a.debate_behavior], ['Update triggers', a.update_triggers],
-      ['Tags', a.tags], ['Quality score', a.quality_score], ['Usage count', a.usage_count],
+      ['Tags', a.tags],
     ];
     p(rows.filter(([, v]) => v != null && v !== '' && val(v) !== '—').map(([k, v]) => `- **${k}:** ${val(v)}`).join('\n') || '- —');
     p();

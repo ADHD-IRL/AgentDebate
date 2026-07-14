@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Library, Sparkles, Users, Scissors, LayoutDashboard, GitBranch, BookMarked, ShieldCheck } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Shield, Bot, Target, Link2, Swords, FileText, Globe, Lightbulb, AlertTriangle, CheckCircle2, Map, Brain, BarChart2, Search, Zap, Sparkles, Users, Scissors, LayoutDashboard, GitBranch, BookMarked, ShieldCheck } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 
 const sections = [
@@ -29,7 +29,7 @@ The core insight: **no single expert sees everything**. A cybersecurity speciali
     content: `
 The sidebar is organized as the workflow, top to bottom. Follow it in order and each step feeds the next:
 
-**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), the **SME Library** (curate and reuse experts), and the **Knowledge Base** (your own documents that ground the analysis). These persist across every session.
+**1 · Build** — Set up your reusable assets: **Domains** (broad categories), **Agents** (your expert panel), and the **Knowledge Base** (your own documents that ground the analysis). These persist across every session.
 
 **2 · Plan** — Define the specific engagement: a **Decision** (the design choice and options you're comparing), a **Scenario** (the situation to stress-test), and, optionally, a **Threats** catalog (known risks). Tag them with domains.
 
@@ -576,46 +576,6 @@ Click any row to open the drill-down panel for that domain.`,
 **Category merge nudge.** Threat categories are free text, so near-duplicates creep in ("Cyber" vs "Cybers") and fragment the heatmap columns. When the map detects similar category names, a blue banner appears offering a one-click **Merge** — it rewrites the category on the affected threats to the most common variant. You confirm before anything changes.
 
 **Unassigned threats banner.** If any threats lack a domain, an amber banner reports the count with an "Open Threats" button. Assign domains there and the map recalculates immediately.`
-      },
-    ]
-  },
-  {
-    id: 'sme-library',
-    icon: Library,
-    color: '#9B59B6',
-    title: 'SME Library',
-    subsections: [
-      {
-        icon: Library,
-        color: '#9B59B6',
-        title: 'What is the SME Library?',
-        body: `The **SME Library** (sidebar → SME Library) is the management dashboard for your Subject Matter Expert collection — a superset view of your agents focused on **curation, quality, and reuse** rather than running sessions.
-
-It has seven tabs:
-- **Overview** — KPI tiles (total SMEs, average quality score, high-quality count, unscored count) plus quality-distribution and top-by-usage charts
-- **Library** — the curated, shared SME collection: sortable, searchable, with inline Promote / Clone / Archive / Delete actions
-- **Workspace** — the same table scoped to your own workspace's SMEs, with a Promote-to-Library action for your best profiles
-- **Generate** — describe a scenario and AI-generate a panel of matching SME profiles, then promote the keepers
-- **Quality** — a quality monitor: score distribution, low-scoring profiles that need enrichment, and unscored profiles
-- **Tokens** — create and revoke API tokens for programmatic access to your SME collection (the token is shown once at creation — copy it immediately)
-- **Import/Export** — export your collection as JSON or CSV, and import SMEs from a JSON file with a preview step
-
-**Library vs Workspace:** library SMEs are the curated, shared collection; workspace SMEs are your private working set. Clone a library SME into your workspace to customize it without touching the shared version; promote a polished workspace SME into the library to share it.`
-      },
-      {
-        icon: Sparkles,
-        color: '#F0A500',
-        title: 'Quality Scores & Curation Workflow',
-        body: `Each SME can carry a **quality score (0–100)** reflecting how complete, specific, consistent, and distinctive its profile is. Scores come from AI assessment and improve as you fill in the extended persona fields (epistemic style, institutional background, adversary model, and so on).
-
-**A practical curation loop:**
-1. Import or generate SMEs in bulk
-2. Check the **Quality tab** — profiles scoring low usually have empty extended fields
-3. Open a low scorer, use the per-field AI regenerate buttons to enrich it
-4. Promote your best profiles to the library so every scenario can draw on them
-5. Archive (don't delete) SMEs you're not using — archiving is reversible
-
-Usage counts accumulate as SMEs participate in sessions, so over time the Overview tab shows you which experts actually earn their place on panels.`
       },
     ]
   },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff, Plus, Trash2, Copy } from 'lucide-react';
+import { Settings2, Brain, Key, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import WrButton from '@/components/ui/WrButton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -48,10 +48,6 @@ export default function Settings() {
   const [testError, setTestError] = useState('');
   const [testing, setTesting] = useState(false);
 const [saveError, setSaveError] = useState('');
-  const [tokens, setTokens] = useState([]);
-  const [tokenName, setTokenName] = useState('');
-  const [newToken, setNewToken] = useState(null);
-  const [creatingToken, setCreatingToken] = useState(false);
 
   useEffect(() => {
     // Prefer localStorage so the key survives if Supabase RLS ever blocks the read
@@ -63,38 +59,7 @@ const [saveError, setSaveError] = useState('');
     }
     const stored = localStorage.getItem('agd_llm_model') || 'claude_sonnet_4_6';
     setCurrentModel(stored);
-    if (workspace?.id) loadTokens(workspace.id);
   }, [workspace]);
-
-  const loadTokens = async (wsId) => {
-    const { data } = await supabase.from('sme_tokens').select('id,name,permissions,created_at,last_used_at,expires_at').eq('workspace_id', wsId).order('created_at', { ascending: false });
-    setTokens(data || []);
-  };
-
-  const handleCreateToken = async () => {
-    if (!workspace?.id || !tokenName.trim()) return;
-    setCreatingToken(true);
-    try {
-      const { data, error } = await supabase
-        .from('sme_tokens')
-        .insert({ workspace_id: workspace.id, name: tokenName.trim(), permissions: ['read', 'write'] })
-        .select()
-        .single();
-      if (!error && data) {
-        setNewToken(data.token);
-        setTokenName('');
-        loadTokens(workspace.id);
-      }
-    } finally {
-      setCreatingToken(false);
-    }
-  };
-
-  const handleDeleteToken = async (id) => {
-    if (!confirm('Revoke this token? Any external agents using it will lose access.')) return;
-    await supabase.from('sme_tokens').delete().eq('id', id);
-    loadTokens(workspace.id);
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -281,71 +246,6 @@ const [saveError, setSaveError] = useState('');
               );
             })}
           </div>
-        </div>
-
-        {/* SME API Tokens */}
-        <div className="rounded p-5" style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)' }}>
-          <div className="flex items-center gap-2 mb-1">
-            <Key className="w-4 h-4" style={{ color: '#9B59B6' }} />
-            <h2 className="text-xs font-bold tracking-widest font-mono" style={{ color: 'var(--wr-text-muted)' }}>
-              SME API TOKENS
-            </h2>
-          </div>
-          <p className="text-xs mb-4" style={{ color: 'var(--wr-text-muted)' }}>
-            Tokens allow external AI agents and scripts to manage SMEs via the <code className="font-mono">/api/sme</code> endpoint or the MCP server. Each token is workspace-scoped.
-          </p>
-
-          {newToken && (
-            <div className="mb-4 p-3 rounded" style={{ backgroundColor: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.3)' }}>
-              <p className="text-xs font-bold mb-1" style={{ color: '#27AE60' }}>Token created — copy it now, it won't be shown again:</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono break-all" style={{ color: 'var(--wr-text-primary)' }}>{newToken}</code>
-                <button onClick={() => navigator.clipboard.writeText(newToken)} className="flex-shrink-0 opacity-70 hover:opacity-100">
-                  <Copy className="w-3.5 h-3.5" style={{ color: '#27AE60' }} />
-                </button>
-              </div>
-              <button onClick={() => setNewToken(null)} className="text-xs mt-2 opacity-60 hover:opacity-100" style={{ color: 'var(--wr-text-muted)' }}>Dismiss</button>
-            </div>
-          )}
-
-          <div className="flex gap-2 mb-4">
-            <input
-              value={tokenName}
-              onChange={e => setTokenName(e.target.value)}
-              placeholder="Token name, e.g. my-agent-script"
-              className="flex-1 px-3 py-2 rounded text-xs font-mono"
-              style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-primary)', outline: 'none' }}
-              onKeyDown={e => e.key === 'Enter' && handleCreateToken()}
-            />
-            <WrButton onClick={handleCreateToken} disabled={creatingToken || !tokenName.trim()} variant="secondary">
-              {creatingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4" /> Create</>}
-            </WrButton>
-          </div>
-
-          {tokens.length === 0 ? (
-            <p className="text-xs italic" style={{ color: 'var(--wr-text-muted)' }}>No tokens yet. Create one to enable external SME management.</p>
-          ) : (
-            <div className="space-y-2">
-              {tokens.map(t => (
-                <div key={t.id} className="flex items-center gap-3 px-3 py-2 rounded text-xs" style={{ backgroundColor: 'var(--wr-bg-secondary)', border: '1px solid var(--wr-border)' }}>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-mono font-semibold" style={{ color: 'var(--wr-text-primary)' }}>{t.name || 'Unnamed'}</span>
-                    {t.last_used_at && (
-                      <span className="ml-2" style={{ color: 'var(--wr-text-muted)' }}>
-                        last used {new Date(t.last_used_at).toLocaleDateString()}
-                      </span>
-                    )}
-                    {!t.last_used_at && (
-                      <span className="ml-2" style={{ color: 'var(--wr-text-muted)' }}>never used</span>
-                    )}
-                  </div>
-                  <button onClick={() => handleDeleteToken(t.id)} className="opacity-50 hover:opacity-100 transition-opacity">
-                    <Trash2 className="w-3.5 h-3.5" style={{ color: '#C0392B' }} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-3">
