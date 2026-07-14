@@ -2,7 +2,12 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+// Short delay so a dismissed toast leaves the DOM almost immediately (these are
+// plain divs, not Radix primitives, so there is no exit-animation timer).
+const TOAST_REMOVE_DELAY = 300;
+// How long a toast stays on screen before it auto-dismisses. Pass `duration` to
+// toast() to override per call (Infinity to make it sticky).
+const TOAST_DEFAULT_DURATION = 4500;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -134,6 +139,15 @@ function toast({ ...props }) {
     },
   });
 
+  // Auto-dismiss after a visible duration (nothing else closes these).
+  const duration = typeof props.duration === 'number' ? props.duration : TOAST_DEFAULT_DURATION;
+  if (duration !== Infinity) {
+    setTimeout(() => {
+      toastTimeouts.delete(id);
+      dispatch({ type: actionTypes.REMOVE_TOAST, toastId: id });
+    }, duration);
+  }
+
   return {
     id,
     dismiss,
@@ -152,7 +166,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+  }, []);
 
   return {
     ...state,
