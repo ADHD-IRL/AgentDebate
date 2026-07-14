@@ -1136,6 +1136,43 @@ Output a clean scenario context document (3-6 paragraphs). No disclaimers.`;
   return { context };
 }
 
+// Best-effort JSON parse of an LLM response: strips ```json fences, trims prose
+// around the object, extracts the outermost balanced {...} (string/escape aware),
+// and repairs trailing commas. Throws only if nothing parseable remains.
+export function parseLooseJson(raw) {
+  if (!raw || !raw.trim()) throw new Error('empty response');
+  const tryParse = (t) => { try { return JSON.parse(t); } catch { return undefined; } };
+
+  let s = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  let v = tryParse(s);
+  if (v !== undefined) return v;
+
+  const startIdx = s.search(/[{[]/);
+  if (startIdx === -1) throw new Error('no JSON found');
+  const open = s[startIdx];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0, inStr = false, esc = false, end = -1;
+  for (let i = startIdx; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === open) depth++;
+    else if (c === close && --depth === 0) { end = i; break; }
+  }
+  const candidate = end !== -1 ? s.slice(startIdx, end + 1) : s.slice(startIdx);
+  v = tryParse(candidate);
+  if (v !== undefined) return v;
+
+  // Repair trailing commas (",}" / ",]")
+  v = tryParse(candidate.replace(/,(\s*[}\]])/g, '$1'));
+  if (v !== undefined) return v;
+
+  throw new Error('unparseable JSON');
+}
+
 // --- analyzeChainBreaker ---
 const CHAIN_BREAKER_SYSTEM = `You are a senior red team analyst specializing in adversarial chain analysis and defensive countermeasure development. Your job is to dissect multi-step attack chains and tell defenders EXACTLY where to intervene, in what order, and what each intervention costs and buys them.
 
@@ -1193,20 +1230,25 @@ export async function analyzeChainBreaker({ chain, scenarioContext = '' }) {
     scenarioContext ? `\nScenario Context:\n${scenarioContext}` : '',
   ].join('\n');
 
-  const raw = await callAnthropicStream({
+  const call = (extra = '') => callAnthropicStream({
     system: CHAIN_BREAKER_SYSTEM,
-    messages: [{ role: 'user', content: userMessage }],
-    maxTokens: 4096,
+    messages: [{ role: 'user', content: userMessage + extra }],
+    maxTokens: 8000,
   });
 
   let result;
   try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    result = JSON.parse(match ? match[0] : raw);
+    result = parseLooseJson(await call());
   } catch {
-    throw new Error('Model returned non-JSON response. Try again.');
+    // One retry, nudging toward compact, complete JSON (the usual failure is a
+    // long response getting truncated before the closing brace).
+    try {
+      result = parseLooseJson(await call('\n\nIMPORTANT: Return ONLY one complete, valid JSON object — no markdown, no prose, no trailing commas. Keep each field concise so the JSON is not truncated.'));
+    } catch {
+      throw new Error('Chain Breaker could not parse the model response — it was likely truncated. Try again, or break a very long chain into fewer steps.');
+    }
   }
-  if (!Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
+  if (!result || !Array.isArray(result.steps)) throw new Error('Unexpected response shape from model.');
   // Normalize countermeasures to objects so the UI can render one shape
   // (older models / retries may still emit plain strings)
   result.steps = result.steps.map(s => ({
