@@ -22,6 +22,7 @@ import NewSession from '@/pages/NewSession';
 import SessionWorkspace from '@/pages/SessionWorkspace';
 import Reports from '@/pages/Reports';
 import UserGuide from '@/pages/UserGuide';
+import PromptLibrary from '@/pages/PromptLibrary';
 import ThreatMap from '@/pages/ThreatMap';
 import AgentAnalytics from '@/pages/AgentAnalytics';
 import SessionComparison from '@/pages/SessionComparison';
@@ -34,7 +35,6 @@ import DecisionDetail from '@/pages/DecisionDetail';
 import KnowledgeBase from '@/pages/KnowledgeBase';
 import WhatIfSimulator from '@/pages/WhatIfSimulator';
 import LiveDebateRoom from '@/pages/LiveDebateRoom';
-import SmeLibrary from '@/pages/SmeLibrary';
 
 const LoadingScreen = () => (
   <div className="fixed inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--wr-bg-primary)' }}>
@@ -96,10 +96,10 @@ const AppRoutes = () => {
         <Route path="/mitigations"          element={<Mitigations />} />
         <Route path="/simulator"            element={<WhatIfSimulator />} />
         <Route path="/simulator/:id"        element={<WhatIfSimulator />} />
-        <Route path="/sme-library"          element={<SmeLibrary />} />
         <Route path="/knowledge"            element={<KnowledgeBase />} />
         <Route path="/settings"             element={<Settings />} />
         <Route path="/guide"                element={<UserGuide />} />
+        <Route path="/prompts"              element={<PromptLibrary />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

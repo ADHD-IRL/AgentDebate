@@ -16,7 +16,6 @@ Multi-user, workspace-aware deployment backed by Supabase. All AI calls go direc
 - **Chain Breaker & Mitigation Register** — dissect kill chains into a prioritized mitigation roadmap, then track each mitigation through its lifecycle and re-score residual risk.
 - **Evidence ledger** — every source an agent cites is captured per-SME with a credibility tier, so findings are traceable.
 - **Knowledge Base** — ingest your own design docs, incidents, and standards; the most relevant passages are retrieved and injected into each agent's prompt to ground the analysis.
-- **SME Library** — curate, quality-score, and reuse experts across sessions.
 
 ---
 
@@ -54,6 +53,7 @@ Open the [SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run:
 5. [`014_knowledge_base.sql`](supabase/migrations/014_knowledge_base.sql) — knowledge documents and chunks
 6. [`015_mitigation_session_link.sql`](supabase/migrations/015_mitigation_session_link.sql) — links mitigations to their originating session
 7. [`016_optimal_sme.sql`](supabase/migrations/016_optimal_sme.sql) — optimal-SME reasoning fields (competence boundaries, tradecraft, risk posture, debate behavior)
+8. [`017_remove_sme_library.sql`](supabase/migrations/017_remove_sme_library.sql) — removes the retired SME Library (drops `sme_tokens`, the library-only agent columns, and the shared library workspace)
 
 > ⚠️ **Don't run Path B on a project managed by the GitHub integration.** Pasting SQL by hand creates objects the integration hasn't recorded, so its next run tries to re-create them and fails. If that already happened, the migrations are idempotent — re-running through the integration now reconciles it (it applies them as no-ops and records them).
 
@@ -120,7 +120,6 @@ The sidebar is organized as the workflow, top to bottom.
 
 - **Domains** — broad categories that link threats to the agents who can analyze them
 - **Agents** — your expert panel; build manually, **AI Generate**, or **Import** from Markdown
-- **SME Library** — curate, quality-score, and reuse experts
 - **Knowledge Base** — add your own documents so analysis is grounded in your material
 
 ### 2 · Plan

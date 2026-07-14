@@ -1,3 +1,8 @@
+// ⚠️ MAINTAINERS: The prompt templates in this file are documented for users in
+// the Prompt Library page (src/pages/PromptLibrary.jsx). That page is authored by
+// hand and does NOT auto-sync. When you add, remove, or materially change a prompt
+// here (or in decisionContext.js / knowledge.js), update PromptLibrary.jsx to match.
+
 const MODEL_MAP = {
   claude_sonnet_4_6: 'claude-sonnet-4-6',
   claude_opus_4_6:   'claude-opus-4-7',

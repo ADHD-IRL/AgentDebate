@@ -1,3 +1,6 @@
+// ⚠️ MAINTAINERS: formatKnowledgeContext()'s injected block is documented in the
+// Prompt Library page (src/pages/PromptLibrary.jsx) — keep it in sync on changes.
+//
 // Organizational knowledge base — retrieval-augmented prompting.
 // Documents are chunked on ingest; retrieval scores chunks against a query by
 // keyword overlap (MVP; a pgvector semantic upgrade can slot in behind

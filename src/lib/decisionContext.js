@@ -1,6 +1,9 @@
 // Builds the prompt framing block for a Decision-Focus session, so the panel
 // assesses ONE specific option of a decision rather than the scenario in the
 // abstract. Prepended to scenarioContext at generation time.
+//
+// ⚠️ MAINTAINERS: this framing is documented in the Prompt Library page
+// (src/pages/PromptLibrary.jsx) — update it there when this block changes.
 
 export function buildDecisionFraming(decision, option, assumptions = []) {
   if (!decision || !option) return '';
