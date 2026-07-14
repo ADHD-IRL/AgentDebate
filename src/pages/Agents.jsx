@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '@/lib/WorkspaceContext';
-import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash } from 'lucide-react';
+import { Bot, Plus, Search, Sparkles, Trash2, Edit2, Copy, Upload, Trash, Wand2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
@@ -10,6 +10,7 @@ import { VectorBars } from '@/components/ui/VectorBar';
 import AgentFormModal from '@/components/agents/AgentFormModal';
 import AgentImportModal from '@/components/agents/AgentImportModal';
 import BulkDeleteModal from '@/components/agents/BulkDeleteModal';
+import DomainAssignModal from '@/components/agents/DomainAssignModal';
 
 export default function Agents() {
   const { db, workspace } = useWorkspace();
@@ -17,6 +18,7 @@ export default function Agents() {
   const [domains, setDomains] = useState([]);
   const [modal, setModal] = useState(null); // null | 'new' | 'ai' | 'import' | agent object
   const [showImport, setShowImport] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const [search, setSearch] = useState('');
   const [filterDomain, setFilterDomain] = useState('');
   const [loading, setLoading] = useState(true);
@@ -139,6 +141,7 @@ export default function Agents() {
         subtitle={`${agents.length} agents in workspace`}
         actions={
           <div className="flex gap-2">
+            <WrButton variant="outline" onClick={() => setShowAssign(true)}><Wand2 className="w-4 h-4" /> Assign Domains</WrButton>
             <WrButton variant="outline" onClick={() => setShowImport(true)}><Upload className="w-4 h-4" /> Import</WrButton>
             <WrButton variant="outline" onClick={() => setModal('ai')}><Sparkles className="w-4 h-4" /> AI Generate</WrButton>
             <WrButton onClick={() => setModal('new')}><Plus className="w-4 h-4" /> New Agent</WrButton>
@@ -308,6 +311,15 @@ export default function Agents() {
           existingDomains={domains}
           onDone={load}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {showAssign && (
+        <DomainAssignModal
+          agents={agents}
+          domains={domains}
+          onDone={load}
+          onClose={() => setShowAssign(false)}
         />
       )}
 

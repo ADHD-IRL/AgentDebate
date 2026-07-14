@@ -267,6 +267,53 @@ Return ONLY the JSON array.`;
   return JSON.parse(match ? match[0] : text);
 }
 
+// --- assignDomainsToAgents ---
+// Reviews each agent's persona/discipline and assigns the best-fit domain,
+// reusing existing domains where possible and proposing BROAD new ones only when
+// nothing fits. Returns [{ id, domain, is_new, why }]. Chunks large panels.
+export async function assignDomainsToAgents({ agents = [], domains = [] }) {
+  const domainList = domains.length
+    ? domains.map(d => `- ${d.name}${d.description ? `: ${d.description}` : ''}`).join('\n')
+    : '(none yet — propose broad domains)';
+
+  const CHUNK = 40;
+  const results = [];
+  for (let start = 0; start < agents.length; start += CHUNK) {
+    const batch = agents.slice(start, start + CHUNK);
+    const expertLines = batch.map(a => {
+      const persona = (a.persona_description || '').slice(0, 240);
+      const focus = (a.red_team_focus || '').slice(0, 160);
+      const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
+      return `[${a.id}] ${a.name} — ${a.discipline || 'unknown discipline'}. Persona: ${persona}${focus ? ` Focus: ${focus}` : ''}${tags ? ` Tags: ${tags}` : ''}`;
+    }).join('\n');
+
+    const prompt = `You are organizing a panel of subject-matter experts into broad, groupable domains.
+
+EXISTING DOMAINS (reuse one of these whenever it reasonably fits — do not invent a near-duplicate):
+${domainList}
+
+EXPERTS TO CLASSIFY:
+${expertLines}
+
+For each expert, assign the single best-fit domain.
+- Strongly prefer an existing domain when one reasonably fits.
+- Only propose a NEW domain when no existing one fits, and make new domains BROAD enough to group several experts (e.g. "National Security", "Cybersecurity", "Economics & Finance", "Public Health") — never a narrow specialty.
+
+Return a JSON array with one object per expert, in the same order:
+{ "id": "<expert id>", "domain": "<domain name>", "is_new": true or false, "why": "<5-10 word rationale>" }
+
+Return ONLY the JSON array.`;
+
+    const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2000 });
+    const match = text.match(/\[[\s\S]*\]/);
+    try {
+      const parsed = JSON.parse(match ? match[0] : '[]');
+      if (Array.isArray(parsed)) results.push(...parsed);
+    } catch { /* skip malformed batch */ }
+  }
+  return results;
+}
+
 // --- generateRound0 ---
 export async function generateRound0({ agent, scenarioContext, phaseFocus }) {
   const prompt = `You are ${agent.name}, ${agent.persona_description}
