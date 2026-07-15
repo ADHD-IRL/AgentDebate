@@ -185,7 +185,7 @@ export default function DebateTranscript({
       </div>
 
       {/* Transcript table */}
-      <table className="w-full border-collapse" style={{ backgroundColor: 'var(--wr-bg-card)' }}>
+      <table className="w-full table-fixed border-collapse" style={{ backgroundColor: 'var(--wr-bg-card)' }}>
         <colgroup>
           <col style={{ width: '160px' }} />
           <col />
