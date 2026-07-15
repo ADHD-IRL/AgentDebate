@@ -132,7 +132,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
             </button>
             {briefExpanded && (
               <div className="px-3 pb-3">
-                <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)' }}>
+                <p className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'var(--wr-text-secondary)' }}>
                   {sa.round0_briefing}
                 </p>
               </div>
@@ -163,7 +163,7 @@ function AgentAssessmentCard({ sa, agent, round, onGenerate, onUpdate, onReset }
             ) : (
               <div>
                 <div className={expanded ? '' : 'line-clamp-4'}>
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--wr-text-secondary)' }}>{text}</p>
+                  <p className="text-xs leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'var(--wr-text-secondary)' }}>{text}</p>
                 </div>
                 <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-xs mt-2 transition-colors hover:opacity-80" style={{ color: 'var(--wr-amber)' }}>
                   {expanded ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> Show more</>}
@@ -348,7 +348,7 @@ function SynthesisPanel({ synthesis, sessionId, onGenerate, generating, synthSta
           />
         </div>
         {streamText ? (
-          <div className="rounded p-4 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-y-auto max-h-[60vh]"
+          <div className="rounded p-4 text-xs leading-relaxed whitespace-pre-wrap break-words font-mono overflow-y-auto max-h-[60vh]"
             style={{ backgroundColor: 'var(--wr-bg-card)', border: '1px solid var(--wr-border)', color: 'var(--wr-text-secondary)' }}>
             {streamText}
             <span className="inline-block w-1.5 h-3 ml-0.5 animate-pulse" style={{ backgroundColor: 'var(--wr-amber)' }} />
