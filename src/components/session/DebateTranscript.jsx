@@ -54,18 +54,18 @@ function AgentRow({ sa, agent, round, onGenerate, onUpdate, onReset }) {
     <tr className="border-b last:border-b-0" style={{ borderColor: 'var(--wr-border)' }}>
       {/* Left: agent info column */}
       <td
-        className="align-top px-4 py-4 border-r w-40 flex-shrink-0"
+        className="align-top px-4 py-4 border-r w-40 overflow-hidden"
         style={{ borderColor: `${color}30`, backgroundColor: `${color}06` }}
       >
-        <div className="flex flex-col gap-1.5 sticky top-4">
+        <div className="flex flex-col gap-1.5 sticky top-4 min-w-0">
           <div
-            className="text-xs font-bold tracking-wider font-mono px-1.5 py-0.5 rounded-full w-fit border"
+            className="text-xs font-bold tracking-wider font-mono px-1.5 py-0.5 rounded-full max-w-full break-words border"
             style={{ color, borderColor: `${color}40`, backgroundColor: `${color}12` }}
           >
             {agent?.name || '—'}
           </div>
           {agent?.discipline && (
-            <span className="text-[11px]" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</span>
+            <span className="text-[11px] break-words" style={{ color: 'var(--wr-text-muted)' }}>{agent.discipline}</span>
           )}
           <div className="flex flex-col gap-1 mt-0.5">
             <SeverityPill severity={severity} />
