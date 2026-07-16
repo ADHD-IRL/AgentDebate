@@ -6,7 +6,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import WrButton from '@/components/ui/WrButton';
 import { WrInput, WrSelect } from '@/components/ui/WrInput';
-import ChainTimeline from '@/components/chains/ChainTimeline';
+import ChainFlowGraph from '@/components/chainbreaker/ChainFlowGraph';
 
 function ChainStepCard({ step, index, agents, onUpdate, onRemove, onMoveUp, onMoveDown }) {
   return (
@@ -328,8 +328,8 @@ export default function Chains() {
                         style={{ color: 'var(--wr-amber)' }}
                       >
                         {expandedChain === chain.id
-                          ? <><ChevronUp className="w-3 h-3" /> Hide Timeline</>
-                          : <><ChevronDown className="w-3 h-3" /> View Timeline</>
+                          ? <><ChevronUp className="w-3 h-3" /> Hide Kill Chain</>
+                          : <><ChevronDown className="w-3 h-3" /> View Kill Chain</>
                         }
                       </button>
                     )}
@@ -337,7 +337,7 @@ export default function Chains() {
 
                   {expandedChain === chain.id && (
                     <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--wr-border)' }}>
-                      <ChainTimeline chain={chain} agents={agents} />
+                      <ChainFlowGraph chain={chain} defaultLens="domain" />
                     </div>
                   )}
                 </div>

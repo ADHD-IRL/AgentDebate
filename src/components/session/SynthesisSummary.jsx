@@ -1,4 +1,5 @@
 import { CheckCircle2, Link2, ShieldAlert, BookOpen, Users, FileText } from 'lucide-react';
+import ChainFlowGraph from '@/components/chainbreaker/ChainFlowGraph';
 
 const SEV_COLOR = {
   CRITICAL: '#C0392B',
@@ -184,6 +185,26 @@ export default function SynthesisSummary({ synthesis, sessionAgents, agents, thr
           </p>
         </TileCard>
       </div>
+
+      {/* Interactive kill-chain rails — one per compound chain identified */}
+      {chains.length > 0 && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Link2 className="w-3.5 h-3.5" style={{ color: '#2E86AB' }} />
+            <span className="text-xs font-mono font-bold tracking-wider" style={{ color: 'var(--wr-text-muted)' }}>
+              KILL CHAINS — click any step to see where to break the chain
+            </span>
+          </div>
+          {chains.map((c, i) => (
+            <div key={i}>
+              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--wr-text-secondary)' }}>
+                {c.chain_name || c.name || `Chain ${i + 1}`}
+              </p>
+              <ChainFlowGraph chain={c} defaultLens="domain" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
