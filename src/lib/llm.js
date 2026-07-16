@@ -924,7 +924,13 @@ function parseCompoundChains(chainsText) {
       chains.push({
         name: cur.name,
         description: cur.steps.join(' → ').slice(0, 300),
-        steps: cur.steps.map((text, i) => ({ step_number: i + 1, agent_id: '', agent_label: '', step_text: text })),
+        steps: cur.steps.map((text, i) => {
+          // Pull an optional "vector: Human|Technical|Physical|Futures" tag.
+          const m = text.match(/\bvector:\s*(human|technical|physical|futures)\b/i);
+          const vector = m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() : '';
+          const clean = text.replace(/\s*[—–-]?\s*vector:\s*(human|technical|physical|futures)\b/i, '').trim();
+          return { step_number: i + 1, agent_id: '', agent_label: '', step_text: clean, vector };
+        }),
       });
     }
     cur = null;
@@ -979,10 +985,10 @@ Generate a comprehensive synthesis report with EXACTLY these sections in this or
 ## COMPOUND CHAINS
 List 2-4 multi-step attack chains that emerged from agents building on each other's work. Prefer chains that cross domains — where one discipline's threat becomes the enabling condition for another's. Each chain should read as a kill chain a defender can attack: every step must be an action the adversary takes that DEPENDS on the previous step succeeding, so that breaking any one step stops the chain. Format EACH chain EXACTLY as shown:
 ### [Chain Name]
-Step 1: [adversary action] — enabled by: [what must already be true]
-Step 2: [adversary action] — enabled by: [the prior step's result]
-Step 3: [adversary action] — enabled by: [...]
-(Each chain must have at least 3 steps, ordered by dependency. Escalate toward the highest-consequence outcome. If no compound chains exist, write a single chain labeled "No compound chains identified".)
+Step 1: [adversary action] — enabled by: [what must already be true] — vector: [Human|Technical|Physical|Futures]
+Step 2: [adversary action] — enabled by: [the prior step's result] — vector: [Human|Technical|Physical|Futures]
+Step 3: [adversary action] — enabled by: [...] — vector: [Human|Technical|Physical|Futures]
+(Each chain must have at least 3 steps, ordered by dependency. End every step with its PRIMARY threat vector as "vector: X". Escalate toward the highest-consequence outcome. If no compound chains exist, write a single chain labeled "No compound chains identified".)
 
 ## CROSS-DOMAIN INTERACTION RISKS
 (The core purpose of this analysis: risks that exist ONLY because two or more domains interact — risks no single-discipline assessment would surface. For each: name the domains involved, the agents who surfaced it, the coupling mechanism, and the combined severity. Prioritize the Round 2 "interaction risk" findings. If none emerged, state that explicitly as a process failure worth noting.)
@@ -1067,12 +1073,13 @@ Generate a compound chain with ${num_steps} steps. Return a JSON object:
     {
       "step_number": 1,
       "agent_label": "Agent name or discipline label from the list above",
-      "step_text": "Clear description of what happens in this step and why it matters"
+      "step_text": "Clear description of what happens in this step and why it matters",
+      "vector": "the PRIMARY threat vector this step exploits — exactly one of: Human, Technical, Physical, Futures"
     }
   ]
 }
 
-Return ONLY the JSON.`;
+Each step must depend on the one before it (a defender who breaks any step stops the chain). Return ONLY the JSON.`;
 
   const text = await callAnthropicStream({ messages: [{ role: 'user', content: prompt }], maxTokens: 2048 });
   const match = text.match(/\{[\s\S]*\}/);
